@@ -150,8 +150,22 @@ function responder(objeto) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+/**
+ * Loads an HTML template.
+ *
+ * The repository keeps one .html file per screen, which is the readable form.
+ * The deploy step bundles everything into a single script file and injects a
+ * PLANTILLAS registry; this helper makes both layouts work from the same source,
+ * so the code that is tested is the code that runs.
+ */
+function hayRegistroPlantillas(nombre) {
+  return typeof PLANTILLAS !== 'undefined' && PLANTILLAS && PLANTILLAS[nombre] !== undefined;
+}
+
 function renderizar(plantilla, datos) {
-  var t = HtmlService.createTemplateFromFile(plantilla);
+  var t = hayRegistroPlantillas(plantilla)
+    ? HtmlService.createTemplate(PLANTILLAS[plantilla])
+    : HtmlService.createTemplateFromFile(plantilla);
   for (var k in datos) if (datos.hasOwnProperty(k)) t[k] = datos[k];
   t.BASE_URL = ScriptApp.getService().getUrl();
   return t.evaluate()
@@ -162,7 +176,9 @@ function renderizar(plantilla, datos) {
 
 /** Lets an HTML file include another (shared styles, shared scripts). */
 function incluir(nombre) {
-  return HtmlService.createHtmlOutputFromFile(nombre).getContent();
+  return hayRegistroPlantillas(nombre)
+    ? PLANTILLAS[nombre]
+    : HtmlService.createHtmlOutputFromFile(nombre).getContent();
 }
 
 /**
