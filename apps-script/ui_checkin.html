@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><base target="_top"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?!= incluir('ui_estilos') ?></head>
+<body>
+<div class="envoltura ancho">
+  <header class="cabecera">
+    <div class="marca">
+      <h1>CHECK-<span>IN</span></h1>
+      <div class="sub">EL BÚNKER · <?= alias ?></div>
+    </div>
+    <div class="datos-evento" id="estadoSync"></div>
+  </header>
+
+  <div id="avisoGlobal"></div>
+
+  <div class="tarjeta">
+    <h2>Buscar participante</h2>
+    <p class="pista">Por código (B-001) o por número de documento. Siempre valida con el documento físico.</p>
+    <div class="campo" style="margin-bottom:10px">
+      <input type="text" id="busqueda" placeholder="B-001 o 1036448960" autocomplete="off"
+             autocapitalize="characters" style="font-size:20px;padding:15px;text-align:center;letter-spacing:.05em">
+    </div>
+    <div class="rejilla dos">
+      <button class="boton fantasma" id="btnLimpiar">Limpiar</button>
+      <button class="boton" id="btnBuscar">Buscar</button>
+    </div>
+  </div>
+
+  <div id="ficha"></div>
+
+  <div class="tarjeta">
+    <div class="pestanas">
+      <button class="pestana activa" data-panel="lista">Lista por bloque</button>
+      <button class="pestana" data-panel="contingencia">Contingencia</button>
+      <button class="pestana" data-panel="cola">Pendientes de sincronizar (<span id="nCola">0</span>)</button>
+    </div>
+
+    <div class="panel activo" id="panel-lista">
+      <div class="campo" style="margin-bottom:12px">
+        <select id="filtroBloque"><option value="">Todos los bloques</option></select>
+      </div>
+      <div class="tabla-envoltura"><table>
+        <thead><tr><th>Código</th><th>Artista</th><th>Bloque</th><th>Llegada</th><th>Audición</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="cuerpoLista"></tbody>
+      </table></div>
+    </div>
+
+    <div class="panel" id="panel-contingencia">
+      <p class="pista">Orden de llegada a la lista. Solo alcanzan quienes quepan en el tiempo que queda antes del cierre.</p>
+      <button class="boton fantasma chico" id="btnPlan" style="margin-bottom:12px">Calcular plan ahora</button>
+      <div id="salidaContingencia"></div>
+    </div>
+
+    <div class="panel" id="panel-cola">
+      <p class="pista">Operaciones guardadas en este dispositivo que aún no llegaron al servidor.</p>
+      <button class="boton chico" id="btnSincronizar" style="margin-bottom:12px">Sincronizar ahora</button>
+      <div id="salidaCola"></div>
+    </div>
+  </div>
+
+  <div class="pie">Datos en caché de este dispositivo. Cierre definitivo de audiciones: <b id="horaCierre">21:30</b>.</div>
+</div>
+
+<?!= incluir('ui_scripts') ?>
+<script>
+window.TOKEN = '<?= token ?>';
+
+var CLAVE_ROSTER = 'bunker_roster_v1';
+var CLAVE_COLA   = 'bunker_cola_v1';
+var ROSTER = [];
+var COLA = [];
+
+document.addEventListener('DOMContentLoaded', function () {
+  COLA = leerLocal(CLAVE_COLA, []);
+  ROSTER = leerLocal(CLAVE_ROSTER, []);
+  pintarCola();
+  if (ROSTER.length) { pintarLista(); marcarSync('cache', ROSTER.length + ' en caché local'); }
+
+  vigilarConexion(function () { sincronizar(true); });
+
+  descargarRoster();
+  setInterval(function () { if (navigator.onLine) sincronizar(true); }, 30000);
+
+  $('#btnBuscar').addEventListener('click', buscar);
+  $('#btnLimpiar').addEventListener('click', function () {
+    $('#busqueda').value = ''; $('#ficha').innerHTML = ''; $('#busqueda').focus();
+  });
+  $('#busqueda').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') buscar(); });
+  $('#btnSincronizar').addEventListener('click', function () { sincronizar(false); });
+  $('#btnPlan').addEventListener('click', calcularContingencia);
+  $('#filtroBloque').addEventListener('change', pintarLista);
+
+  $$('.pestana').forEach(function (p) {
+    p.addEventListener('click', function () {
+      $$('.pestana').forEach(function (x) { x.classList.remove('activa'); });
+      $$('.panel').forEach(function (x) { x.classList.remove('activo'); });
+      p.classList.add('activa');
+      $('#panel-' + p.dataset.panel).classList.add('activo');
+    });
+  });
+  $('#busqueda').focus();
+});
+
+// --- local storage -----------------------------------------------------------
+function leerLocal(k, pd) { try { return JSON.parse(localStorage.getItem(k)) || pd; } catch (e) { return pd; } }
+function guardarLocal(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* full */ } }
+
+function marcarSync(tipo, texto) {
+  var color = { ok: 'var(--ok)', cache: 'var(--alerta)', error: 'var(--error)' }[tipo] || 'var(--tenue)';
+  $('#estadoSync').innerHTML = '<span class="chip" style="border-color:' + color + '">' +
+    escaparHtml(texto) + '</span>';
+}
+
+// --- roster ------------------------------------------------------------------
+function descargarRoster() {
+  if (!navigator.onLine) { marcarSync('cache', 'Sin conexión · usando caché'); return; }
+  llamar('roster_checkin').then(function (r) {
+    ROSTER = r.roster;
+    guardarLocal(CLAVE_ROSTER, ROSTER);
+    aplicarColaSobreRoster();
+    pintarLista();
+    llenarBloques();
+    marcarSync('ok', ROSTER.length + ' participantes · ' + r.generado_at.slice(11, 16));
+  }).catch(function (e) {
+    marcarSync('error', 'No se pudo actualizar · usando caché');
+    if (!ROSTER.length) mostrarAviso('#avisoGlobal', 'error', 'Sin datos locales', e.message);
+  });
+}
+
+/** Queued operations win over the server copy until they are confirmed. */
+function aplicarColaSobreRoster() {
+  COLA.forEach(function (op) {
+    var p = ROSTER.filter(function (x) { return x.code === op.code; })[0];
+    if (p) p.attendance_status = op.estado;
+  });
+}
+
+function llenarBloques() {
+  var sel = $('#filtroBloque');
+  var previo = sel.value;
+  var bloques = {};
+  ROSTER.forEach(function (p) { if (p.final_block) bloques[p.final_block] = true; });
+  sel.innerHTML = '<option value="">Todos los bloques</option>' +
+    Object.keys(bloques).sort(function (a, b) { return a - b; })
+      .map(function (b) { return '<option value="' + b + '">Bloque ' + b + '</option>'; }).join('');
+  sel.value = previo;
+}
+
+// --- search ------------------------------------------------------------------
+function buscar() {
+  var q = ($('#busqueda').value || '').trim().toUpperCase();
+  if (!q) return;
+
+  var soloDigitos = q.replace(/\D/g, '');
+  var p = ROSTER.filter(function (x) {
+    return x.code.toUpperCase() === q ||
+           (soloDigitos && String(x.id_number).replace(/\D/g, '') === soloDigitos);
+  })[0];
+
+  if (!p) {
+    $('#ficha').innerHTML = '<div class="aviso error"><b>No encontrado</b>' +
+      'Ningún participante con código o documento "' + escaparHtml(q) + '". ' +
+      'Verifica el dato o consulta con coordinación.</div>';
+    return;
+  }
+  pintarFicha(p);
+}
+
+function pintarFicha(p) {
+  var ahora = new Date();
+  var hhmm = ('0' + ahora.getHours()).slice(-2) + ':' + ('0' + ahora.getMinutes()).slice(-2);
+  var retraso = minutos(hhmm) - minutos(p.final_time);
+  var avisoHora = '';
+
+  if (isFinite(retraso) && p.attendance_status === 'CONFIRMADO') {
+    if (retraso > 5) {
+      avisoHora = '<div class="aviso error"><b>' + retraso + ' minutos tarde</b>' +
+        'Supera la tolerancia de 5 minutos: pierde el turno y pasa a CONTINGENCIA. ' +
+        'Nunca se desplaza a quien llegó puntual.</div>';
+    } else if (retraso > 0) {
+      avisoHora = '<div class="aviso alerta"><b>' + retraso + ' minutos tarde</b>' +
+        'Dentro de la tolerancia. Conserva el turno SOLO si no altera el flujo — lo decide el coordinador.</div>';
+    }
+  }
+
+  $('#ficha').innerHTML =
+    '<div class="tarjeta" style="border-color:var(--amarillo)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">' +
+        '<div><div style="font-size:31px;font-weight:900;letter-spacing:.04em">' + escaparHtml(p.code) + '</div>' +
+        '<div style="font-size:17px;font-weight:700;margin-top:3px">' + escaparHtml(p.artistic_name || p.full_name) + '</div>' +
+        '<div style="color:var(--tenue);font-size:13.5px">' + escaparHtml(p.full_name) + ' · ' + escaparHtml(p.discipline) + '</div></div>' +
+        '<div style="text-align:right">' + etiquetaEstado(p.attendance_status) +
+        '<div style="color:var(--tenue);font-size:12.5px;margin-top:6px">Bloque ' + escaparHtml(p.final_block) +
+        '<br>Llegada ' + escaparHtml(p.arrival_time) + ' · Audición <b>' + escaparHtml(p.final_time) + '</b></div></div>' +
+      '</div>' +
+      '<div class="aviso info" style="margin-top:14px;font-size:13px">' +
+        '<b>Valida con el documento físico</b>Documento registrado: <b>' + escaparHtml(p.id_number) + '</b>' +
+        (p.technical_needs && p.technical_needs !== 'Ninguna'
+          ? '<br>Necesidades técnicas: ' + escaparHtml(p.technical_needs) : '') +
+      '</div>' + avisoHora +
+      '<div class="rejilla dos" style="margin-top:8px">' +
+        boton(p.code, 'CHECK-IN', 'boton', 'Confirmar CHECK-IN') +
+        boton(p.code, 'REALIZADA', 'boton fantasma', 'Audición REALIZADA') +
+        boton(p.code, 'CONTINGENCIA', 'boton fantasma', 'Pasar a CONTINGENCIA') +
+        boton(p.code, 'NO SHOW', 'boton fantasma', 'Marcar NO SHOW') +
+      '</div>' +
+    '</div>';
+
+  $$('#ficha [data-estado]').forEach(function (b) {
+    b.addEventListener('click', function () { registrarEstado(b.dataset.code, b.dataset.estado); });
+  });
+}
+
+function boton(code, estado, clase, texto) {
+  return '<button class="' + clase + '" data-code="' + escaparHtml(code) +
+         '" data-estado="' + escaparHtml(estado) + '">' + texto + '</button>';
+}
+
+function minutos(hhmm) {
+  var m = String(hhmm || '').match(/^(\d{1,2}):(\d{2})/);
+  return m ? (+m[1]) * 60 + (+m[2]) : NaN;
+}
+
+// --- state changes (offline-first) -------------------------------------------
+function registrarEstado(code, estado) {
+  var op = {
+    accion: 'registrar_estado', code: code, estado: estado,
+    client_op_id: 'OP' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    check_in_time: new Date().toISOString()
+  };
+
+  // Optimistic local update: the desk must never wait for the network.
+  var p = ROSTER.filter(function (x) { return x.code === code; })[0];
+  if (p) { p.attendance_status = estado; guardarLocal(CLAVE_ROSTER, ROSTER); pintarFicha(p); }
+
+  COLA.push(op);
+  guardarLocal(CLAVE_COLA, COLA);
+  pintarCola();
+  pintarLista();
+
+  if (navigator.onLine) sincronizar(true);
+}
+
+function sincronizar(silencioso) {
+  if (!COLA.length) { if (!silencioso) mostrarAviso('#salidaCola', 'ok', 'Nada pendiente', ''); return; }
+  if (!navigator.onLine) { if (!silencioso) mostrarAviso('#salidaCola', 'error', 'Sin conexión', 'Se reintenta solo.'); return; }
+
+  var enviando = COLA.slice();
+  llamar('sincronizar_cola', { cola: JSON.stringify(enviando) })
+    .then(function (r) {
+      var aplicadas = {};
+      (r.resultados || []).forEach(function (x) { if (x.ok !== false) aplicadas[x.client_op_id] = true; });
+      COLA = COLA.filter(function (op) { return !aplicadas[op.client_op_id]; });
+      guardarLocal(CLAVE_COLA, COLA);
+      pintarCola();
+
+      var fallidas = (r.resultados || []).filter(function (x) { return x.ok === false; });
+      if (fallidas.length) {
+        $('#salidaCola').innerHTML = '<div class="aviso alerta"><b>' + fallidas.length +
+          ' operaciones rechazadas por el servidor</b>' +
+          fallidas.map(function (f) { return escaparHtml(f.error); }).join('<br>') + '</div>';
+      } else if (!silencioso) {
+        mostrarAviso('#salidaCola', 'ok', 'Sincronizado', r.procesadas + ' operaciones aplicadas.');
+      }
+      descargarRoster();
+    })
+    .catch(function (e) {
+      if (!silencioso) mostrarAviso('#salidaCola', 'error', 'No se pudo sincronizar', e.message);
+    });
+}
+
+function pintarCola() {
+  $('#nCola').textContent = COLA.length;
+  var barra = $('.conexion');
+  if (barra && COLA.length && navigator.onLine) {
+    barra.className = 'conexion pendiente';
+    barra.textContent = COLA.length + ' operaciones pendientes de sincronizar';
+  } else if (barra && navigator.onLine) {
+    barra.className = 'conexion';
+  }
+  $('#salidaCola').innerHTML = COLA.length
+    ? '<div class="tabla-envoltura"><table><thead><tr><th>Código</th><th>Estado</th><th>Hora</th></tr></thead><tbody>' +
+      COLA.map(function (o) {
+        return '<tr><td><b>' + escaparHtml(o.code) + '</b></td><td>' + etiquetaEstado(o.estado) +
+               '</td><td>' + escaparHtml(String(o.check_in_time).slice(11, 19)) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : '<div class="aviso ok"><b>Todo sincronizado</b>No hay operaciones pendientes.</div>';
+}
+
+function pintarLista() {
+  var filtro = $('#filtroBloque').value;
+  var filas = ROSTER.filter(function (p) { return !filtro || String(p.final_block) === filtro; });
+
+  $('#cuerpoLista').innerHTML = filas.map(function (p) {
+    return '<tr><td><b>' + escaparHtml(p.code) + '</b></td>' +
+      '<td>' + escaparHtml(p.artistic_name || p.full_name) + '</td>' +
+      '<td>' + escaparHtml(p.final_block) + '</td>' +
+      '<td>' + escaparHtml(p.arrival_time) + '</td>' +
+      '<td>' + escaparHtml(p.final_time) + '</td>' +
+      '<td>' + etiquetaEstado(p.attendance_status) + '</td>' +
+      '<td><button class="boton chico fantasma" data-ver="' + escaparHtml(p.code) + '">Abrir</button></td></tr>';
+  }).join('') || '<tr><td colspan="7" style="color:var(--tenue)">Sin participantes en este filtro.</td></tr>';
+
+  $$('#cuerpoLista [data-ver]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = ROSTER.filter(function (x) { return x.code === b.dataset.ver; })[0];
+      if (p) { pintarFicha(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    });
+  });
+}
+
+function calcularContingencia() {
+  var b = $('#btnPlan'); ocupado(b, true, 'Calculando...');
+  llamar('plan_contingencia', {}).then(function (r) {
+    ocupado(b, false);
+    $('#salidaContingencia').innerHTML =
+      '<div class="aviso ' + (r.cupos_disponibles ? 'info' : 'alerta') + '">' +
+      '<b>' + r.cupos_disponibles + ' cupos hasta el cierre (' + escaparHtml(r.cierre) + ')</b>' +
+      r.minutos_disponibles + ' minutos disponibles · ' + r.entran.length + ' alcanzan · ' +
+      r.fuera.length + ' quedarían NO AUDICIONADOS.</div>' +
+      (r.entran.length ? '<div class="tabla-envoltura"><table><thead><tr><th>#</th><th>Código</th><th>Artista</th><th>Hora estimada</th></tr></thead><tbody>' +
+        r.entran.map(function (x) {
+          return '<tr><td>' + x.orden + '</td><td><b>' + escaparHtml(x.code) + '</b></td><td>' +
+            escaparHtml(x.nombre) + '</td><td>' + escaparHtml(x.hora_estimada) + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '') +
+      (r.fuera.length ? '<p class="pista" style="margin-top:12px">Sin tiempo: ' +
+        r.fuera.map(function (x) { return escaparHtml(x.code); }).join(', ') + '</p>' : '');
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaContingencia', 'error', 'Error', e.message); });
+}
+</script>
+</body>
+</html>

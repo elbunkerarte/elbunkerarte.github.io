@@ -1,0 +1,93 @@
+<script>
+/* EL BUNKER - shared client helpers. */
+
+/** Calls a server action. Same origin, so no CORS and no API key in the page. */
+function llamar(accion, datos) {
+  return new Promise(function (resolve, reject) {
+    var carga = Object.assign({ accion: accion, t: window.TOKEN || '' }, datos || {});
+    google.script.run
+      .withSuccessHandler(function (r) {
+        if (r && r.ok === false) reject(new Error(r.error || 'Error desconocido'));
+        else resolve(r);
+      })
+      .withFailureHandler(function (e) { reject(new Error(e.message || 'Fallo de conexion')); })
+      .api(carga);
+  });
+}
+
+function $(sel, raiz) { return (raiz || document).querySelector(sel); }
+function $$(sel, raiz) { return Array.prototype.slice.call((raiz || document).querySelectorAll(sel)); }
+
+function escaparHtml(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function mostrarAviso(contenedor, tipo, titulo, texto) {
+  var el = typeof contenedor === 'string' ? $(contenedor) : contenedor;
+  if (!el) return;
+  el.innerHTML = '<div class="aviso ' + tipo + '"><b>' + escaparHtml(titulo) + '</b>' +
+                 escaparHtml(texto || '') + '</div>';
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function ocupado(boton, activo, textoOcupado) {
+  if (!boton) return;
+  if (activo) {
+    boton.dataset.textoPrevio = boton.innerHTML;
+    boton.disabled = true;
+    boton.innerHTML = '<span class="cargando"></span> ' + (textoOcupado || 'Procesando...');
+  } else {
+    boton.disabled = false;
+    if (boton.dataset.textoPrevio) boton.innerHTML = boton.dataset.textoPrevio;
+  }
+}
+
+/** Stable id per browser tab so a retry is recognised as the same submission. */
+function idEnvio(clave) {
+  var k = 'bunker_' + clave;
+  var v = null;
+  try { v = sessionStorage.getItem(k); } catch (e) { /* private mode */ }
+  if (!v) {
+    v = 'C' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+    try { sessionStorage.setItem(k, v); } catch (e) { /* ignore */ }
+  }
+  return v;
+}
+
+function nuevoIdEnvio(clave) {
+  try { sessionStorage.removeItem('bunker_' + clave); } catch (e) { /* ignore */ }
+  return idEnvio(clave);
+}
+
+function claseEstado(valor) {
+  return 'e-' + String(valor || '').toUpperCase().replace(/[\s-]+/g, '');
+}
+
+function etiquetaEstado(valor) {
+  if (!valor) return '';
+  return '<span class="etiqueta ' + claseEstado(valor) + '">' + escaparHtml(valor) + '</span>';
+}
+
+/** Online/offline banner, shared by every panel. */
+function vigilarConexion(alRecuperar) {
+  var barra = document.createElement('div');
+  barra.className = 'conexion';
+  document.body.appendChild(barra);
+
+  function pintar() {
+    if (navigator.onLine) {
+      barra.className = 'conexion';
+      if (alRecuperar) alRecuperar();
+    } else {
+      barra.className = 'conexion sin';
+      barra.textContent = 'SIN CONEXION - se guarda en este dispositivo y se sincroniza al volver';
+    }
+  }
+  window.addEventListener('online', pintar);
+  window.addEventListener('offline', pintar);
+  pintar();
+  return barra;
+}
+</script>

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?!= incluir('ui_estilos') ?>
+</head>
+<body>
+<div class="envoltura">
+
+  <header class="cabecera">
+    <div class="marca">
+      <h1>EL <span>BÚNKER</span></h1>
+      <div class="sub">by Arte es la Solución</div>
+    </div>
+    <div class="datos-evento" id="datosEvento"></div>
+  </header>
+
+  <div id="avisoGlobal"></div>
+
+  <div id="formulario">
+    <div class="tarjeta">
+      <h2>Inscripción a la convocatoria</h2>
+      <p class="pista">Todos los campos marcados con <span class="req">*</span> son obligatorios.
+        Diligénciala una sola vez: si te inscribes dos veces con el mismo documento conservamos la primera.</p>
+
+      <div class="campo">
+        <label for="full_name">Nombre completo <span class="req">*</span></label>
+        <input type="text" id="full_name" autocomplete="name" placeholder="Nombres y apellidos como aparecen en tu documento">
+        <div class="error"></div>
+      </div>
+
+      <div class="rejilla dos">
+        <div class="campo">
+          <label for="id_number">Número de documento <span class="req">*</span></label>
+          <input type="text" id="id_number" inputmode="numeric" autocomplete="off" placeholder="Sin puntos ni comas">
+          <p class="ayuda">Lo verificaremos con tu documento físico el día de la audición.</p>
+          <div class="error"></div>
+        </div>
+        <div class="campo">
+          <label for="birth_date">Fecha de nacimiento <span class="req">*</span></label>
+          <input type="date" id="birth_date">
+          <p class="ayuda" id="ayudaEdad">La convocatoria es para personas de 18 a 28 años.</p>
+          <div class="error"></div>
+        </div>
+      </div>
+
+      <div class="campo">
+        <label for="neighborhood_sector">Barrio, sector o vereda <span class="req">*</span></label>
+        <input type="text" id="neighborhood_sector" placeholder="Ej.: La Doctora, Betania, San Joaquín...">
+        <div class="error"></div>
+      </div>
+
+      <div class="campo" id="campoResidencia">
+        <label class="check">
+          <input type="checkbox" id="resides_in_sabaneta">
+          <span>Declaro que <b>resido en Sabaneta, Antioquia</b>. <span class="req">*</span></span>
+        </label>
+        <div class="error"></div>
+      </div>
+
+      <div class="rejilla dos">
+        <div class="campo">
+          <label for="email">Correo electrónico <span class="req">*</span></label>
+          <input type="email" id="email" autocomplete="email" placeholder="tucorreo@ejemplo.com">
+          <div class="error"></div>
+        </div>
+        <div class="campo">
+          <label for="whatsapp">WhatsApp <span class="req">*</span></label>
+          <input type="tel" id="whatsapp" inputmode="numeric" autocomplete="tel" placeholder="3001234567">
+          <p class="ayuda">10 dígitos, empieza por 3. Por aquí enviaremos tu código y tu horario.</p>
+          <div class="error"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Tu propuesta artística</h2>
+      <p class="pista">Esto es lo que verá el jurado antes de tu audición.</p>
+
+      <div class="rejilla dos">
+        <div class="campo">
+          <label for="artistic_name">Nombre artístico</label>
+          <input type="text" id="artistic_name" placeholder="Si no tienes, déjalo vacío">
+        </div>
+        <div class="campo">
+          <label for="discipline">Disciplina <span class="req">*</span></label>
+          <select id="discipline">
+            <option value="">Selecciona...</option>
+            <option>Canto</option><option>Rap / Hip hop</option>
+            <option>Música instrumental</option><option>DJ / producción</option>
+            <option>Danza urbana</option><option>Danza contemporánea</option>
+            <option>Danza folclórica</option><option>Teatro</option>
+            <option>Poesía / spoken word</option><option>Circo</option>
+            <option>Artes visuales en vivo</option><option>Otra</option>
+          </select>
+          <div class="error"></div>
+        </div>
+      </div>
+
+      <div class="campo">
+        <label for="genre_or_proposal">Género o propuesta</label>
+        <input type="text" id="genre_or_proposal" placeholder="Ej.: R&B, trap, salsa choke, teatro físico...">
+      </div>
+
+      <div class="campo">
+        <label for="artist_description">Cuéntanos de ti</label>
+        <textarea id="artist_description" maxlength="600" placeholder="Tu trayectoria, dónde te has presentado, qué te mueve."></textarea>
+      </div>
+
+      <div class="campo">
+        <label for="audition_description">¿Qué vas a presentar en 3 minutos? <span class="req">*</span></label>
+        <textarea id="audition_description" maxlength="600" placeholder="Describe exactamente lo que vas a hacer en tarima."></textarea>
+        <p class="ayuda">La audición dura máximo 3 minutos. Se cronometra.</p>
+        <div class="error"></div>
+      </div>
+
+      <div class="campo">
+        <label for="video_url">Enlace a un video tuyo</label>
+        <input type="url" id="video_url" placeholder="https://... (YouTube, Instagram, TikTok, Drive)">
+        <p class="ayuda">Opcional pero recomendado. Verifica que el enlace sea público antes de enviarlo.</p>
+        <div class="error"></div>
+      </div>
+
+      <div class="campo">
+        <label for="technical_needs">Necesidades técnicas</label>
+        <input type="text" id="technical_needs" placeholder="Ej.: micrófono, pista en USB, espacio para 4 personas">
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Disponibilidad</h2>
+      <p class="pista">No hay forma de elegir horario. La organización lo asigna y te lo comunica.</p>
+      <label class="check" id="campoDisponibilidad">
+        <input type="checkbox" id="availability_statement">
+        <span id="textoDisponibilidad">Declaro que tengo disponibilidad para asistir dentro de la jornada de
+          audiciones y acepto el horario que posteriormente sea asignado por la organización.
+          <span class="req">*</span></span>
+      </label>
+      <div class="error"></div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Autorizaciones</h2>
+      <p class="pista">Lee los documentos antes de marcar. Guardamos la versión exacta del texto que aceptaste.</p>
+
+      <div id="enlacesLegales" class="aviso info" style="font-size:13px">
+        <b>Antes de aceptar, revisa:</b>
+        <span id="linkTerminos"></span> · <span id="linkPolitica"></span>
+      </div>
+
+      <label class="check" id="campoTerminos">
+        <input type="checkbox" id="accept_terms">
+        <span>He leído y acepto los <b>términos y condiciones</b> de EL BÚNKER. <span class="req">*</span></span>
+      </label>
+      <label class="check" id="campoDatos">
+        <input type="checkbox" id="accept_data_processing">
+        <span>Autorizo el <b>tratamiento de mis datos personales</b> para las finalidades informadas
+          en la política de tratamiento de datos. <span class="req">*</span></span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="accept_whatsapp_operational">
+        <span>Autorizo recibir <b>comunicaciones operativas por WhatsApp</b> sobre mi inscripción,
+          horario, cambios y novedades.</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="accept_image_voice">
+        <span>Autorizo la captación y uso de mi <b>imagen, voz y registros audiovisuales</b>
+          para las finalidades informadas.</span>
+      </label>
+
+      <div class="aviso alerta" style="margin-top:14px;font-size:13px">
+        Inscribirte <b>no garantiza</b> selección, contratación ni presentación.
+      </div>
+
+      <button class="boton" id="btnEnviar" style="margin-top:6px">Enviar mi inscripción</button>
+    </div>
+  </div>
+
+  <div id="resultado" class="oculto"></div>
+
+  <div class="pie">
+    <div id="pieLegal"></div>
+  </div>
+</div>
+
+<?!= incluir('ui_scripts') ?>
+<script>
+var CONFIG = null;
+
+document.addEventListener('DOMContentLoaded', function () {
+  llamar('config_publica').then(pintarConfig).catch(function (e) {
+    mostrarAviso('#avisoGlobal', 'error', 'No pudimos cargar la convocatoria', e.message);
+  });
+  $('#btnEnviar').addEventListener('click', enviar);
+});
+
+function pintarConfig(c) {
+  CONFIG = c;
+  var e = c.evento;
+
+  $('#datosEvento').innerHTML =
+    chip('Fecha', e.fecha) + chip('Jornada', e.hora_inicio + ' - ' + e.hora_fin) +
+    chip('Edad', e.edad_minima + ' a ' + e.edad_maxima + ' años') +
+    chip('Residencia', e.municipio) + chip('Audición', 'máx. ' + e.duracion_audicion + ' min') +
+    chip('Cupos', String(e.cupo)) + chip('Se seleccionan', String(e.top) + ' artistas');
+
+  $('#ayudaEdad').textContent = 'Debes tener entre ' + e.edad_minima + ' y ' + e.edad_maxima +
+    ' años cumplidos el ' + e.fecha + '.';
+  $('#textoDisponibilidad').innerHTML =
+    'Declaro que tengo disponibilidad para asistir el <b>' + escaparHtml(e.fecha) +
+    '</b> dentro de la jornada de audiciones de <b>' + escaparHtml(e.hora_inicio) + ' a ' +
+    escaparHtml(e.hora_fin) + '</b> y acepto el horario que posteriormente sea asignado por la organización. ' +
+    '<span class="req">*</span>';
+
+  $('#linkTerminos').innerHTML = enlaceLegal(c.legal.terms_url, 'Términos y condiciones');
+  $('#linkPolitica').innerHTML = enlaceLegal(c.legal.privacy_policy_url, 'Política de tratamiento de datos');
+
+  $('#pieLegal').innerHTML =
+    'Responsable del tratamiento: ' + dato(c.legal.legal_name) + '<br>' +
+    'Ejercicio de derechos del titular: ' + dato(c.legal.data_protection_email) +
+    ' · ' + dato(c.legal.institutional_phone) +
+    '<br><span style="opacity:.6">Versión de textos aceptada: ' + escaparHtml(c.legal.consent_version) + '</span>';
+
+  if (!c.abierto) {
+    $('#formulario').classList.add('oculto');
+    mostrarAviso('#avisoGlobal', 'alerta', 'Inscripciones cerradas',
+      'La convocatoria ya no está recibiendo inscripciones.');
+  }
+}
+
+function chip(t, v) { return '<span class="chip">' + t + ' <b>' + escaparHtml(v) + '</b></span>'; }
+
+function dato(v) {
+  return String(v).indexOf('PENDIENTE') === 0
+    ? '<span class="pendiente-dato">' + escaparHtml(v) + '</span>'
+    : escaparHtml(v);
+}
+
+function enlaceLegal(url, texto) {
+  if (!url || String(url).indexOf('PENDIENTE') === 0) {
+    return '<span class="pendiente-dato">' + texto + ' (PENDIENTE DE PUBLICAR)</span>';
+  }
+  return '<a href="' + escaparHtml(url) + '" target="_blank" rel="noopener">' + texto + '</a>';
+}
+
+var CAMPOS = ['full_name','id_number','birth_date','neighborhood_sector','email','whatsapp',
+              'artistic_name','discipline','genre_or_proposal','artist_description',
+              'audition_description','video_url','technical_needs'];
+var CASILLAS = ['resides_in_sabaneta','availability_statement','accept_terms',
+                'accept_data_processing','accept_whatsapp_operational','accept_image_voice'];
+
+function recolectar() {
+  var datos = {};
+  CAMPOS.forEach(function (id) { datos[id] = ($('#' + id).value || '').trim(); });
+  CASILLAS.forEach(function (id) { datos[id] = $('#' + id).checked; });
+  datos.client_submission_id = idEnvio('inscripcion');
+  datos.source = 'web';
+  return datos;
+}
+
+function limpiarErrores() {
+  $$('.campo').forEach(function (c) { c.classList.remove('malo'); });
+  $$('.check').forEach(function (c) { c.classList.remove('malo'); });
+}
+
+/** Client-side check only to fail fast; the server always validates again. */
+function validacionRapida(d) {
+  var faltan = [];
+  [['full_name','Nombre completo'],['id_number','Documento'],['birth_date','Fecha de nacimiento'],
+   ['neighborhood_sector','Barrio o sector'],['email','Correo'],['whatsapp','WhatsApp'],
+   ['discipline','Disciplina'],['audition_description','Qué vas a presentar']]
+    .forEach(function (p) { if (!d[p[0]]) faltan.push(p); });
+
+  if (!d.resides_in_sabaneta) faltan.push(['campoResidencia', 'Declaración de residencia']);
+  if (!d.availability_statement) faltan.push(['campoDisponibilidad', 'Declaración de disponibilidad']);
+  if (!d.accept_terms) faltan.push(['campoTerminos', 'Aceptación de términos']);
+  if (!d.accept_data_processing) faltan.push(['campoDatos', 'Autorización de datos']);
+
+  faltan.forEach(function (p) {
+    var el = $('#' + p[0]);
+    if (!el) return;
+    var cont = el.closest('.campo') || el.closest('.check') || el;
+    cont.classList.add('malo');
+    var err = cont.querySelector('.error');
+    if (err) err.textContent = p[1] + ' es obligatorio.';
+  });
+  return faltan;
+}
+
+function enviar() {
+  limpiarErrores();
+  var datos = recolectar();
+  var faltan = validacionRapida(datos);
+
+  if (faltan.length) {
+    mostrarAviso('#avisoGlobal', 'error', 'Faltan datos obligatorios',
+      'Revisa los campos marcados en rojo (' + faltan.length + ').');
+    return;
+  }
+
+  var boton = $('#btnEnviar');
+  ocupado(boton, true, 'Enviando...');
+  $('#avisoGlobal').innerHTML = '';
+
+  llamar('inscribir', datos)
+    .then(function (r) { mostrarResultado(r); })
+    .catch(function (e) {
+      ocupado(boton, false);
+      mostrarAviso('#avisoGlobal', 'error', 'No pudimos enviar tu inscripción',
+        e.message + ' — revisa tu conexión y vuelve a intentar. No se creó un registro duplicado.');
+    });
+}
+
+function mostrarResultado(r) {
+  var tipo = { APTO: 'ok', DUPLICADO: 'alerta', REVISION: 'alerta',
+               INCOMPLETO: 'error', NO_CUMPLE: 'error' }[r.eligibility_status] || 'info';
+
+  // INCOMPLETO is the only verdict the participant can fix by resubmitting.
+  if (r.eligibility_status === 'INCOMPLETO') {
+    ocupado($('#btnEnviar'), false);
+    nuevoIdEnvio('inscripcion');
+    var lista = (r.errores || []).map(function (e) { return '• ' + e.mensaje; }).join('<br>');
+    $('#avisoGlobal').innerHTML = '<div class="aviso error"><b>Faltan datos</b>' + lista + '</div>';
+    (r.errores || []).forEach(function (e) {
+      var el = $('#' + e.campo);
+      if (el) { var c = el.closest('.campo') || el.closest('.check'); if (c) c.classList.add('malo'); }
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+
+  $('#formulario').classList.add('oculto');
+  var caja = $('#resultado');
+  caja.classList.remove('oculto');
+
+  var extra = '';
+  if (r.eligibility_status === 'APTO') {
+    extra = '<div class="tarjeta"><h2>¿Y ahora qué?</h2>' +
+      '<p class="pista" style="margin:0">1. Validamos todas las inscripciones.<br>' +
+      '2. Si quedas dentro de los cupos recibes tu <b>código</b> y tu <b>horario</b> por WhatsApp y/o correo.<br>' +
+      '3. Solo si tienes un impedimento real podrás pedir <b>un</b> cambio de horario.<br>' +
+      '4. Llega 15 minutos antes con tu <b>documento físico</b>.</p></div>';
+  }
+
+  caja.innerHTML =
+    '<div class="aviso ' + tipo + '"><b>' + escaparHtml(r.eligibility_status) + '</b>' +
+    escaparHtml(r.mensaje) + '</div>' +
+    '<div class="tarjeta"><h2>Comprobante</h2>' +
+    '<p class="pista" style="margin:0">Guarda este número por si necesitas escribirnos:<br>' +
+    '<b style="font-size:19px;letter-spacing:.06em">' + escaparHtml(r.submission_id) + '</b></p></div>' +
+    extra;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>

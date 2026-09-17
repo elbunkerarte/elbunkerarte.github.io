@@ -1,0 +1,67 @@
+/* EL BUNKER - public site. Mobile-first: the QR lands on a phone. */
+:root{
+  --negro:#0b0d10;--carbon:#15181d;--acero:#1e232b;--linea:#2b323d;
+  --texto:#eef1f5;--tenue:#98a2b3;--amarillo:#ffd400;--amarillo-oscuro:#d6b000;
+  --alerta:#f59e0b;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--negro);color:var(--texto);
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.envoltura{max-width:720px;margin:0 auto;padding:28px 18px 70px}
+a{color:var(--amarillo)}
+
+.hero{text-align:center;padding:30px 0 34px;border-bottom:1px solid var(--linea);margin-bottom:30px}
+.hero h1{margin:0;font-size:clamp(42px,13vw,82px);font-weight:900;letter-spacing:-.035em;line-height:.92}
+.hero h1 span{color:var(--amarillo)}
+.hero .lema{color:var(--tenue);font-size:13px;text-transform:uppercase;
+  letter-spacing:.24em;margin-top:12px}
+.hero .bajada{margin:20px auto 0;max-width:480px;font-size:16.5px;color:var(--texto)}
+
+.datos{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:22px}
+.dato{background:var(--acero);border:1px solid var(--linea);border-radius:999px;
+  padding:7px 15px;font-size:13px;color:var(--tenue)}
+.dato b{color:var(--texto)}
+
+.acciones{display:grid;gap:12px;margin-bottom:34px}
+.btn{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--carbon);border:1px solid var(--linea);border-radius:14px;
+  padding:19px 21px;text-decoration:none;color:var(--texto);
+  transition:border-color .16s,transform .08s,background .16s}
+.btn:hover{border-color:var(--amarillo);background:var(--acero)}
+.btn:active{transform:translateY(1px)}
+.btn .t{font-size:17px;font-weight:800;letter-spacing:-.01em}
+.btn .d{font-size:13px;color:var(--tenue);margin-top:2px;font-weight:400}
+.btn .flecha{color:var(--amarillo);font-size:21px;flex-shrink:0}
+.btn.principal{background:var(--amarillo);border-color:var(--amarillo);color:#000}
+.btn.principal .d{color:rgba(0,0,0,.66)}
+.btn.principal .flecha{color:#000}
+.btn.principal:hover{background:var(--amarillo-oscuro);border-color:var(--amarillo-oscuro)}
+
+.bloque{background:var(--carbon);border:1px solid var(--linea);
+  border-radius:14px;padding:22px;margin-bottom:18px}
+.bloque h2{margin:0 0 12px;font-size:19px;font-weight:800;letter-spacing:-.01em}
+.bloque h3{margin:22px 0 8px;font-size:15px;font-weight:700;color:var(--amarillo)}
+.bloque p,.bloque li{font-size:14.5px;color:#d6dbe3}
+.bloque ul,.bloque ol{padding-left:21px;margin:8px 0}
+.bloque li{margin-bottom:6px}
+.bloque table{width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0}
+.bloque th{text-align:left;padding:9px 10px;background:var(--acero);
+  font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--tenue)}
+.bloque td{padding:9px 10px;border-top:1px solid var(--linea)}
+
+.pendiente{color:var(--alerta);font-weight:700;
+  background:rgba(245,158,11,.1);padding:1px 7px;border-radius:5px;font-size:.92em}
+
+.migas{margin-bottom:22px;font-size:13.5px}
+.migas a{color:var(--tenue);text-decoration:none}
+.migas a:hover{color:var(--amarillo)}
+
+.pie{margin-top:36px;padding-top:22px;border-top:1px solid var(--linea);
+  color:var(--tenue);font-size:12.5px;text-align:center;line-height:1.75}
+.pie a{color:var(--tenue)}
+
+.nota{border-left:3px solid var(--amarillo);padding:11px 15px;
+  background:rgba(255,212,0,.055);border-radius:0 9px 9px 0;margin:16px 0;font-size:13.5px}
+@media(max-width:560px){.envoltura{padding:20px 14px 60px}.bloque{padding:18px}}

@@ -1,0 +1,10 @@
+# Nunca al repositorio
+*.token
+*.key
+.env
+.env.*
+!config/env.example
+.clasp.json
+node_modules/
+.DS_Store
+build/

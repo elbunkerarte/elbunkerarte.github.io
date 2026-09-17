@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><base target="_top"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?!= incluir('ui_estilos') ?></head>
+<body>
+<div class="envoltura">
+  <header class="cabecera">
+    <div class="marca"><h1>EL <span>BÚNKER</span></h1><div class="sub">by Arte es la Solución</div></div>
+  </header>
+  <div class="aviso ok"><b>Listo</b>Recibimos tu información.</div>
+  <div class="tarjeta"><h2>Consulta tu estado</h2>
+    <p class="pista">Ingresa tu código y tu documento para ver tu horario.</p>
+    <div class="campo"><label for="code">Código</label><input type="text" id="code" placeholder="B-001"></div>
+    <div class="campo"><label for="id_number">Documento</label><input type="text" id="id_number" inputmode="numeric"></div>
+    <button class="boton" id="btn">Consultar</button>
+    <div id="salida" style="margin-top:16px"></div>
+  </div>
+</div>
+<?!= incluir('ui_scripts') ?>
+<script>
+$('#btn').addEventListener('click', function () {
+  var b = $('#btn'); ocupado(b, true, 'Consultando...');
+  llamar('consultar_estado', { code: $('#code').value.trim(), id_number: $('#id_number').value.trim() })
+    .then(function (r) {
+      ocupado(b, false);
+      $('#salida').innerHTML = '<div class="aviso info"><b>' + escaparHtml(r.code || 'Sin código aún') + '</b>' +
+        'Elegibilidad: ' + escaparHtml(r.eligibility_status) +
+        (r.hora_audicion ? '<br>Llegada: <b>' + escaparHtml(r.hora_llegada) + '</b> · Audición: <b>' +
+          escaparHtml(r.hora_audicion) + '</b> (bloque ' + escaparHtml(r.bloque) + ')' : '') + '</div>';
+    })
+    .catch(function (e) { ocupado(b, false); mostrarAviso('#salida', 'error', 'No encontrado', e.message); });
+});
+</script>
+</body>
+</html>

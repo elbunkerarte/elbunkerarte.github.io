@@ -1,0 +1,37 @@
+{
+  "_instrucciones": "Copia este archivo como site/config.json y reemplaza CADA 'PENDIENTE DE COMPLETAR' con el dato real aprobado por la organizacion. NO se inventa ningun dato legal. Los mismos valores deben quedar en la hoja CONFIG de la base maestra.",
+
+  "evento": {
+    "nombre": "EL BÚNKER by Arte es la Solución",
+    "fecha_texto": "viernes 2 de octubre de 2026",
+    "fecha_iso": "2026-10-02",
+    "hora_inicio": "4:00 p. m.",
+    "hora_fin": "10:00 p. m.",
+    "municipio": "Sabaneta, Antioquia",
+    "edad_minima": 18,
+    "edad_maxima": 28,
+    "cupos": 100,
+    "seleccionados": 7,
+    "duracion_audicion_min": 3,
+    "sede": "PENDIENTE DE COMPLETAR",
+    "direccion": "PENDIENTE DE COMPLETAR"
+  },
+
+  "legal": {
+    "legal_name": "PENDIENTE DE COMPLETAR",
+    "nit": "PENDIENTE DE COMPLETAR",
+    "legal_address": "PENDIENTE DE COMPLETAR",
+    "data_protection_email": "PENDIENTE DE COMPLETAR",
+    "institutional_phone": "PENDIENTE DE COMPLETAR",
+    "domain": "PENDIENTE DE COMPLETAR",
+    "consent_version": "v1-PENDIENTE"
+  },
+
+  "enlaces": {
+    "inscripcion": "PENDIENTE DE COMPLETAR (URL /exec de la Web App de Apps Script con ?p=inscripcion)",
+    "cambio_horario": "PENDIENTE DE COMPLETAR (misma URL con ?p=cambio-horario)",
+    "instagram": "PENDIENTE DE COMPLETAR",
+    "tiktok": "PENDIENTE DE COMPLETAR",
+    "whatsapp_contacto": "PENDIENTE DE COMPLETAR"
+  }
+}

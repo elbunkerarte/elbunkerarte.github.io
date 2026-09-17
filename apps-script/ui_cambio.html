@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?!= incluir('ui_estilos') ?>
+</head>
+<body>
+<div class="envoltura">
+  <header class="cabecera">
+    <div class="marca">
+      <h1>EL <span>BÚNKER</span></h1>
+      <div class="sub">Solicitud de cambio de horario</div>
+    </div>
+  </header>
+
+  <div id="avisoGlobal"></div>
+
+  <div class="aviso alerta">
+    <b>Antes de continuar, lee esto</b>
+    Este formulario es <b>solo</b> para quien tiene un impedimento real y <b>no puede asistir</b> en su horario.
+    Tienes <b>una sola</b> solicitud. <b>No eliges la nueva hora</b>: la asigna producción según disponibilidad.
+    Mientras no te confirmen, tu horario original sigue vigente.
+  </div>
+
+  <div id="formulario">
+    <div class="tarjeta">
+      <h2>Tus datos</h2>
+      <div class="campo">
+        <label for="participant_code">Tu código <span class="req">*</span></label>
+        <input type="text" id="participant_code" placeholder="B-001" autocapitalize="characters">
+        <p class="ayuda">Es el código que recibiste por WhatsApp o correo. Nunca cambia.</p>
+        <div class="error"></div>
+      </div>
+      <div class="campo">
+        <label for="full_name">Nombre completo <span class="req">*</span></label>
+        <input type="text" id="full_name" placeholder="Igual que en tu inscripción">
+        <p class="ayuda">Debe coincidir exactamente con el nombre registrado para ese código.</p>
+        <div class="error"></div>
+      </div>
+      <div class="campo">
+        <label for="contact">WhatsApp de contacto <span class="req">*</span></label>
+        <input type="tel" id="contact" inputmode="numeric" placeholder="3001234567">
+        <div class="error"></div>
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Tu impedimento</h2>
+      <label class="check" id="campoNoPuede">
+        <input type="checkbox" id="can_attend_original_no">
+        <span>Confirmo que <b>NO puedo asistir</b> en el horario que me fue asignado.
+          <span class="req">*</span></span>
+      </label>
+      <div class="campo">
+        <label for="reason_short">Motivo (breve) <span class="req">*</span></label>
+        <textarea id="reason_short" maxlength="400" placeholder="Ej.: trabajo hasta las 8:00 p. m., cita médica, clase..."></textarea>
+        <div class="error"></div>
+      </div>
+      <label class="check" id="campoAceptacion">
+        <input type="checkbox" id="acceptance">
+        <span>Entiendo que producción asigna la nueva hora <b>según disponibilidad</b>, que la solicitud
+          puede ser <b>no aprobada</b>, y que el día del evento <b>no hay cambios</b>.
+          <span class="req">*</span></span>
+      </label>
+      <button class="boton" id="btnEnviar" style="margin-top:6px">Enviar solicitud</button>
+    </div>
+  </div>
+
+  <div id="resultado" class="oculto"></div>
+  <div class="pie">Si ya enviaste tu solicitud, espera la respuesta. Enviar de nuevo no la acelera.</div>
+</div>
+
+<?!= incluir('ui_scripts') ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var precargado = '<?= codigo ?>';
+  if (precargado) $('#participant_code').value = precargado;
+
+  llamar('config_publica').then(function (c) {
+    if (!c.cambios_abiertos) {
+      $('#formulario').classList.add('oculto');
+      mostrarAviso('#avisoGlobal', 'alerta', 'El plazo de cambios ya cerró',
+        'El día del evento no se hacen cambios ordinarios. Si pierdes tu turno pasas a contingencia.');
+    }
+  }).catch(function () { /* the form still works; the server re-checks */ });
+
+  $('#btnEnviar').addEventListener('click', enviar);
+});
+
+function enviar() {
+  $$('.campo,.check').forEach(function (c) { c.classList.remove('malo'); });
+
+  var datos = {
+    participant_code: ($('#participant_code').value || '').trim().toUpperCase(),
+    full_name: ($('#full_name').value || '').trim(),
+    contact: ($('#contact').value || '').trim(),
+    reason_short: ($('#reason_short').value || '').trim(),
+    can_attend_original: false,
+    acceptance: $('#acceptance').checked,
+    client_submission_id: idEnvio('cambio')
+  };
+
+  var faltan = [];
+  if (!datos.participant_code) faltan.push('participant_code');
+  if (!datos.full_name) faltan.push('full_name');
+  if (!datos.contact) faltan.push('contact');
+  if (!datos.reason_short) faltan.push('reason_short');
+  if (!$('#can_attend_original_no').checked) faltan.push('campoNoPuede');
+  if (!datos.acceptance) faltan.push('campoAceptacion');
+
+  if (faltan.length) {
+    faltan.forEach(function (id) {
+      var el = $('#' + id);
+      var c = el ? (el.closest('.campo') || el.closest('.check')) : $('#' + id);
+      if (c) c.classList.add('malo');
+    });
+    mostrarAviso('#avisoGlobal', 'error', 'Faltan datos', 'Completa los campos marcados.');
+    return;
+  }
+
+  var boton = $('#btnEnviar');
+  ocupado(boton, true, 'Enviando...');
+  $('#avisoGlobal').innerHTML = '';
+
+  llamar('solicitar_cambio', datos)
+    .then(function (r) {
+      $('#formulario').classList.add('oculto');
+      $('#resultado').classList.remove('oculto');
+      $('#resultado').innerHTML =
+        '<div class="aviso ok"><b>Solicitud registrada</b>' + escaparHtml(r.mensaje) + '</div>' +
+        '<div class="tarjeta"><h2>Número de solicitud</h2>' +
+        '<p class="pista" style="margin:0"><b style="font-size:19px">' + escaparHtml(r.solicitud_id) +
+        '</b><br>Estado: ' + etiquetaEstado(r.estado) + '</p></div>';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    })
+    .catch(function (e) {
+      ocupado(boton, false);
+      nuevoIdEnvio('cambio');
+      mostrarAviso('#avisoGlobal', 'error', 'No se pudo registrar', e.message);
+    });
+}
+</script>
+</body>
+</html>

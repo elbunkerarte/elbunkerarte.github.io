@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><base target="_top"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?!= incluir('ui_estilos') ?></head>
+<body>
+<div class="envoltura">
+  <header class="cabecera">
+    <div class="marca"><h1>EL <span>BÚNKER</span></h1><div class="sub">Acceso restringido</div></div>
+  </header>
+  <div class="aviso error">
+    <b>No tienes acceso a esta sección</b>
+    Esta área es interna. Usa el enlace personal que te entregó la coordinación.
+  </div>
+  <div class="tarjeta">
+    <h2>¿Qué hago?</h2>
+    <p class="pista" style="margin:0">
+      Motivo técnico: <code><?= motivo ?></code><br><br>
+      • Si eres <b>participante</b>, esta no es tu página: usa el enlace público de la convocatoria.<br>
+      • Si eres del <b>equipo</b>, pide a coordinación que te reenvíe tu enlace de acceso: los enlaces
+      caducan y se revocan si tu usuario queda inactivo.
+    </p>
+  </div>
+</div>
+</body>
+</html>

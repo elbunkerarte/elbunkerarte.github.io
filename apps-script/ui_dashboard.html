@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><base target="_top"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?!= incluir('ui_estilos') ?>
+<style>
+/* Charts: ONE hue for every data mark. Identity comes from the row label, never
+   from colour, so there is no categorical pair that can be confused - which is
+   what the palette validator flagged when states were colour-coded.
+   Mark colour #ffd400 measures 12.4:1 against the chart surface. */
+.viz{--marca:#ffd400;--pista:#232935;--tinta:#eef1f5;--tinta2:#98a2b3}
+.grafico{margin-bottom:8px}
+.grafico h3{font-size:13px;font-weight:800;margin:0 0 3px;letter-spacing:-.01em}
+.grafico .sub{color:var(--tinta2);font-size:12px;margin:0 0 14px}
+
+/* Horizontal bars: label | track+fill | value */
+.fila-barra{display:grid;grid-template-columns:minmax(96px,29%) 1fr auto;gap:11px;
+  align-items:center;padding:4px 0;border-radius:7px}
+.fila-barra:hover{background:rgba(255,255,255,.035)}
+.fila-barra .et{font-size:12.5px;color:var(--tinta);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.fila-barra .pista{background:var(--pista);border-radius:4px;height:16px;position:relative;overflow:hidden}
+.fila-barra .relleno{background:var(--marca);height:100%;border-radius:0 4px 4px 0;
+  min-width:2px;transition:width .45s ease}
+.fila-barra .val{font-size:12.5px;font-weight:800;color:var(--tinta);
+  min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+.fila-barra .meta{font-size:11px;color:var(--tinta2);min-width:44px;text-align:right}
+
+/* Vertical histogram */
+.histo{display:flex;align-items:flex-end;gap:2px;height:150px;
+  border-bottom:1px solid var(--linea);padding-bottom:0}
+.histo .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;
+  align-items:center;height:100%;border-radius:6px 6px 0 0;padding:0 1px}
+.histo .col:hover{background:rgba(255,255,255,.04)}
+.histo .col .n{font-size:11.5px;font-weight:800;margin-bottom:5px;font-variant-numeric:tabular-nums}
+.histo .col .b{width:100%;background:var(--marca);border-radius:4px 4px 0 0;min-height:2px;
+  transition:height .45s ease}
+.histo-ejes{display:flex;gap:2px;margin-top:7px}
+.histo-ejes span{flex:1;text-align:center;font-size:10.5px;color:var(--tinta2)}
+
+.vacio{color:var(--tinta2);font-size:12.5px;padding:18px 0;text-align:center;
+  border:1px dashed var(--linea);border-radius:9px}
+.tabla-alterna{margin-top:12px;display:none}
+.tabla-alterna.visible{display:block}
+.enlace-tabla{background:none;border:none;color:var(--tinta2);font-size:11.5px;
+  cursor:pointer;text-decoration:underline;padding:6px 0;font-family:inherit}
+</style></head>
+<body>
+<div class="envoltura ancho viz">
+  <header class="cabecera">
+    <div class="marca"><h1>DASH<span>BOARD</span></h1>
+      <div class="sub">EL BÚNKER · <?= alias ?></div></div>
+    <div class="datos-evento" id="cabeceraChips"></div>
+  </header>
+
+  <div id="avisoGlobal"></div>
+
+  <div class="rejilla metricas" id="metricas" style="margin-bottom:18px"></div>
+
+  <div class="tarjeta">
+    <h2>Avance de la jornada</h2>
+    <div id="avanceGlobal"></div>
+  </div>
+
+  <div class="rejilla dos" style="align-items:start">
+    <div class="tarjeta grafico">
+      <h3>Estado de participantes</h3>
+      <p class="sub">Cada fila lleva su etiqueta: el color no distingue categorías.</p>
+      <div id="gEstados"></div>
+      <button class="enlace-tabla" data-tabla="tEstados">Ver como tabla</button>
+      <div class="tabla-alterna" id="tEstados"></div>
+    </div>
+
+    <div class="tarjeta grafico">
+      <h3>Avance por bloque</h3>
+      <p class="sub">Barra = audiciones realizadas. Cifra gris = participantes asignados al bloque.</p>
+      <div id="gBloques"></div>
+      <button class="enlace-tabla" data-tabla="tBloques">Ver como tabla</button>
+      <div class="tabla-alterna" id="tBloques"></div>
+    </div>
+  </div>
+
+  <div class="rejilla dos" style="align-items:start">
+    <div class="tarjeta grafico">
+      <h3>Distribución de puntajes</h3>
+      <p class="sub">Artistas por rango de puntaje final (0-100).</p>
+      <div id="gDistribucion"></div>
+      <button class="enlace-tabla" data-tabla="tDistribucion">Ver como tabla</button>
+      <div class="tabla-alterna" id="tDistribucion"></div>
+    </div>
+
+    <div class="tarjeta grafico">
+      <h3>Top <span id="nTop">7</span></h3>
+      <p class="sub">Promedio de los jurados válidos, sobre 100.</p>
+      <div id="gTop"></div>
+      <button class="enlace-tabla" data-tabla="tTop">Ver como tabla</button>
+      <div class="tabla-alterna" id="tTop"></div>
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Resultado consolidado</h2>
+    <p class="pista">El ranking completo no se publica. Esta vista es interna.</p>
+    <button class="boton fantasma chico" id="btnResultados" style="margin-bottom:12px">Calcular resultados</button>
+    <div id="salidaResultados"></div>
+  </div>
+
+  <div class="pie">Actualizado <span id="sello">—</span> · se refresca solo cada 60 s</div>
+</div>
+
+<?!= incluir('ui_scripts') ?>
+<script>
+window.TOKEN = '<?= token ?>';
+
+document.addEventListener('DOMContentLoaded', function () {
+  cargar();
+  setInterval(cargar, 60000);
+  $('#btnResultados').addEventListener('click', calcularResultados);
+  $$('.enlace-tabla').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var t = $('#' + b.dataset.tabla);
+      t.classList.toggle('visible');
+      b.textContent = t.classList.contains('visible') ? 'Ocultar tabla' : 'Ver como tabla';
+    });
+  });
+});
+
+function cargar() {
+  llamar('dashboard').then(function (r) { pintar(r.metricas); })
+    .catch(function (e) { mostrarAviso('#avisoGlobal', 'error', 'No se pudo cargar', e.message); });
+}
+
+function pintar(m) {
+  $('#sello').textContent = new Date().toLocaleTimeString('es-CO');
+
+  $('#cabeceraChips').innerHTML =
+    '<span class="chip">Inscritos <b>' + m.inscritos + '</b></span>' +
+    '<span class="chip">Con código <b>' + m.con_codigo + '</b></span>' +
+    '<span class="chip">Realizadas <b>' + m.realizadas + '</b></span>' +
+    (m.requiere_comite ? '<span class="chip" style="border-color:var(--alerta)">Requiere comité</span>' : '');
+
+  $('#metricas').innerHTML = [
+    ['Inscritos', m.inscritos, ''], ['Únicos', m.unicos, ''], ['Duplicados', m.duplicados, ''],
+    ['Aptos', m.aptos, ''], ['Con código', m.con_codigo, 'destacada'],
+    ['Cupos libres', m.cupos_libres, ''], ['Incompletos', m.incompletos, ''],
+    ['No cumplen', m.no_cumplen, ''], ['Reasignados', m.reasignados, ''],
+    ['Cambios pendientes', m.cambios_pendientes, m.cambios_pendientes ? 'destacada' : ''],
+    ['Check-ins', m.check_ins, ''], ['Realizadas', m.realizadas, 'destacada'],
+    ['No show', m.no_show, ''], ['Contingencia', m.contingencia, ''],
+    ['No audicionados', m.no_audicionados, ''],
+    ['Promedio global', m.promedio_global === null ? '—' : m.promedio_global, '']
+  ].map(function (x) {
+    return '<div class="metrica ' + x[2] + '"><div class="n">' + x[1] + '</div><div class="t">' + x[0] + '</div></div>';
+  }).join('');
+
+  $('#avanceGlobal').innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">' +
+    '<span style="font-size:28px;font-weight:900;color:var(--amarillo)">' + m.avance + '%</span>' +
+    '<span style="color:var(--tenue);font-size:13px">' + escaparHtml(m.avance_texto) + '</span></div>' +
+    '<div class="barra"><i style="width:' + Math.min(100, m.avance) + '%"></i></div>';
+
+  // --- Chart: participant states (horizontal bars, one hue, row labels) -----
+  var estados = [
+    ['Confirmados', m.confirmados], ['Check-in', m.check_ins], ['Realizadas', m.realizadas],
+    ['Contingencia', m.contingencia], ['No show', m.no_show], ['No audicionados', m.no_audicionados]
+  ];
+  barras('#gEstados', estados.map(function (e) { return { etiqueta: e[0], valor: e[1] }; }),
+         { sufijo: ' participantes' });
+  tabla('#tEstados', ['Estado', 'Cantidad'], estados);
+
+  // --- Chart: progress per block (bar = done, grey figure = assigned) -------
+  barras('#gBloques', m.por_bloque.map(function (b) {
+    return { etiqueta: 'Bloque ' + b.block_id, valor: b.realizadas, meta: b.asignados,
+             titulo: b.ventana + ' · ' + b.realizadas + ' de ' + b.asignados + ' realizadas' };
+  }), { conMeta: true });
+  tabla('#tBloques', ['Bloque', 'Ventana', 'Realizadas', 'Asignados'],
+        m.por_bloque.map(function (b) { return [b.block_id, b.ventana, b.realizadas, b.asignados]; }));
+
+  // --- Chart: score distribution (histogram) -------------------------------
+  histograma('#gDistribucion', m.distribucion);
+  tabla('#tDistribucion', ['Rango', 'Artistas'],
+        m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; }));
+
+  // --- Chart: Top N --------------------------------------------------------
+  $('#nTop').textContent = m.top.length || 7;
+  if (!m.top.length) {
+    $('#gTop').innerHTML = '<div class="vacio">Aún no hay resultados. Aparecerán cuando el jurado califique.</div>';
+    $('#tTop').innerHTML = '';
+  } else {
+    barras('#gTop', m.top.map(function (t, i) {
+      return { etiqueta: (i + 1) + '. ' + (t.artistic_name || t.code), valor: t.artist_final,
+               titulo: t.code + ' · ' + t.artist_final + '/100' };
+    }), { max: 100, decimales: true, sufijo: '/100' });
+    tabla('#tTop', ['#', 'Código', 'Artista', 'Puntaje'],
+          m.top.map(function (t, i) { return [i + 1, t.code, t.artistic_name, t.artist_final]; }));
+  }
+}
+
+/**
+ * Horizontal bars. One hue; the row label carries identity, so no legend and no
+ * categorical palette is needed. Every bar is directly labelled with its value.
+ */
+function barras(sel, filas, opciones) {
+  opciones = opciones || {};
+  var valores = filas.map(function (f) { return Number(f.valor) || 0; });
+  var metas = filas.map(function (f) { return Number(f.meta) || 0; });
+  var max = opciones.max || Math.max(1, Math.max.apply(null, valores.concat(metas)));
+
+  $(sel).innerHTML = filas.map(function (f) {
+    var v = Number(f.valor) || 0;
+    var ancho = Math.max(v > 0 ? 1.5 : 0, (v / max) * 100);
+    return '<div class="fila-barra" title="' +
+        escaparHtml(f.titulo || (f.etiqueta + ': ' + v + (opciones.sufijo || ''))) + '">' +
+      '<span class="et">' + escaparHtml(f.etiqueta) + '</span>' +
+      '<span class="pista"><span class="relleno" style="width:' + ancho + '%"></span></span>' +
+      '<span class="val">' + (opciones.decimales ? v : Math.round(v)) + '</span>' +
+      (opciones.conMeta ? '<span class="meta">de ' + (f.meta || 0) + '</span>' : '') +
+    '</div>';
+  }).join('');
+}
+
+/** Vertical histogram for the ordered score bins. */
+function histograma(sel, datos) {
+  var max = Math.max(1, Math.max.apply(null, datos.map(function (d) { return d.conteo; })));
+  if (!datos.some(function (d) { return d.conteo > 0; })) {
+    $(sel).innerHTML = '<div class="vacio">Sin puntajes todavía.</div>';
+    return;
+  }
+  $(sel).innerHTML =
+    '<div class="histo">' + datos.map(function (d) {
+      return '<div class="col" title="' + escaparHtml(d.etiqueta + ': ' + d.conteo + ' artistas') + '">' +
+        '<span class="n">' + d.conteo + '</span>' +
+        '<span class="b" style="height:' + Math.max(d.conteo ? 3 : 0, (d.conteo / max) * 100) + '%"></span></div>';
+    }).join('') + '</div>' +
+    '<div class="histo-ejes">' + datos.map(function (d) {
+      return '<span>' + escaparHtml(d.etiqueta) + '</span>';
+    }).join('') + '</div>';
+}
+
+/** Table view of the same numbers - required so identity is never colour-only. */
+function tabla(sel, cabeceras, filas) {
+  $(sel).innerHTML = '<div class="tabla-envoltura"><table><thead><tr>' +
+    cabeceras.map(function (c) { return '<th>' + escaparHtml(c) + '</th>'; }).join('') +
+    '</tr></thead><tbody>' + filas.map(function (f) {
+      return '<tr>' + f.map(function (c) { return '<td>' + escaparHtml(c) + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+function calcularResultados() {
+  var b = $('#btnResultados'); ocupado(b, true, 'Calculando...');
+  llamar('resultados').then(function (r) {
+    ocupado(b, false);
+    $('#salidaResultados').innerHTML =
+      (r.requiere_comite
+        ? '<div class="aviso alerta"><b>Empate en el corte</b>El desempate automático ' +
+          '(Performance → Talento → Identidad) no resolvió. Requiere deliberación documentada del comité.</div>'
+        : '') +
+      '<div class="tabla-envoltura"><table><thead><tr><th>#</th><th>Código</th><th>Artista</th>' +
+      '<th>Disciplina</th><th>J1</th><th>J2</th><th>J3</th><th>Final</th><th>Sel.</th></tr></thead><tbody>' +
+      r.ranking.map(function (x) {
+        return '<tr' + (String(x.seleccionado).toUpperCase() === 'SI' ? ' style="background:rgba(255,212,0,.07)"' : '') +
+          '><td>' + escaparHtml(x.posicion) + '</td><td><b>' + escaparHtml(x.code) + '</b></td>' +
+          '<td>' + escaparHtml(x.artistic_name) + '</td><td>' + escaparHtml(x.discipline) + '</td>' +
+          '<td>' + escaparHtml(x.jurado_1) + '</td><td>' + escaparHtml(x.jurado_2) + '</td>' +
+          '<td>' + escaparHtml(x.jurado_3) + '</td><td><b>' + escaparHtml(x.artist_final) + '</b></td>' +
+          '<td>' + (String(x.seleccionado).toUpperCase() === 'SI' ? '★' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaResultados', 'error', 'Error', e.message); });
+}
+</script>
+</body>
+</html>

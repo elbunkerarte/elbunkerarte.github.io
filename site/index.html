@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EL BÚNKER by Arte es la Solución — Convocatoria</title>
+<meta name="description" content="Convocatoria de audiciones para jóvenes artistas de 18 a 28 años residentes en Sabaneta, Antioquia.">
+<meta name="robots" content="index,follow">
+<meta property="og:title" content="EL BÚNKER by Arte es la Solución">
+<meta property="og:description" content="Convocatoria para jóvenes artistas de 18 a 28 años residentes en Sabaneta. 100 cupos. Se seleccionan 7 artistas.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="assets/estilos.css">
+</head>
+<body>
+<div class="envoltura">
+
+  <header class="hero">
+    <h1>EL <span>BÚNKER</span></h1>
+    <div class="lema">by Arte es la Solución</div>
+    <p class="bajada">Convocatoria abierta para jóvenes artistas de
+      <b data-cfg="evento.municipio"></b>. Audiciones en vivo, jurado profesional
+      y <b data-cfg="evento.seleccionados"></b> artistas seleccionados.</p>
+    <div class="datos">
+      <span class="dato">📅 <b data-cfg="evento.fecha_texto"></b></span>
+      <span class="dato">🕓 <b data-cfg="evento.hora_inicio"></b> a <b data-cfg="evento.hora_fin"></b></span>
+      <span class="dato">🎂 <b data-cfg="evento.edad_minima"></b> a <b data-cfg="evento.edad_maxima"></b> años</span>
+      <span class="dato">🎟️ <b data-cfg="evento.cupos"></b> cupos</span>
+      <span class="dato">⏱️ <b data-cfg="evento.duracion_audicion_min"></b> min por audición</span>
+    </div>
+  </header>
+
+  <nav class="acciones">
+    <a class="btn principal" data-enlace="enlaces.inscripcion">
+      <span><span class="t">INSCRÍBETE</span><span class="d">Formulario de inscripción · una sola vez</span></span>
+      <span class="flecha">→</span>
+    </a>
+    <a class="btn" href="terminos.html">
+      <span><span class="t">TÉRMINOS Y CONDICIONES</span><span class="d">Reglas completas de la convocatoria</span></span>
+      <span class="flecha">→</span>
+    </a>
+    <a class="btn" href="politica-datos.html">
+      <span><span class="t">POLÍTICA DE TRATAMIENTO DE DATOS</span><span class="d">Cómo usamos tus datos personales</span></span>
+      <span class="flecha">→</span>
+    </a>
+    <a class="btn" href="contacto.html">
+      <span><span class="t">CONTACTO / DERECHOS DE DATOS</span><span class="d">Canal para ejercer tus derechos</span></span>
+      <span class="flecha">→</span>
+    </a>
+  </nav>
+
+  <section class="bloque">
+    <h2>Cómo funciona</h2>
+    <ol>
+      <li><b>Te inscribes</b> una sola vez con el formulario de arriba.</li>
+      <li><b>Validamos</b> edad, residencia y datos. Si hay dos inscripciones con el mismo documento, vale la primera.</li>
+      <li><b>Recibes tu código y tu horario</b> por WhatsApp y/o correo. Los cupos son
+        <b data-cfg="evento.cupos"></b> y se asignan por orden de inscripción válida.</li>
+      <li><b>Llegas 15 minutos antes</b> de tu hora, con tu documento de identidad físico.</li>
+      <li><b>Audicionas</b> máximo <b data-cfg="evento.duracion_audicion_min"></b> minutos ante tres jurados.</li>
+      <li><b>Se seleccionan <span data-cfg="evento.seleccionados"></span> artistas</b> con una rúbrica común.</li>
+    </ol>
+    <div class="nota">
+      <b>No hay confirmación adicional.</b> Cuando recibas tu horario, tu turno queda vigente.
+      Solo si tienes un impedimento real usas el formulario de cambio, y solo puedes pedirlo <b>una vez</b>.
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>¿Ya tienes tu código y no puedes asistir?</h2>
+    <p>Solicita un cambio de horario. Una sola solicitud por participante, antes del cierre que
+      establezca producción. <b>No eliges la hora</b>: la asigna la organización según disponibilidad.</p>
+    <a class="btn" data-enlace="enlaces.cambio_horario" style="margin-top:12px">
+      <span><span class="t">SOLICITAR CAMBIO DE HORARIO</span><span class="d">Solo si NO puedes asistir en tu horario</span></span>
+      <span class="flecha">→</span>
+    </a>
+  </section>
+
+  <section class="bloque">
+    <h2>Requisitos</h2>
+    <ul>
+      <li>Tener entre <b data-cfg="evento.edad_minima"></b> y <b data-cfg="evento.edad_maxima"></b>
+        años cumplidos el día de las audiciones.</li>
+      <li>Residir en <b data-cfg="evento.municipio"></b>.</li>
+      <li>Documento de identidad (lo verificamos físicamente el día del evento).</li>
+      <li>Disponibilidad dentro de toda la jornada: no se eligen horarios.</li>
+      <li>Una propuesta artística de máximo <b data-cfg="evento.duracion_audicion_min"></b> minutos.</li>
+    </ul>
+    <div class="nota">
+      Participar <b>no garantiza</b> selección, contratación ni presentación.
+    </div>
+  </section>
+
+  <footer class="pie">
+    <div><b data-cfg="legal.legal_name"></b></div>
+    <div>NIT <span data-cfg="legal.nit"></span> · <span data-cfg="legal.legal_address"></span></div>
+    <div>Datos personales: <span data-cfg="legal.data_protection_email"></span> ·
+      <span data-cfg="legal.institutional_phone"></span></div>
+    <div style="margin-top:10px">
+      <a href="terminos.html">Términos</a> · <a href="politica-datos.html">Política de datos</a> ·
+      <a href="contacto.html">Contacto</a>
+    </div>
+  </footer>
+</div>
+<script src="assets/sitio.js"></script>
+</body>
+</html>

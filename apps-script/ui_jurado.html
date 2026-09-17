@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><base target="_top"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?!= incluir('ui_estilos') ?>
+<style>
+.factor{background:var(--acero);border:1px solid var(--linea);border-radius:11px;padding:13px;margin-bottom:10px}
+.factor .enc{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:9px}
+.factor .nom{font-weight:700;font-size:14px}
+.factor .peso{color:var(--tenue);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em}
+.notas{display:grid;grid-template-columns:repeat(10,1fr);gap:5px}
+.notas button{background:var(--negro);border:1px solid var(--linea);color:var(--texto);
+  border-radius:8px;padding:11px 0;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.notas button:hover{border-color:var(--amarillo)}
+.notas button.sel{background:var(--amarillo);border-color:var(--amarillo);color:#000}
+.total{position:sticky;bottom:0;background:var(--carbon);border-top:2px solid var(--amarillo);
+  padding:14px 16px;margin:0 -16px -16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.total .n{font-size:27px;font-weight:900;color:var(--amarillo);line-height:1}
+</style></head>
+<body>
+<div class="envoltura">
+  <header class="cabecera">
+    <div class="marca"><h1>JU<span>RADO</span></h1><div class="sub">EL BÚNKER · <?= alias ?></div></div>
+    <div class="datos-evento" id="cabeceraInfo"></div>
+  </header>
+
+  <div id="avisoGlobal"></div>
+
+  <div class="aviso info" style="font-size:13px">
+    <b>Califica de forma independiente</b>
+    Cada factor va de 1 a 10. No veas ni comentes las notas de los otros jurados antes de deliberar.
+    Puedes corregir una calificación: la corrección queda registrada.
+  </div>
+
+  <div class="tarjeta">
+    <h2>Escala común</h2>
+    <div id="escala" class="rejilla dos" style="gap:8px"></div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Participantes</h2>
+    <p class="pista">Solo aparecen quienes ya pasaron por check-in. Selecciona uno para calificarlo.</p>
+    <div class="campo" style="margin-bottom:10px">
+      <input type="text" id="buscar" placeholder="Filtrar por código o nombre artístico">
+    </div>
+    <div class="tabla-envoltura" style="max-height:340px;overflow-y:auto"><table>
+      <thead><tr><th>Código</th><th>Artista</th><th>Disciplina</th><th>Estado</th><th>Mi nota</th><th></th></tr></thead>
+      <tbody id="cuerpoLista"></tbody>
+    </table></div>
+  </div>
+
+  <div id="tarjetaEvaluacion"></div>
+</div>
+
+<?!= incluir('ui_scripts') ?>
+<script>
+window.TOKEN = '<?= token ?>';
+var DATOS = null, ACTUAL = null, PUNTAJES = {};
+
+document.addEventListener('DOMContentLoaded', function () {
+  cargar();
+  $('#buscar').addEventListener('input', pintarLista);
+});
+
+function cargar() {
+  llamar('lista_evaluacion').then(function (r) {
+    DATOS = r;
+    $('#cabeceraInfo').innerHTML = '<span class="chip">Hoja <b>' + escaparHtml(r.hoja) + '</b></span>' +
+      '<span class="chip">Evaluados <b id="nEval">0</b></span>';
+    $('#escala').innerHTML = r.escala.map(function (e) {
+      return '<div class="chip" style="white-space:normal"><b>' + e.desde + '-' + e.hasta + '</b> ' +
+             escaparHtml(e.etiqueta) + '</div>';
+    }).join('');
+    pintarLista();
+  }).catch(function (e) { mostrarAviso('#avisoGlobal', 'error', 'No se pudo cargar', e.message); });
+}
+
+function pintarLista() {
+  if (!DATOS) return;
+  var q = ($('#buscar').value || '').toUpperCase();
+  var filas = DATOS.participantes.filter(function (p) {
+    return !q || p.code.toUpperCase().indexOf(q) !== -1 ||
+           String(p.artistic_name).toUpperCase().indexOf(q) !== -1;
+  });
+
+  var n = DATOS.participantes.filter(function (p) { return p.evaluado; }).length;
+  var cont = $('#nEval'); if (cont) cont.textContent = n + ' / ' + DATOS.participantes.length;
+
+  $('#cuerpoLista').innerHTML = filas.map(function (p) {
+    return '<tr><td><b>' + escaparHtml(p.code) + '</b></td>' +
+      '<td>' + escaparHtml(p.artistic_name) + '</td>' +
+      '<td>' + escaparHtml(p.discipline) + '</td>' +
+      '<td>' + etiquetaEstado(p.audition_status || p.attendance_status) + '</td>' +
+      '<td>' + (p.evaluado ? '<b style="color:var(--amarillo)">' + p.total + '</b>' : '—') + '</td>' +
+      '<td><button class="boton chico ' + (p.evaluado ? 'fantasma' : '') + '" data-code="' +
+        escaparHtml(p.code) + '">' + (p.evaluado ? 'Corregir' : 'Calificar') + '</button></td></tr>';
+  }).join('') || '<tr><td colspan="6" style="color:var(--tenue)">Sin participantes todavía.</td></tr>';
+
+  $$('#cuerpoLista [data-code]').forEach(function (b) {
+    b.addEventListener('click', function () { abrir(b.dataset.code); });
+  });
+}
+
+function abrir(code) {
+  ACTUAL = DATOS.participantes.filter(function (p) { return p.code === code; })[0];
+  if (!ACTUAL) return;
+
+  PUNTAJES = {};
+  if (ACTUAL.puntajes) {
+    DATOS.rubrica.forEach(function (f) {
+      var v = Number(ACTUAL.puntajes[f.id]);
+      if (isFinite(v) && v >= 1 && v <= 10) PUNTAJES[f.id] = v;
+    });
+  }
+
+  $('#tarjetaEvaluacion').innerHTML =
+    '<div class="tarjeta" style="border-color:var(--amarillo)">' +
+      '<h2>' + escaparHtml(ACTUAL.code) + ' · ' + escaparHtml(ACTUAL.artistic_name) + '</h2>' +
+      '<p class="pista">' + escaparHtml(ACTUAL.discipline) +
+        (ACTUAL.evaluado ? ' · <b style="color:var(--alerta)">Ya calificaste a este participante. Guardar sobrescribe y deja registro.</b>' : '') +
+      '</p>' +
+      DATOS.rubrica.map(function (f) {
+        return '<div class="factor" data-factor="' + f.id + '">' +
+          '<div class="enc"><span class="nom">' + escaparHtml(f.etiqueta) + '</span>' +
+          '<span class="peso">peso ' + f.peso + '%</span></div>' +
+          '<div class="notas">' + [1,2,3,4,5,6,7,8,9,10].map(function (n) {
+            return '<button data-f="' + f.id + '" data-n="' + n + '"' +
+                   (PUNTAJES[f.id] === n ? ' class="sel"' : '') + '>' + n + '</button>';
+          }).join('') + '</div></div>';
+      }).join('') +
+      '<div class="campo" style="margin-top:14px"><label for="obs">Observaciones</label>' +
+      '<textarea id="obs" maxlength="900" placeholder="Notas para la deliberación.">' +
+        escaparHtml(ACTUAL.observaciones || '') + '</textarea></div>' +
+      '<div class="total"><div><div class="peso" style="color:var(--tenue);font-size:11.5px">TOTAL SOBRE 100</div>' +
+      '<div class="n" id="totalVivo">—</div></div>' +
+      '<button class="boton" id="btnGuardar" style="width:auto">Guardar calificación</button></div>' +
+    '</div>';
+
+  $$('#tarjetaEvaluacion .notas button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      PUNTAJES[b.dataset.f] = Number(b.dataset.n);
+      $$('.notas button[data-f="' + b.dataset.f + '"]').forEach(function (x) { x.classList.remove('sel'); });
+      b.classList.add('sel');
+      recalcular();
+    });
+  });
+  $('#btnGuardar').addEventListener('click', guardar);
+  recalcular();
+  $('#tarjetaEvaluacion').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/** Mirrors the server formula exactly: (nota / 10) * peso. */
+function recalcular() {
+  var faltan = DATOS.rubrica.filter(function (f) { return !PUNTAJES[f.id]; });
+  if (faltan.length) {
+    $('#totalVivo').textContent = '— (faltan ' + faltan.length + ')';
+    $('#btnGuardar').disabled = true;
+    return;
+  }
+  var total = DATOS.rubrica.reduce(function (s, f) { return s + (PUNTAJES[f.id] / 10) * f.peso; }, 0);
+  $('#totalVivo').textContent = Math.round(total * 100) / 100;
+  $('#btnGuardar').disabled = false;
+}
+
+function guardar() {
+  var b = $('#btnGuardar');
+  ocupado(b, true, 'Guardando...');
+  var datos = { code: ACTUAL.code, observaciones: $('#obs').value };
+  DATOS.rubrica.forEach(function (f) { datos[f.id] = PUNTAJES[f.id]; });
+
+  llamar('guardar_evaluacion', datos).then(function (r) {
+    ocupado(b, false);
+    mostrarAviso('#avisoGlobal', 'ok',
+      r.corregida ? 'Calificación corregida' : 'Calificación guardada',
+      ACTUAL.code + ' — total ' + r.total + '/100.');
+    $('#tarjetaEvaluacion').innerHTML = '';
+    cargar();
+  }).catch(function (e) {
+    ocupado(b, false);
+    mostrarAviso('#avisoGlobal', 'error', 'No se pudo guardar', e.message);
+  });
+}
+</script>
+</body>
+</html>
