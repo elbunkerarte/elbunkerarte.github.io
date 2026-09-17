@@ -8,6 +8,21 @@
 
 var PAGINAS_PUBLICAS = ['inscripcion', 'cambio-horario', 'gracias', 'estado'];
 
+/**
+ * Which roles may OPEN each internal page.
+ *
+ * A valid token is not enough: without this table any signed token opened any
+ * panel. The actions were still refused by exigir(), so no data leaked, but a
+ * juror could load the admin shell - confusing, and one missing check away from
+ * being a real hole.
+ */
+var ROLES_POR_PAGINA = {
+  'admin':     [ROL.ADMIN, ROL.LOGISTICA],
+  'checkin':   [ROL.ADMIN, ROL.LOGISTICA, ROL.CHECKIN],
+  'jurado':    [ROL.ADMIN, ROL.JURADO],
+  'dashboard': [ROL.ADMIN, ROL.DIRECCION, ROL.LOGISTICA]
+};
+
 function doGet(e) {
   var params = (e && e.parameter) || {};
   var pagina = params.p || 'inscripcion';
@@ -19,6 +34,12 @@ function doGet(e) {
 
     if (PAGINAS_PUBLICAS.indexOf(pagina) === -1) {
       if (!sesion.ok) return renderizar('ui_403', { motivo: sesion.motivo });
+
+      var permitidos = ROLES_POR_PAGINA[pagina];
+      if (permitidos && permitidos.indexOf(sesion.rol) === -1) {
+        registrar(sesion.alias, sesion.rol, 'ACCESO_DENEGADO', pagina, 'rol sin permiso sobre la pagina');
+        return renderizar('ui_403', { motivo: 'ROL_SIN_ACCESO_A_ESTA_PAGINA' });
+      }
     }
 
     var plantilla = {
