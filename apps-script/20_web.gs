@@ -189,6 +189,7 @@ function renderizar(plantilla, datos) {
     : HtmlService.createTemplateFromFile(plantilla);
   for (var k in datos) if (datos.hasOwnProperty(k)) t[k] = datos[k];
   t.BASE_URL = ScriptApp.getService().getUrl();
+  t.ENTORNO = entorno();
   return t.evaluate()
     .setTitle(cfg('evento_nombre', 'EL BUNKER'))
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')

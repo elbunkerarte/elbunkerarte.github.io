@@ -50,7 +50,23 @@ function INSTALAR() {
  * borrarDatosDePrueba("SI-BORRAR").
  */
 function ENSAYO() {
+  exigirEntornoPruebas('ENSAYO');
   return ensayoIntegral();
+}
+
+/**
+ * Convierte ESTE proyecto en el entorno de PRUEBAS y lo instala.
+ *
+ * Se ejecuta una sola vez, en un proyecto de Apps Script NUEVO y vacio: crea su
+ * propia hoja de calculo, separada de la de produccion. A partir de ahi ENSAYO y
+ * LIMPIAR funcionan aqui y siguen bloqueados en produccion.
+ */
+function INSTALAR_PRUEBAS() {
+  PropertiesService.getScriptProperties().setProperty(PROP.ENTORNO, 'PRUEBAS');
+  var r = INSTALAR();
+  console.log('\n*** ESTE PROYECTO ES EL ENTORNO DE PRUEBAS ***');
+  console.log('Sus datos son ficticios y desechables. Produccion no se ve afectada.');
+  return r;
 }
 
 /**
@@ -62,6 +78,7 @@ function ENSAYO() {
  * integral y antes de abrir inscripciones reales.
  */
 function LIMPIAR() {
+  exigirEntornoPruebas('LIMPIAR');
   var r = borrarDatosDePrueba('SI-BORRAR');
   console.log('Datos operativos borrados. CONFIG y usuarios intactos.');
   return r;

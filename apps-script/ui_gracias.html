@@ -18,6 +18,7 @@
   </div>
 </div>
 <?!= incluir('ui_scripts') ?>
+<script>window.ENTORNO = '<?= ENTORNO ?>';</script>
 <script>
 $('#btn').addEventListener('click', function () {
   var b = $('#btn'); ocupado(b, true, 'Consultando...');

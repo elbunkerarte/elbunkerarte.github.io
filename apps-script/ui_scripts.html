@@ -70,6 +70,24 @@ function etiquetaEstado(valor) {
   return '<span class="etiqueta ' + claseEstado(valor) + '">' + escaparHtml(valor) + '</span>';
 }
 
+/**
+ * Paints the test-environment banner.
+ *
+ * Production and staging are two different Apps Script projects with two
+ * different spreadsheets, and their URLs look almost identical - so the only
+ * reliable way to tell them apart at a glance is on screen.
+ */
+function marcarEntorno() {
+  if (window.ENTORNO !== 'PRUEBAS') return;
+  var b = document.createElement('div');
+  b.className = 'banner-pruebas';
+  b.innerHTML = '<span>⚠ ENTORNO DE <b>PRUEBAS</b> — los datos son ficticios ' +
+                'y se pueden borrar. Esto NO es la convocatoria real.</span>';
+  document.body.insertBefore(b, document.body.firstChild);
+  document.title = '[PRUEBAS] ' + document.title;
+}
+document.addEventListener('DOMContentLoaded', marcarEntorno);
+
 /** Online/offline banner, shared by every panel. */
 function vigilarConexion(alRecuperar) {
   var barra = document.createElement('div');

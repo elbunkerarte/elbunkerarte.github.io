@@ -12,8 +12,41 @@ var PROP = {
   SPREADSHEET_ID: 'SPREADSHEET_ID',
   SECRETO_HMAC: 'SECRETO_HMAC',
   CARPETA_BACKUPS: 'CARPETA_BACKUPS',
-  SITIO_PUBLICO: 'SITIO_PUBLICO'
+  SITIO_PUBLICO: 'SITIO_PUBLICO',
+  ENTORNO: 'ENTORNO'
 };
+
+/**
+ * PRUEBAS o PRODUCCION. Cada entorno es un proyecto de Apps Script distinto,
+ * con su propia hoja de calculo: no comparten ni una fila.
+ *
+ * Por defecto PRODUCCION. Un entorno solo es de pruebas si alguien lo declaro
+ * explicitamente, de modo que olvidarse nunca convierte produccion en un
+ * sitio donde se pueden borrar datos.
+ */
+function entorno() {
+  var v = PropertiesService.getScriptProperties().getProperty(PROP.ENTORNO);
+  return normalizarComparable(v) === 'PRUEBAS' ? 'PRUEBAS' : 'PRODUCCION';
+}
+
+function esPruebas() {
+  return entorno() === 'PRUEBAS';
+}
+
+/**
+ * Corta cualquier operacion destructiva fuera del entorno de pruebas.
+ * Es un gate ejecutable, no una advertencia en la documentacion: cargar datos
+ * ficticios o vaciar las hojas en produccion arruinaria la convocatoria, y una
+ * nota en un manual no lo impide.
+ */
+function exigirEntornoPruebas(operacion) {
+  if (esPruebas()) return true;
+  throw new Error(
+    'BLOQUEADO: "' + operacion + '" solo puede correr en el entorno de PRUEBAS.\n' +
+    'Este proyecto es PRODUCCION y contiene (o contendra) inscripciones reales.\n\n' +
+    'Si de verdad quieres hacerlo aqui, cambia ENTORNO a PRUEBAS en\n' +
+    'Configuracion del proyecto > Propiedades del script. Piensalo dos veces.');
+}
 
 var HOJA = {
   REGISTRO: 'REGISTRO',

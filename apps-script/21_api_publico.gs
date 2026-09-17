@@ -230,6 +230,7 @@ function accionConfigPublica() {
       privacy_policy_url: cfg('privacy_policy_url', ''),
       consent_version: cfg('consent_version', 'v1-PENDIENTE')
     },
+    entorno: entorno(),
     abierto: cfgBool('inscripciones_abiertas', true),
     cambios_abiertos: cfgBool('cambios_abiertos', true)
   };
