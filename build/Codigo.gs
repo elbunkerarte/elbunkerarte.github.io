@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-17T14:12:00.599Z
+ * Generado: 2026-09-17T14:26:00.721Z
  * Modulos: 20 .gs + 10 .html
  */
 
@@ -80,6 +80,20 @@ function INSTALAR() {
  */
 function ENSAYO() {
   return ensayoIntegral();
+}
+
+/**
+ * Borra los datos operativos (inscripciones, evaluaciones, incidentes, cambios,
+ * bitacora) y deja CONFIG y los usuarios intactos.
+ *
+ * Existe como funcion sin argumentos porque el boton "Ejecutar" del editor no
+ * permite pasar parametros, y es justo lo que hace falta despues del ensayo
+ * integral y antes de abrir inscripciones reales.
+ */
+function LIMPIAR() {
+  var r = borrarDatosDePrueba('SI-BORRAR');
+  console.log('Datos operativos borrados. CONFIG y usuarios intactos.');
+  return r;
 }
 
 // ========================================================================

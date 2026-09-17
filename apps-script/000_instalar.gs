@@ -52,3 +52,17 @@ function INSTALAR() {
 function ENSAYO() {
   return ensayoIntegral();
 }
+
+/**
+ * Borra los datos operativos (inscripciones, evaluaciones, incidentes, cambios,
+ * bitacora) y deja CONFIG y los usuarios intactos.
+ *
+ * Existe como funcion sin argumentos porque el boton "Ejecutar" del editor no
+ * permite pasar parametros, y es justo lo que hace falta despues del ensayo
+ * integral y antes de abrir inscripciones reales.
+ */
+function LIMPIAR() {
+  var r = borrarDatosDePrueba('SI-BORRAR');
+  console.log('Datos operativos borrados. CONFIG y usuarios intactos.');
+  return r;
+}
