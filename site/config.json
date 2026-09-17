@@ -1,6 +1,5 @@
 {
   "_instrucciones": "Copia este archivo como site/config.json y reemplaza CADA 'PENDIENTE DE COMPLETAR' con el dato real aprobado por la organizacion. NO se inventa ningun dato legal. Los mismos valores deben quedar en la hoja CONFIG de la base maestra.",
-
   "evento": {
     "nombre": "EL BÚNKER by Arte es la Solución",
     "fecha_texto": "viernes 2 de octubre de 2026",
@@ -16,7 +15,6 @@
     "sede": "PENDIENTE DE COMPLETAR",
     "direccion": "PENDIENTE DE COMPLETAR"
   },
-
   "legal": {
     "legal_name": "PENDIENTE DE COMPLETAR",
     "nit": "PENDIENTE DE COMPLETAR",
@@ -26,10 +24,9 @@
     "domain": "PENDIENTE DE COMPLETAR",
     "consent_version": "v1-PENDIENTE"
   },
-
   "enlaces": {
-    "inscripcion": "PENDIENTE DE COMPLETAR (URL /exec de la Web App de Apps Script con ?p=inscripcion)",
-    "cambio_horario": "PENDIENTE DE COMPLETAR (misma URL con ?p=cambio-horario)",
+    "inscripcion": "https://script.google.com/macros/s/AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW/exec?p=inscripcion",
+    "cambio_horario": "https://script.google.com/macros/s/AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW/exec?p=cambio-horario",
     "instagram": "PENDIENTE DE COMPLETAR",
     "tiktok": "PENDIENTE DE COMPLETAR",
     "whatsapp_contacto": "PENDIENTE DE COMPLETAR"
