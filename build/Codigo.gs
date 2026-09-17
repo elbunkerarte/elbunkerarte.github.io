@@ -4,8 +4,8 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-17T14:08:49.590Z
- * Modulos: 19 .gs + 10 .html
+ * Generado: 2026-09-17T14:12:00.599Z
+ * Modulos: 20 .gs + 10 .html
  */
 
 /** Pantallas HTML. Las lee hayRegistroPlantillas() en 20_web.gs. */
@@ -22,6 +22,65 @@ var PLANTILLAS = {
   "ui_scripts": "<script>\n/* EL BUNKER - shared client helpers. */\n\n/** Calls a server action. Same origin, so no CORS and no API key in the page. */\nfunction llamar(accion, datos) {\n  return new Promise(function (resolve, reject) {\n    var carga = Object.assign({ accion: accion, t: window.TOKEN || '' }, datos || {});\n    google.script.run\n      .withSuccessHandler(function (r) {\n        if (r && r.ok === false) reject(new Error(r.error || 'Error desconocido'));\n        else resolve(r);\n      })\n      .withFailureHandler(function (e) { reject(new Error(e.message || 'Fallo de conexion')); })\n      .api(carga);\n  });\n}\n\nfunction $(sel, raiz) { return (raiz || document).querySelector(sel); }\nfunction $$(sel, raiz) { return Array.prototype.slice.call((raiz || document).querySelectorAll(sel)); }\n\nfunction escaparHtml(v) {\n  return String(v === null || v === undefined ? '' : v)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction mostrarAviso(contenedor, tipo, titulo, texto) {\n  var el = typeof contenedor === 'string' ? $(contenedor) : contenedor;\n  if (!el) return;\n  el.innerHTML = '<div class=\"aviso ' + tipo + '\"><b>' + escaparHtml(titulo) + '</b>' +\n                 escaparHtml(texto || '') + '</div>';\n  el.scrollIntoView({ behavior: 'smooth', block: 'center' });\n}\n\nfunction ocupado(boton, activo, textoOcupado) {\n  if (!boton) return;\n  if (activo) {\n    boton.dataset.textoPrevio = boton.innerHTML;\n    boton.disabled = true;\n    boton.innerHTML = '<span class=\"cargando\"></span> ' + (textoOcupado || 'Procesando...');\n  } else {\n    boton.disabled = false;\n    if (boton.dataset.textoPrevio) boton.innerHTML = boton.dataset.textoPrevio;\n  }\n}\n\n/** Stable id per browser tab so a retry is recognised as the same submission. */\nfunction idEnvio(clave) {\n  var k = 'bunker_' + clave;\n  var v = null;\n  try { v = sessionStorage.getItem(k); } catch (e) { /* private mode */ }\n  if (!v) {\n    v = 'C' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);\n    try { sessionStorage.setItem(k, v); } catch (e) { /* ignore */ }\n  }\n  return v;\n}\n\nfunction nuevoIdEnvio(clave) {\n  try { sessionStorage.removeItem('bunker_' + clave); } catch (e) { /* ignore */ }\n  return idEnvio(clave);\n}\n\nfunction claseEstado(valor) {\n  return 'e-' + String(valor || '').toUpperCase().replace(/[\\s-]+/g, '');\n}\n\nfunction etiquetaEstado(valor) {\n  if (!valor) return '';\n  return '<span class=\"etiqueta ' + claseEstado(valor) + '\">' + escaparHtml(valor) + '</span>';\n}\n\n/** Online/offline banner, shared by every panel. */\nfunction vigilarConexion(alRecuperar) {\n  var barra = document.createElement('div');\n  barra.className = 'conexion';\n  document.body.appendChild(barra);\n\n  function pintar() {\n    if (navigator.onLine) {\n      barra.className = 'conexion';\n      if (alRecuperar) alRecuperar();\n    } else {\n      barra.className = 'conexion sin';\n      barra.textContent = 'SIN CONEXION - se guarda en este dispositivo y se sincroniza al volver';\n    }\n  }\n  window.addEventListener('online', pintar);\n  window.addEventListener('offline', pintar);\n  pintar();\n  return barra;\n}\n</script>\n"
 };
 
+
+// ========================================================================
+// 000_instalar.gs
+// ========================================================================
+
+/**
+ * EL BUNKER - punto de entrada de instalacion.
+ *
+ * Deliberadamente es la PRIMERA funcion del archivo: el editor de Apps Script
+ * preselecciona la primera funcion del proyecto, asi que quien instala solo
+ * tiene que pulsar "Ejecutar" sin buscar nada en el desplegable.
+ *
+ * Es idempotente: se puede correr las veces que haga falta.
+ */
+function INSTALAR() {
+  var resumen = setupInicial();
+  var accesos = crearAccesosOperativos();
+
+  var lineas = [
+    '',
+    '========================================================',
+    '  EL BUNKER - INSTALACION COMPLETA',
+    '========================================================',
+    '',
+    'BASE MAESTRA (tu "Excel"):',
+    '  ' + resumen.spreadsheet_url,
+    '',
+    'ENLACES DE ACCESO (entrega a cada persona SOLO el suyo):'
+  ];
+
+  accesos.forEach(function (a) {
+    lineas.push('  ' + a.alias + ' [' + a.rol + ']');
+    lineas.push('    ' + a.url);
+  });
+
+  lineas.push('');
+  lineas.push('SIGUIENTE PASO OBLIGATORIO:');
+  lineas.push('  Implementar > Nueva implementacion > Aplicacion web');
+  lineas.push('    Ejecutar como:    Yo');
+  lineas.push('    Quien tiene acceso: Cualquier usuario');
+  lineas.push('  Sin esto los enlaces de arriba no abren.');
+  lineas.push('');
+  lineas.push('DESPUES: abre la hoja CONFIG y reemplaza cada');
+  lineas.push('PENDIENTE DE COMPLETAR con el dato real aprobado.');
+  lineas.push('========================================================');
+
+  console.log(lineas.join('\n'));
+  return { base: resumen.spreadsheet_url, accesos: accesos };
+}
+
+/**
+ * Ensayo completo con datos ficticios: carga 130 inscripciones, emite los 100
+ * codigos, simula la jornada, califica con tres jurados y produce el Top 7.
+ * Para el "ensayo integral" del cronograma. Limpiar despues con
+ * borrarDatosDePrueba("SI-BORRAR").
+ */
+function ENSAYO() {
+  return ensayoIntegral();
+}
 
 // ========================================================================
 // 00_config.gs
