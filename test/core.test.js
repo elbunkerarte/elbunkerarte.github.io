@@ -31,6 +31,13 @@ function inscripcionValida(extra) {
     accept_data_processing: true,
     accept_whatsapp_operational: true,
     accept_image_voice: true,
+    participation_mode: 'SOLISTA',
+    genre_primary: 'R&B',
+    presentation_format: 'VOZ_PISTA',
+    own_equipment: 'NO',
+    track_uses: 'SI',
+    track_method: 'ARCHIVO',
+    adult_confirmation: true,
     created_at: '2026-09-20T10:00:00.000Z'
   }, extra || {});
 }
@@ -270,31 +277,33 @@ describe('Asignacion de codigos B-001..B-100', () => {
 
 // ===========================================================================
 describe('Agenda por bloques', () => {
-  it('B-001 va al bloque 1, 16:00, llegada 15:45', () => {
+  it('B-001 is block 1 at 15:00 with arrival at 14:45', () => {
     const h = C.horarioDeCodigo('B-001');
     expect(h.block_id).toBe(1);
-    expect(h.audition_time).toBe('16:00');
-    expect(h.arrival_time).toBe('15:45');
+    expect(h.audition_time).toBe('15:00');
+    expect(h.arrival_time).toBe('14:45');
   });
   it('B-010 sigue en el bloque 1 (frontera)', () => {
     expect(C.horarioDeCodigo('B-010').block_id).toBe(1);
   });
-  it('B-011 abre el bloque 2 a las 16:30', () => {
+  it('B-011 opens block 2 at 15:30', () => {
     const h = C.horarioDeCodigo('B-011');
     expect(h.block_id).toBe(2);
-    expect(h.audition_time).toBe('16:30');
+    expect(h.audition_time).toBe('15:30');
   });
-  it('B-100 cierra el bloque 10 a las 20:30', () => {
+  it('B-100 closes block 10 at 19:30-20:00', () => {
     const h = C.horarioDeCodigo('B-100');
     expect(h.block_id).toBe(10);
-    expect(h.audition_time).toBe('20:30');
-    expect(h.fin).toBe('21:00');
+    expect(h.audition_time).toBe('19:30');
+    expect(h.fin).toBe('20:00');
   });
-  it('la agenda completa son 10 bloques + contingencia 21:00-21:30', () => {
+  it('the full agenda is 10 blocks + margin 20:00-20:30 + contingency 20:30-21:00', () => {
     const a = C.construirAgenda();
-    expect(a).toHaveLength(11);
-    expect(a[10].block_id).toBe('CONTINGENCIA');
-    expect(a[10].ventana).toBe('21:00-21:30');
+    expect(a).toHaveLength(12);
+    expect(a[10].block_id).toBe('MARGEN');
+    expect(a[10].ventana).toBe('20:00-20:30');
+    expect(a[11].block_id).toBe('CONTINGENCIA');
+    expect(a[11].ventana).toBe('20:30-21:00');
   });
   it('cada bloque cubre exactamente 10 codigos', () => {
     const a = C.construirAgenda();
@@ -345,8 +354,8 @@ describe('QA: cambios de horario (Formulario 2)', () => {
     expect(r.ok).toBe(true);
     expect(r.cambios.code).toBe('B-014');
     expect(r.cambios.final_block).toBe(7);
-    expect(r.cambios.final_time).toBe('19:00');
-    expect(r.cambios.arrival_time).toBe('18:45');
+    expect(r.cambios.final_time).toBe('18:00');
+    expect(r.cambios.arrival_time).toBe('17:45');
     expect(r.cambios.change_status).toBe('APROBADO');
     expect(r.cambios.changed_by).toBe('logistica');
   });
@@ -515,7 +524,7 @@ describe('Seleccion del Top 7', () => {
   it('devuelve exactamente 7 y ordenados de mayor a menor', () => {
     const lista = [];
     for (let i = 0; i < 12; i++) lista.push(artista('B-' + String(i + 1).padStart(3, '0'), 10 - i * 0.5));
-    const r = C.seleccionarTop(lista);
+    const r = C.seleccionarTop(lista, { top: 7 });
     expect(r.top).toHaveLength(7);
     expect(r.top[0].code).toBe('B-001');
     expect(r.top[0].artist_final > r.top[6].artist_final).toBe(true);

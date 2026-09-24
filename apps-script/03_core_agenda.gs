@@ -3,15 +3,20 @@
  * PURE FUNCTIONS ONLY.
  */
 
-/** Auditions run 16:00-21:00 in ten 30-minute blocks of ten codes. */
+/**
+ * Auditions run 15:00-20:00 in ten 30-minute blocks of ten codes, then an
+ * operational margin (20:00-20:30), then contingency (20:30-21:00), and the
+ * day closes at 21:00. 100 x 3 minutes = 5 hours.
+ */
 var AGENDA_DEFECTO = {
-  inicio_minutos: 16 * 60,        // 16:00
+  inicio_minutos: 15 * 60,        // 15:00
   duracion_bloque: 30,            // minutes
   bloques: 10,
   cupo_por_bloque: 10,
   antelacion_llegada: 15,         // minutes before the block starts
-  contingencia_inicio: 21 * 60,   // 21:00
-  contingencia_fin: 21 * 60 + 30, // 21:30 - hard close
+  margen_inicio: 20 * 60,         // 20:00 operational margin
+  contingencia_inicio: 20 * 60 + 30, // 20:30
+  contingencia_fin: 21 * 60,      // 21:00 - hard close
   tolerancia_minutos: 5
 };
 
@@ -21,10 +26,17 @@ function minutosAHora(minutos) {
   return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
 }
 
+/**
+ * "15:00" -> 900. Also reads the forms a spreadsheet produces when it turns a
+ * typed time into a date: "1899-12-30T15:00:00" or "2026-10-23 15:00".
+ */
 function horaAMinutos(hora) {
-  var m = String(hora || '').match(/^(\d{1,2}):(\d{2})/);
+  var texto = String(hora === null || hora === undefined ? '' : hora).trim();
+  var m = texto.match(/^(\d{1,2}):(\d{2})/) || texto.match(/^\d{4}-\d{2}-\d{2}[T ](\d{1,2}):(\d{2})/);
   if (!m) return null;
-  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  var h = parseInt(m[1], 10), min = parseInt(m[2], 10);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
 }
 
 /** Block number (1..10) for a code number, or null when out of range. */
@@ -59,11 +71,20 @@ function horarioDeBloque(bloque, cfg) {
   };
 }
 
-/** The ten blocks, ready to render in the AGENDA sheet or the public page. */
+/** The ten blocks plus margin and contingency, ready for the AGENDA sheet. */
 function construirAgenda(cfg) {
   var c = cfg || AGENDA_DEFECTO;
   var filas = [];
   for (var b = 1; b <= c.bloques; b++) filas.push(horarioDeBloque(b, c));
+  if (c.margen_inicio !== undefined && c.margen_inicio < c.contingencia_inicio) {
+    filas.push({
+      block_id: 'MARGEN',
+      inicio: minutosAHora(c.margen_inicio),
+      fin: minutosAHora(c.contingencia_inicio),
+      ventana: minutosAHora(c.margen_inicio) + '-' + minutosAHora(c.contingencia_inicio),
+      arrival_time: '', audition_time: '', limite_tolerancia: '', codigo_desde: '', codigo_hasta: ''
+    });
+  }
   filas.push({
     block_id: 'CONTINGENCIA',
     inicio: minutosAHora(c.contingencia_inicio),
@@ -183,4 +204,22 @@ function aplicarCambio(registro, nuevoBloque, opciones) {
     },
     horario: h
   };
+}
+
+/**
+ * Where the day stands at a given minute: the running block number, or one of
+ * ANTES / MARGEN / CONTINGENCIA / CERRADO. Feeds the operational indicator.
+ */
+function currentBlock(nowMinutes, cfg) {
+  var c = cfg || AGENDA_DEFECTO;
+  if (nowMinutes === null || nowMinutes === undefined) return { phase: 'DESCONOCIDO', block_id: null };
+  if (nowMinutes < c.inicio_minutos) return { phase: 'ANTES', block_id: null };
+  var endBlocks = c.inicio_minutos + c.bloques * c.duracion_bloque;
+  if (nowMinutes < endBlocks) {
+    var block = Math.floor((nowMinutes - c.inicio_minutos) / c.duracion_bloque) + 1;
+    return { phase: 'BLOQUE', block_id: block };
+  }
+  if (nowMinutes < c.contingencia_inicio) return { phase: 'MARGEN', block_id: null };
+  if (nowMinutes < c.contingencia_fin) return { phase: 'CONTINGENCIA', block_id: null };
+  return { phase: 'CERRADO', block_id: null };
 }
