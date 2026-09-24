@@ -53,6 +53,65 @@ function expect(valor) {
       if (!valor || valor.indexOf(item) === -1) {
         throw new FalloAssercion(`esperaba que contuviera ${JSON.stringify(item)}`);
       }
+    },
+
+    // ---- Matchers added for the integration suite (test/integration*.test.js) ----
+
+    /** Calls `valor` and expects it to throw; `expected` is a substring or RegExp of the message. Returns the error. */
+    toThrow(expected) {
+      if (typeof valor !== 'function') throw new FalloAssercion('toThrow() needs a function');
+      let error = null;
+      try { valor(); } catch (e) { error = e; }
+      if (!error) throw new FalloAssercion('expected the function to throw, but it returned normally');
+      const message = String(error && error.message !== undefined ? error.message : error);
+      if (expected instanceof RegExp && !expected.test(message)) {
+        throw new FalloAssercion(`expected an error matching ${expected}, got ${JSON.stringify(message)}`);
+      }
+      if (typeof expected === 'string' && message.indexOf(expected) === -1) {
+        throw new FalloAssercion(`expected an error containing ${JSON.stringify(expected)}, got ${JSON.stringify(message)}`);
+      }
+      return error;
+    },
+    toMatch(re) {
+      const text = String(valor);
+      if (!(re instanceof RegExp ? re.test(text) : text.indexOf(re) !== -1)) {
+        throw new FalloAssercion(`expected ${JSON.stringify(text.slice(0, 200))} to match ${re}`);
+      }
+    },
+    toBeGreaterThan(n) {
+      if (!(valor > n)) throw new FalloAssercion(`expected ${JSON.stringify(valor)} > ${n}`);
+    },
+    toBeGreaterThanOrEqual(n) {
+      if (!(valor >= n)) throw new FalloAssercion(`expected ${JSON.stringify(valor)} >= ${n}`);
+    },
+    toBeLessThan(n) {
+      if (!(valor < n)) throw new FalloAssercion(`expected ${JSON.stringify(valor)} < ${n}`);
+    },
+    toBeDefined() {
+      if (valor === undefined) throw new FalloAssercion('expected a defined value');
+    },
+    toBeUndefined() {
+      if (valor !== undefined) throw new FalloAssercion(`expected undefined, got ${JSON.stringify(valor)}`);
+    },
+
+    /** Negated matchers: expect(x).not.toBe(y), .not.toContain(...), .not.toMatch(...), ... */
+    get not() {
+      const positive = expect(valor);
+      const negated = {};
+      Object.keys(positive).forEach((name) => {
+        if (name === 'not' || name === 'toThrow') return;
+        negated[name] = (...args) => {
+          try {
+            positive[name](...args);
+          } catch (e) {
+            if (e instanceof FalloAssercion) return;
+            throw e;
+          }
+          throw new FalloAssercion(`expected NOT ${name}(${args.map((a) => JSON.stringify(a)).join(', ')}) ` +
+            `for ${JSON.stringify(valor === undefined ? 'undefined' : valor).slice(0, 200)}`);
+        };
+      });
+      return negated;
     }
   };
 }
