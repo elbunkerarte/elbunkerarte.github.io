@@ -1,6 +1,6 @@
 # Checklist de lanzamiento — EL BÚNKER
 
-Estado al **17 de septiembre de 2026**. El brief pide que *cada variable, enlace,
+Estado al **24 de septiembre de 2026**. El brief pide que *cada variable, enlace,
 consentimiento y automatización tenga estado READY / PENDING*.
 
 **Resumen: la máquina está READY. Lo PENDING son decisiones de la organización
@@ -46,6 +46,9 @@ que ningún sistema puede tomar por ella.**
 | 20 | Respaldo + copia offline | 🟡 PENDING | Coordinación | 1-oct |
 | 21 | Hotspot y power banks | 🟡 PENDING | Producción | 1-oct |
 | 22 | Cerrar cambios (`cambios_abiertos=NO`) | 🟡 PENDING | Coordinación | 1-oct |
+| 23 | **Instalar el entorno de PRUEBAS** (proyecto creado con el código; el OAuth pidió verificación en 2 pasos del dueño de la cuenta) | 🟡 PENDING | Dueño de la cuenta Google | Antes del ensayo |
+| 24 | Producción ya tiene inscripciones del 17-sep: **confirmar si son pruebas** y, si lo son, borrarlas a mano en `REGISTRO` (`LIMPIAR` está bloqueado en producción a propósito) | 🟡 PENDING | Coordinación | Antes de abrir |
+| 25 | Revisar correos con dominio mal escrito (p. ej. `gmaik.com`): el validador comprueba la sintaxis, no la errata | 🟡 PENDING | Coordinación | Al cerrar los 100 |
 
 ---
 
