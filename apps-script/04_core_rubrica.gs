@@ -163,13 +163,59 @@ function seleccionarTop(artistas, opciones) {
   var top = elegibles.slice(0, n);
   var empatesSinResolver = detectarEmpateEnCorte(elegibles, n);
 
-  return {
+  var resultado = {
     top: top,
     ranking: elegibles,
     excluidos: excluidos,
     empates_sin_resolver: empatesSinResolver,
-    requiere_comite: empatesSinResolver.length > 0
+    requiere_comite: empatesSinResolver.length > 0,
+    deliberacion_aplicada: '',
+    deliberacion_descartada: ''
   };
+  if (opciones.deliberacion && resultado.requiere_comite) {
+    return applyDeliberation(resultado, opciones.deliberacion, n);
+  }
+  return resultado;
+}
+
+/**
+ * Applies a minuted committee decision to an unresolved tie at the cut.
+ *
+ * The decision only counts if it covers EXACTLY the artists that are tied now:
+ * if scores changed after the committee met, the tie is different and the old
+ * minutes must not silently decide it. In that case the tie stays open and the
+ * reason is reported.
+ */
+function applyDeliberation(selection, deliberation, n) {
+  var order = (deliberation.codes_in_order || []).map(function (c) { return normalizarComparable(c); });
+  var tied = selection.empates_sin_resolver.map(function (a) { return normalizarComparable(a.code); });
+  var sameSet = order.length === tied.length && tied.every(function (c) { return order.indexOf(c) !== -1; });
+  if (!sameSet) {
+    return Object.assign({}, selection, {
+      deliberacion_descartada: (deliberation.deliberation_id || '') + ' no corresponde al empate actual'
+    });
+  }
+
+  var tiedSet = {};
+  tied.forEach(function (c) { tiedSet[c] = true; });
+  var firstTied = -1;
+  for (var i = 0; i < selection.ranking.length; i++) {
+    if (tiedSet[normalizarComparable(selection.ranking[i].code)]) { firstTied = i; break; }
+  }
+  var byCode = {};
+  selection.ranking.forEach(function (a) { byCode[normalizarComparable(a.code)] = a; });
+  var reordered = selection.ranking.filter(function (a) { return !tiedSet[normalizarComparable(a.code)]; });
+  var decided = order.map(function (c) { return byCode[c]; });
+  Array.prototype.splice.apply(reordered, [firstTied, 0].concat(decided));
+  reordered.forEach(function (a, idx) { a.posicion = idx + 1; });
+
+  return Object.assign({}, selection, {
+    ranking: reordered,
+    top: reordered.slice(0, n),
+    empates_sin_resolver: [],
+    requiere_comite: false,
+    deliberacion_aplicada: deliberation.deliberation_id || 'ACTA'
+  });
 }
 
 /** Descending by final score, then down the documented tie-break ladder. */

@@ -55,22 +55,34 @@ function verificarToken(token) {
   if (!datos.e || Date.now() > datos.e) return { ok: false, motivo: 'EXPIRADO' };
   if (!PERMISOS[datos.r]) return { ok: false, motivo: 'ROL_DESCONOCIDO' };
 
-  // A revoked user keeps a valid signature, so the sheet is the final word.
-  if (!usuarioActivo(datos.a)) return { ok: false, motivo: 'USUARIO_INACTIVO' };
+  // A revoked or re-issued link keeps a valid signature, so the sheet is the final word.
+  var estado = estadoUsuario(datos.a, token);
+  if (estado) return { ok: false, motivo: estado };
 
   return { ok: true, rol: datos.r, alias: datos.a, expira: datos.e };
 }
 
-function usuarioActivo(alias) {
+/**
+ * '' when the user may enter with this token; otherwise the reason.
+ * Only the token stored in _USUARIOS is valid: issuing a new link for an
+ * alias revokes the previous one.
+ */
+function estadoUsuario(alias, token) {
   var usuarios = leerHoja(HOJA.USUARIOS);
-  if (!usuarios.length) return true;                       // not provisioned yet
+  if (!usuarios.length) return '';                         // not provisioned yet
   for (var i = 0; i < usuarios.length; i++) {
-    if (normalizarComparable(usuarios[i].email_o_alias) === normalizarComparable(alias)) {
-      return normalizarComparable(usuarios[i].activo) !== 'NO' &&
-             normalizarComparable(usuarios[i].activo) !== 'FALSE';
-    }
+    var u = usuarios[i];
+    if (normalizarComparable(u.email_o_alias) !== normalizarComparable(alias)) continue;
+    var activo = normalizarComparable(u.activo);
+    if (activo === 'NO' || activo === 'FALSE') return 'USUARIO_INACTIVO';
+    if (token !== undefined && normalizarTexto(u.token) && normalizarTexto(u.token) !== String(token)) return 'TOKEN_REEMPLAZADO';
+    return '';
   }
-  return false;
+  return 'USUARIO_INACTIVO';
+}
+
+function usuarioActivo(alias) {
+  return estadoUsuario(alias) === '';
 }
 
 function puede(rol, capacidad) {
@@ -128,4 +140,20 @@ function urlPanel(rol, token) {
   var pagina = { admin: 'admin', direccion: 'dashboard', logistica: 'admin',
                  checkin: 'checkin', jurado: 'jurado' }[rol] || 'admin';
   return base + '?p=' + pagina + '&t=' + encodeURIComponent(token);
+}
+
+/**
+ * Six-character key that travels with a group code in the members link.
+ * GRP numbers are sequential and easy to guess; the key (an HMAC of the code)
+ * is what stops a stranger from adding people to someone else's group.
+ */
+function groupAccessKey(groupCode) {
+  var code = String(groupCode || '').trim().toUpperCase();
+  if (!code) return '';
+  return firmar('grp:' + code).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
+}
+
+function groupKeyMatches(groupCode, key) {
+  var expected = groupAccessKey(groupCode);
+  return !!expected && expected === String(key || '').trim().toUpperCase();
 }

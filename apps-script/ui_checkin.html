@@ -17,7 +17,8 @@
 
   <div class="tarjeta">
     <h2>Buscar participante</h2>
-    <p class="pista">Por código (B-001) o por número de documento. Siempre valida con el documento físico.</p>
+    <p class="pista">Por código (B-001), por la cédula del líder o por la cédula de cualquier integrante de una agrupación.
+      Siempre valida con el documento físico.</p>
     <div class="campo" style="margin-bottom:10px">
       <input type="text" id="busqueda" placeholder="B-001 o 1036448960" autocomplete="off"
              autocapitalize="characters" style="font-size:20px;padding:15px;text-align:center;letter-spacing:.05em">
@@ -33,6 +34,8 @@
   <div class="tarjeta">
     <div class="pestanas">
       <button class="pestana activa" data-panel="lista">Lista por bloque</button>
+      <button class="pestana" data-panel="escena">Escena</button>
+      <button class="pestana" data-panel="pistas">Pistas</button>
       <button class="pestana" data-panel="contingencia">Contingencia</button>
       <button class="pestana" data-panel="cola">Pendientes de sincronizar (<span id="nCola">0</span>)</button>
     </div>
@@ -42,9 +45,21 @@
         <select id="filtroBloque"><option value="">Todos los bloques</option></select>
       </div>
       <div class="tabla-envoltura"><table>
-        <thead><tr><th>Código</th><th>Artista</th><th>Bloque</th><th>Llegada</th><th>Audición</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th>Código</th><th>Artista</th><th>Modalidad</th><th>Bloque</th><th>Llegada</th><th>Audición</th><th>Estado</th><th></th></tr></thead>
         <tbody id="cuerpoLista"></tbody>
       </table></div>
+    </div>
+
+    <div class="panel" id="panel-escena">
+      <p class="pista">Flujo de escena: CHECK-IN → PRECOLA → EN AUDICIÓN → REALIZADA (salida). Aquí ves quién está en precola
+        y quién está en escena ahora.</p>
+      <div id="salidaEscena"></div>
+    </div>
+
+    <div class="panel" id="panel-pistas">
+      <p class="pista">Pistas en orden de agenda para el técnico de audio. Si la pista no llegó o tiene problema, pide la USB de respaldo.</p>
+      <button class="boton fantasma chico" id="btnPistas" style="margin-bottom:12px">Cargar pistas</button>
+      <div id="salidaPistas"></div>
     </div>
 
     <div class="panel" id="panel-contingencia">
@@ -60,24 +75,34 @@
     </div>
   </div>
 
-  <div class="pie">Datos en caché de este dispositivo. Cierre definitivo de audiciones: <b id="horaCierre">21:30</b>.</div>
+  <div class="pie">Datos en caché de este dispositivo. Tolerancia de llegada: <b><?= cfgNumero('tolerancia_min', 5) ?> min</b> ·
+    Cierre definitivo de audiciones: <b><?= clockText(cfg('cierre_audiciones', '21:00')) ?></b>.</div>
 </div>
 
 <?!= incluir('ui_scripts') ?>
 <script>
 window.ENTORNO = '<?= ENTORNO ?>';
 window.TOKEN = '<?= token ?>';
+var BASE_URL = '<?= BASE_URL ?>';
+var TRANSITIONS = <?!= jsonForScript(TRANSICIONES) ?>;
+var TOLERANCE_MIN = <?= cfgNumero('tolerancia_min', 5) ?>;
 
-var CLAVE_ROSTER = 'bunker_roster_v1';
+var CLAVE_ROSTER = 'bunker_roster_v2';
 var CLAVE_COLA   = 'bunker_cola_v1';
 var ROSTER = [];
 var COLA = [];
+var MODE_LABELS = { SOLISTA: 'Solista', DUO: 'Dúo', AGRUPACION: 'Agrupación' };
+var STATE_BUTTONS = [
+  ['CHECK-IN', 'Confirmar CHECK-IN'], ['PRECOLA', 'Pasar a PRECOLA'], ['EN AUDICION', 'Sube a escena (EN AUDICIÓN)'],
+  ['REALIZADA', 'Audición REALIZADA (salida)'], ['CONTINGENCIA', 'Pasar a CONTINGENCIA'], ['NO SHOW', 'Marcar NO SHOW']
+];
 
 document.addEventListener('DOMContentLoaded', function () {
+  try { localStorage.removeItem('bunker_roster_v1'); } catch (e) { /* old cache shape */ }
   COLA = leerLocal(CLAVE_COLA, []);
   ROSTER = leerLocal(CLAVE_ROSTER, []);
   pintarCola();
-  if (ROSTER.length) { pintarLista(); marcarSync('cache', ROSTER.length + ' en caché local'); }
+  if (ROSTER.length) { pintarLista(); renderStage(); marcarSync('cache', ROSTER.length + ' en caché local'); }
 
   vigilarConexion(function () { sincronizar(true); });
 
@@ -91,6 +116,7 @@ document.addEventListener('DOMContentLoaded', function () {
   $('#busqueda').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') buscar(); });
   $('#btnSincronizar').addEventListener('click', function () { sincronizar(false); });
   $('#btnPlan').addEventListener('click', calcularContingencia);
+  $('#btnPistas').addEventListener('click', loadTracks);
   $('#filtroBloque').addEventListener('change', pintarLista);
 
   $$('.pestana').forEach(function (p) {
@@ -99,6 +125,7 @@ document.addEventListener('DOMContentLoaded', function () {
       $$('.panel').forEach(function (x) { x.classList.remove('activo'); });
       p.classList.add('activa');
       $('#panel-' + p.dataset.panel).classList.add('activo');
+      if (p.dataset.panel === 'escena') renderStage();
     });
   });
   $('#busqueda').focus();
@@ -110,8 +137,7 @@ function guardarLocal(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); 
 
 function marcarSync(tipo, texto) {
   var color = { ok: 'var(--ok)', cache: 'var(--alerta)', error: 'var(--error)' }[tipo] || 'var(--tenue)';
-  $('#estadoSync').innerHTML = '<span class="chip" style="border-color:' + color + '">' +
-    escaparHtml(texto) + '</span>';
+  $('#estadoSync').innerHTML = '<span class="chip" style="border-color:' + color + '">' + escaparHtml(texto) + '</span>';
 }
 
 // --- roster ------------------------------------------------------------------
@@ -119,9 +145,10 @@ function descargarRoster() {
   if (!navigator.onLine) { marcarSync('cache', 'Sin conexión · usando caché'); return; }
   llamar('roster_checkin').then(function (r) {
     ROSTER = r.roster;
-    guardarLocal(CLAVE_ROSTER, ROSTER);
     aplicarColaSobreRoster();
+    guardarLocal(CLAVE_ROSTER, ROSTER);
     pintarLista();
+    renderStage();
     llenarBloques();
     marcarSync('ok', ROSTER.length + ' participantes · ' + r.generado_at.slice(11, 16));
   }).catch(function (e) {
@@ -133,10 +160,12 @@ function descargarRoster() {
 /** Queued operations win over the server copy until they are confirmed. */
 function aplicarColaSobreRoster() {
   COLA.forEach(function (op) {
-    var p = ROSTER.filter(function (x) { return x.code === op.code; })[0];
+    var p = byCode(op.code);
     if (p) p.attendance_status = op.estado;
   });
 }
+
+function byCode(code) { return ROSTER.filter(function (x) { return x.code === code; })[0]; }
 
 function llenarBloques() {
   var sel = $('#filtroBloque');
@@ -150,73 +179,110 @@ function llenarBloques() {
 }
 
 // --- search ------------------------------------------------------------------
+function soloDigitos(v) { return String(v || '').replace(/\D/g, '').replace(/^0+/, ''); }
+
 function buscar() {
   var q = ($('#busqueda').value || '').trim().toUpperCase();
   if (!q) return;
-
-  var soloDigitos = q.replace(/\D/g, '');
-  var p = ROSTER.filter(function (x) {
-    return x.code.toUpperCase() === q ||
-           (soloDigitos && String(x.id_number).replace(/\D/g, '') === soloDigitos);
-  })[0];
-
+  var wantedCode = /^B-?\d+$/.test(q) ? 'B-' + ('00' + q.replace(/\D/g, '')).slice(-3) : '';
+  var doc = soloDigitos(q);
+  var via = '';
+  var p = wantedCode ? byCode(wantedCode) : null;
+  if (p) via = 'código';
+  if (!p && doc) {
+    p = ROSTER.filter(function (x) { return soloDigitos(x.id_number) === doc; })[0];
+    if (p) via = 'cédula del líder';
+  }
+  var matchedMember = null;
+  if (!p && doc) {
+    ROSTER.some(function (x) {
+      var m = (x.members || []).filter(function (m) { return soloDigitos(m.id_number) === doc; })[0];
+      if (m) { p = x; matchedMember = m; via = 'cédula de integrante'; }
+      return !!m;
+    });
+  }
   if (!p) {
     $('#ficha').innerHTML = '<div class="aviso error"><b>No encontrado</b>' +
-      'Ningún participante con código o documento "' + escaparHtml(q) + '". ' +
-      'Verifica el dato o consulta con coordinación.</div>';
+      'Nadie con cupo tiene el código o documento "' + escaparHtml(q) + '". Verifica el dato o consulta con coordinación.</div>';
     return;
   }
-  pintarFicha(p);
+  pintarFicha(p, via, matchedMember);
 }
 
-function pintarFicha(p) {
+function warningsFor(p) {
+  var a = [];
+  var declaredCount = Number(p.members_declared) || 0;
+  if (p.group_code && p.members_authorized < declaredCount) {
+    a.push('Autorizaciones: ' + p.members_authorized + ' de ' + declaredCount + '. Quien no haya autorizado firma la constancia física antes de subir.');
+  }
+  if (!p.consent_image) a.push('NO autoriza uso de imagen/voz: no grabar ni publicar su presentación.');
+  if (p.track_status === 'PISTA PENDIENTE') a.push('La pista no ha llegado: pedir la USB de respaldo.');
+  if (p.track_status === 'PISTA CON PROBLEMA') a.push('La pista tiene un problema reportado: avisar al técnico de audio.');
+  if (p.change_status === 'PENDIENTE') a.push('Tiene una solicitud de cambio de horario sin resolver.');
+  return a;
+}
+
+function pintarFicha(p, via, matchedMember) {
   var ahora = new Date();
   var hhmm = ('0' + ahora.getHours()).slice(-2) + ':' + ('0' + ahora.getMinutes()).slice(-2);
   var retraso = minutos(hhmm) - minutos(p.final_time);
   var avisoHora = '';
-
   if (isFinite(retraso) && p.attendance_status === 'CONFIRMADO') {
-    if (retraso > 5) {
-      avisoHora = '<div class="aviso error"><b>' + retraso + ' minutos tarde</b>' +
-        'Supera la tolerancia de 5 minutos: pierde el turno y pasa a CONTINGENCIA. ' +
-        'Nunca se desplaza a quien llegó puntual.</div>';
+    if (retraso > TOLERANCE_MIN) {
+      avisoHora = '<div class="aviso error"><b>' + retraso + ' minutos tarde</b>Supera la tolerancia de ' + TOLERANCE_MIN +
+        ' minutos: pierde el turno y pasa a CONTINGENCIA. Nunca se desplaza a quien llegó puntual.</div>';
     } else if (retraso > 0) {
       avisoHora = '<div class="aviso alerta"><b>' + retraso + ' minutos tarde</b>' +
-        'Dentro de la tolerancia. Conserva el turno SOLO si no altera el flujo — lo decide el coordinador.</div>';
+        'Dentro de la tolerancia. Conserva el turno SOLO si no altera el flujo; lo decide el coordinador.</div>';
     }
   }
+  var warnings = warningsFor(p);
+  var allowedStates = TRANSITIONS[p.attendance_status] || [];
+  var memberList = p.members || [];
 
   $('#ficha').innerHTML =
     '<div class="tarjeta" style="border-color:var(--amarillo)">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">' +
         '<div><div style="font-size:31px;font-weight:900;letter-spacing:.04em">' + escaparHtml(p.code) + '</div>' +
         '<div style="font-size:17px;font-weight:700;margin-top:3px">' + escaparHtml(p.artistic_name || p.full_name) + '</div>' +
-        '<div style="color:var(--tenue);font-size:13.5px">' + escaparHtml(p.full_name) + ' · ' + escaparHtml(p.discipline) + '</div></div>' +
+        '<div style="color:var(--tenue);font-size:13.5px">' + escaparHtml(MODE_LABELS[p.participation_mode] || p.participation_mode) +
+          (p.group_code ? ' ' + escaparHtml(p.group_code) + ' · ' + escaparHtml(p.members_declared) + ' en escena' : '') +
+          ' · ' + escaparHtml(p.discipline) + (via ? ' · encontrado por ' + via : '') + '</div></div>' +
         '<div style="text-align:right">' + etiquetaEstado(p.attendance_status) +
         '<div style="color:var(--tenue);font-size:12.5px;margin-top:6px">Bloque ' + escaparHtml(p.final_block) +
         '<br>Llegada ' + escaparHtml(p.arrival_time) + ' · Audición <b>' + escaparHtml(p.final_time) + '</b></div></div>' +
       '</div>' +
-      '<div class="aviso info" style="margin-top:14px;font-size:13px">' +
-        '<b>Valida con el documento físico</b>Documento registrado: <b>' + escaparHtml(p.id_number) + '</b>' +
-        (p.technical_needs && p.technical_needs !== 'Ninguna'
-          ? '<br>Necesidades técnicas: ' + escaparHtml(p.technical_needs) : '') +
-      '</div>' + avisoHora +
-      '<div class="rejilla dos" style="margin-top:8px">' +
-        boton(p.code, 'CHECK-IN', 'boton', 'Confirmar CHECK-IN') +
-        boton(p.code, 'REALIZADA', 'boton fantasma', 'Audición REALIZADA') +
-        boton(p.code, 'CONTINGENCIA', 'boton fantasma', 'Pasar a CONTINGENCIA') +
-        boton(p.code, 'NO SHOW', 'boton fantasma', 'Marcar NO SHOW') +
+      '<div class="aviso info" style="margin-top:14px;font-size:13px"><b>Valida con el documento físico' + (p.group_code ? ' de cada integrante' : '') + '</b>' +
+        'Líder / titular: ' + escaparHtml(p.full_name) + ' · <b>' + escaparHtml(p.id_number) + '</b>' +
+        (matchedMember ? '<br>Buscaste a: <b>' + escaparHtml(matchedMember.full_name) + '</b> (' + escaparHtml(matchedMember.artistic_role || 'integrante') + ')' : '') +
+        (p.presentation_format ? '<br>Formato: ' + escaparHtml(p.presentation_format) : '') +
+        (p.technical_needs ? '<br>Necesidades técnicas: ' + escaparHtml(p.technical_needs) : '') +
+        (p.own_equipment_detail ? '<br>Equipo propio: ' + escaparHtml(p.own_equipment_detail) : '') +
+        (p.song_name ? '<br>Canción: ' + escaparHtml(p.song_name) + ' · ' + escaparHtml(p.track_status || '') : '') +
       '</div>' +
+      (warnings.length ? '<div class="aviso alerta"><b>Atención</b>' + warnings.map(escaparHtml).join('<br>') + '</div>' : '') +
+      avisoHora +
+      (memberList.length ? '<div class="tabla-envoltura" style="margin-bottom:12px"><table><thead><tr><th>Integrante</th><th>Documento</th><th>Rol</th><th>Autorización</th><th>Firma</th><th>Imagen</th></tr></thead><tbody>' +
+        memberList.map(function (m) {
+          return '<tr' + (matchedMember && m.id_number === matchedMember.id_number ? ' style="outline:2px solid var(--amarillo)"' : '') + '><td>' +
+            escaparHtml(m.full_name) + (m.is_leader ? ' (líder)' : '') + '</td><td>' + escaparHtml(m.id_number) + '</td><td>' +
+            escaparHtml(m.artistic_role) + '</td><td>' + etiquetaEstado(m.member_status) + '</td><td>' + (m.signature ? 'SI' : (m.is_leader ? 'Form. 1' : 'NO')) +
+            '</td><td>' + (m.consent_image ? 'SI' : '<b style="color:var(--error)">NO</b>') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '') +
+      (p.group_code ? '<p style="margin:0 0 12px"><a target="_blank" rel="noopener" href="' + BASE_URL + '?p=constancia&g=' +
+        encodeURIComponent(p.group_code) + '&t=' + encodeURIComponent(window.TOKEN) + '">Abrir constancia imprimible (firmas en papel)</a></p>' : '') +
+      '<div class="rejilla dos" style="margin-top:8px">' +
+        STATE_BUTTONS.filter(function (b) { return allowedStates.indexOf(b[0]) !== -1; }).map(function (b, i) {
+          return '<button class="' + (i === 0 ? 'boton' : 'boton fantasma') + '" data-code="' + escaparHtml(p.code) +
+                 '" data-estado="' + escaparHtml(b[0]) + '">' + b[1] + '</button>';
+        }).join('') +
+      '</div>' +
+      (allowedStates.length ? '' : '<p class="pista" style="margin:0">Estado final: no hay más cambios desde esta pantalla.</p>') +
     '</div>';
 
   $$('#ficha [data-estado]').forEach(function (b) {
     b.addEventListener('click', function () { registrarEstado(b.dataset.code, b.dataset.estado); });
   });
-}
-
-function boton(code, estado, clase, texto) {
-  return '<button class="' + clase + '" data-code="' + escaparHtml(code) +
-         '" data-estado="' + escaparHtml(estado) + '">' + texto + '</button>';
 }
 
 function minutos(hhmm) {
@@ -233,13 +299,14 @@ function registrarEstado(code, estado) {
   };
 
   // Optimistic local update: the desk must never wait for the network.
-  var p = ROSTER.filter(function (x) { return x.code === code; })[0];
+  var p = byCode(code);
   if (p) { p.attendance_status = estado; guardarLocal(CLAVE_ROSTER, ROSTER); pintarFicha(p); }
 
   COLA.push(op);
   guardarLocal(CLAVE_COLA, COLA);
   pintarCola();
   pintarLista();
+  renderStage();
 
   if (navigator.onLine) sincronizar(true);
 }
@@ -251,9 +318,9 @@ function sincronizar(silencioso) {
   var enviando = COLA.slice();
   llamar('sincronizar_cola', { cola: JSON.stringify(enviando) })
     .then(function (r) {
-      var aplicadas = {};
-      (r.resultados || []).forEach(function (x) { if (x.ok !== false) aplicadas[x.client_op_id] = true; });
-      COLA = COLA.filter(function (op) { return !aplicadas[op.client_op_id]; });
+      var resolvedOps = {};
+      (r.resultados || []).forEach(function (x) { resolvedOps[x.client_op_id] = true; });
+      COLA = COLA.filter(function (op) { return !resolvedOps[op.client_op_id]; });
       guardarLocal(CLAVE_COLA, COLA);
       pintarCola();
 
@@ -261,7 +328,8 @@ function sincronizar(silencioso) {
       if (fallidas.length) {
         $('#salidaCola').innerHTML = '<div class="aviso alerta"><b>' + fallidas.length +
           ' operaciones rechazadas por el servidor</b>' +
-          fallidas.map(function (f) { return escaparHtml(f.error); }).join('<br>') + '</div>';
+          fallidas.map(function (f) { return escaparHtml(f.error); }).join('<br>') +
+          '<br>Si el cambio es correcto, pide a coordinación que lo haga con el motivo.</div>';
       } else if (!silencioso) {
         mostrarAviso('#salidaCola', 'ok', 'Sincronizado', r.procesadas + ' operaciones aplicadas.');
       }
@@ -297,19 +365,55 @@ function pintarLista() {
   $('#cuerpoLista').innerHTML = filas.map(function (p) {
     return '<tr><td><b>' + escaparHtml(p.code) + '</b></td>' +
       '<td>' + escaparHtml(p.artistic_name || p.full_name) + '</td>' +
+      '<td>' + escaparHtml(MODE_LABELS[p.participation_mode] || '') + (p.group_code ? ' · ' + escaparHtml(p.members_authorized + '/' + p.members_declared) : '') + '</td>' +
       '<td>' + escaparHtml(p.final_block) + '</td>' +
       '<td>' + escaparHtml(p.arrival_time) + '</td>' +
       '<td>' + escaparHtml(p.final_time) + '</td>' +
       '<td>' + etiquetaEstado(p.attendance_status) + '</td>' +
       '<td><button class="boton chico fantasma" data-ver="' + escaparHtml(p.code) + '">Abrir</button></td></tr>';
-  }).join('') || '<tr><td colspan="7" style="color:var(--tenue)">Sin participantes en este filtro.</td></tr>';
+  }).join('') || '<tr><td colspan="8" style="color:var(--tenue)">Sin participantes en este filtro.</td></tr>';
+  bindOpenButtons('#cuerpoLista');
+}
 
-  $$('#cuerpoLista [data-ver]').forEach(function (b) {
+function bindOpenButtons(contenedor) {
+  $$(contenedor + ' [data-ver]').forEach(function (b) {
     b.addEventListener('click', function () {
-      var p = ROSTER.filter(function (x) { return x.code === b.dataset.ver; })[0];
+      var p = byCode(b.dataset.ver);
       if (p) { pintarFicha(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }
     });
   });
+}
+
+function renderStage() {
+  var stageList = function (estado, title) {
+    var filas = ROSTER.filter(function (p) { return p.attendance_status === estado; });
+    return '<h3 style="margin:14px 0 8px">' + title + ' (' + filas.length + ')</h3>' + (filas.length
+      ? '<div class="tabla-envoltura"><table><tbody>' + filas.map(function (p) {
+          return '<tr><td><b>' + escaparHtml(p.code) + '</b></td><td>' + escaparHtml(p.artistic_name || p.full_name) + '</td><td>' +
+            escaparHtml(p.final_time) + '</td><td>' + escaparHtml(p.song_name || '') + '</td><td><button class="boton chico fantasma" data-ver="' +
+            escaparHtml(p.code) + '">Abrir</button></td></tr>';
+        }).join('') + '</tbody></table></div>'
+      : '<p class="pista" style="margin:0">Nadie.</p>');
+  };
+  $('#salidaEscena').innerHTML = stageList('EN AUDICION', 'En escena') + stageList('PRECOLA', 'En precola') + stageList('CHECK-IN', 'Con check-in, esperando');
+  bindOpenButtons('#salidaEscena');
+}
+
+function loadTracks() {
+  var b = $('#btnPistas'); ocupado(b, true, 'Cargando…');
+  llamar('pistas_evento').then(function (r) {
+    ocupado(b, false);
+    $('#salidaPistas').innerHTML = '<div class="datos-evento" style="margin-bottom:12px">' +
+      Object.keys(r.por_estado).map(function (k) { return '<span class="chip">' + escaparHtml(k) + ' <b>' + r.por_estado[k] + '</b></span>'; }).join(' ') +
+      (r.carpeta_audio ? ' <a class="chip" target="_blank" rel="noopener" href="' + escaparHtml(r.carpeta_audio) + '">Carpeta Audio</a>' : '') + '</div>' +
+      '<div class="tabla-envoltura"><table><thead><tr><th>Código</th><th>Hora</th><th>Artista</th><th>Canción</th><th>Estado</th><th>Archivo</th><th>Notas</th></tr></thead><tbody>' +
+      r.pistas.map(function (p) {
+        return '<tr><td><b>' + escaparHtml(p.code || '') + '</b></td><td>' + escaparHtml(p.final_time || '') + '</td><td>' + escaparHtml(p.artistic_name) + '</td>' +
+          '<td>' + escaparHtml(p.song_name || '') + '</td><td>' + etiquetaEstado(p.track_status) + '</td>' +
+          '<td>' + (p.track_file_url ? '<a target="_blank" rel="noopener" href="' + escaparHtml(p.track_file_url) + '">' + escaparHtml(p.track_file_name) + '</a>' : '—') + '</td>' +
+          '<td style="white-space:normal;font-size:12px;color:var(--tenue)">' + escaparHtml(p.needs || '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaPistas', 'error', 'Error', e.message); });
 }
 
 function calcularContingencia() {

@@ -1,12 +1,13 @@
 {
   "name": "el-bunker",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "EL BUNKER by Arte es la Solucion - sistema de convocatoria, agenda, check-in y evaluacion",
   "private": true,
   "scripts": {
-    "test": "node test/core.test.js && node test/dataset.test.js && node test/integration.test.js",
+    "test": "node test/core.test.js && node test/dataset.test.js && node test/iteration2.test.js && node test/integration.test.js",
     "test:core": "node test/core.test.js",
     "test:dataset": "node test/dataset.test.js",
+    "test:iteration2": "node test/iteration2.test.js",
     "test:integration": "node test/integration.test.js",
     "test:known-bugs": "node test/integration.known-bugs.test.js",
     "check": "node tools/verificar.js"

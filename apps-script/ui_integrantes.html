@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?!= incluir('ui_estilos') ?>
+</head>
+<body>
+<? var C = accionConfigPublica(); var E = C.evento; ?>
+<div class="envoltura">
+  <?!= incluir('ui_cabecera') ?>
+
+  <h2 class="titulo-pagina">Integrantes de agrupación</h2>
+  <p style="color:var(--tenue);margin-top:0">Cada integrante da <b>su propia autorización</b>. El líder de la agrupación no
+    puede autorizar por otras personas. Tus datos se usan para verificar tu identidad y registrar tu aceptación.</p>
+
+  <div id="avisoGlobal" role="alert" aria-live="polite"></div>
+
+  <!-- Step 1: which group -->
+  <section class="tarjeta" id="pasoGrupo">
+    <h2><span class="n">1</span>Tu agrupación</h2>
+    <div class="rejilla dos">
+      <div class="campo">
+        <label for="group_code">Código de agrupación <span class="req">*</span></label>
+        <input type="text" id="group_code" autocomplete="off" placeholder="GRP-001" value="<?= grupo ?>">
+        <div class="error"></div>
+      </div>
+      <div class="campo">
+        <label for="group_key">Clave de la agrupación <span class="req">*</span></label>
+        <input type="text" id="group_key" autocomplete="off" placeholder="6 caracteres" value="<?= clave ?>">
+        <p class="ayuda">Viene en el enlace que te compartió tu líder.</p>
+        <div class="error"></div>
+      </div>
+    </div>
+    <button type="button" class="boton" id="btnBuscarGrupo">Continuar</button>
+  </section>
+
+  <div id="resumenGrupo"></div>
+
+  <!-- Step 2: the member's own data and authorization -->
+  <form id="formulario" class="oculto" novalidate>
+    <section class="tarjeta">
+      <h2><span class="n">2</span>Tus datos</h2>
+      <div class="campo">
+        <label for="full_name">Nombre completo <span class="req">*</span></label>
+        <input type="text" id="full_name" autocomplete="name" maxlength="120" placeholder="Como aparece en tu documento">
+        <div class="error"></div>
+      </div>
+      <div class="rejilla dos">
+        <div class="campo">
+          <label for="id_number">Número de documento <span class="req">*</span></label>
+          <input type="text" id="id_number" inputmode="numeric" maxlength="15" autocomplete="off">
+          <div class="error"></div>
+        </div>
+        <div class="campo">
+          <label for="birth_date">Fecha de nacimiento <span class="req">*</span></label>
+          <input type="date" id="birth_date" max="<?= E.fecha ?>">
+          <div class="error"></div>
+        </div>
+      </div>
+      <div class="campo">
+        <label for="artistic_role">Rol artístico <span class="req">*</span></label>
+        <input type="text" id="artistic_role" list="roles" maxlength="60" placeholder="Ej.: voz, guitarra, baile, DJ">
+        <datalist id="roles"><option>Voz</option><option>Coros</option><option>Guitarra</option><option>Bajo</option>
+          <option>Batería</option><option>Teclado</option><option>Percusión</option><option>DJ</option><option>Baile</option></datalist>
+        <div class="error"></div>
+      </div>
+      <label class="check" id="campoMayoria">
+        <input type="checkbox" id="adult_confirmation">
+        <span>Confirmo que soy <b>mayor de edad</b> y que mis datos son verdaderos. <span class="req">*</span><span class="error"></span></span>
+      </label>
+    </section>
+
+    <section class="tarjeta">
+      <h2><span class="n">3</span>Tu autorización individual</h2>
+      <div class="aviso info" style="font-size:14px">
+        Lee antes de marcar:
+        <a href="<?= C.legal.terms_url ?>" target="_blank" rel="noopener">Términos y condiciones</a> ·
+        <a href="<?= C.legal.privacy_policy_url ?>" target="_blank" rel="noopener">Política de tratamiento de datos</a>.
+      </div>
+      <label class="check" id="campoTerminos">
+        <input type="checkbox" id="accept_terms">
+        <span>Acepto los <b>Términos y Condiciones</b>. <span class="req">*</span><span class="error"></span></span>
+      </label>
+      <label class="check" id="campoDatos">
+        <input type="checkbox" id="accept_data_processing">
+        <span>Autorizo el <b>tratamiento de mis datos personales</b>. <span class="req">*</span><span class="error"></span></span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="accept_image_voice">
+        <span>Autorizo el <b>uso de mi imagen, voz y registros audiovisuales</b>.</span>
+      </label>
+
+      <div class="campo<?= C.formularios.firma_integrantes ? '' : ' oculto' ?>" id="campoFirma" style="margin-top:14px">
+        <span class="etiqueta-campo">Tu firma <span class="req">*</span></span>
+        <div class="firma"><canvas id="lienzoFirma" aria-label="Espacio para firmar con el dedo o el mouse"></canvas>
+          <div class="guia"></div><div class="texto-guia">Firma aquí con el dedo o el mouse</div></div>
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-top:8px;align-items:center">
+          <p class="ayuda" style="margin:0">Se guarda como evidencia de tu aceptación (firma manuscrita digitalizada). No es una
+            firma electrónica certificada.</p>
+          <button type="button" class="boton chico fantasma" id="btnLimpiarFirma">Borrar</button>
+        </div>
+        <div class="error"></div>
+      </div>
+
+      <div class="trampa" aria-hidden="true"><label for="hp_field">No completar</label><input type="text" id="hp_field" tabindex="-1" autocomplete="off"></div>
+      <button type="submit" class="boton" id="btnEnviar" style="margin-top:8px">Registrar mi autorización</button>
+    </section>
+  </form>
+
+  <div id="resultado" class="oculto" aria-live="polite"></div>
+
+  <footer class="pie">
+    Responsable del tratamiento: <?= C.legal.legal_name ?> · NIT <?= C.legal.nit ?><br>
+    Datos personales y reclamos: <?= C.legal.data_protection_email ?> · <?= C.legal.institutional_phone ?><br>
+    <span style="opacity:.75">Términos <?= C.legal.terms_version ?> · Política <?= C.legal.policy_version ?></span>
+  </footer>
+</div>
+
+<?!= incluir('ui_scripts') ?>
+<script>
+window.ENTORNO = '<?= ENTORNO ?>';
+var CONFIG = <?!= jsonForScript(C) ?>;
+var GROUP = null;
+var SIGNATURE_PAD = null;
+
+document.addEventListener('DOMContentLoaded', function () {
+  if (!CONFIG.integrantes_abierto) {
+    $('#pasoGrupo').classList.add('oculto');
+    mostrarAviso('#avisoGlobal', 'alerta', 'Registro cerrado', 'El registro de integrantes ya está cerrado.');
+    return;
+  }
+  $('#btnBuscarGrupo').addEventListener('click', findGroup);
+  $('#formulario').addEventListener('submit', function (e) { e.preventDefault(); submitMember(); });
+  $('#btnLimpiarFirma').addEventListener('click', function () { if (SIGNATURE_PAD) SIGNATURE_PAD.clear(); });
+  if ($('#group_code').value && $('#group_key').value) findGroup();
+});
+
+function findGroup() {
+  $$('.campo').forEach(function (c) { c.classList.remove('malo'); });
+  var code = $('#group_code').value.trim().toUpperCase();
+  var key = $('#group_key').value.trim().toUpperCase();
+  if (!code) { markError('group_code', 'Escribe el código de agrupación.'); return; }
+  if (!key) { markError('group_key', 'Escribe la clave.'); return; }
+  var b = $('#btnBuscarGrupo');
+  ocupado(b, true, 'Buscando…');
+  llamar('consultar_agrupacion', { group_code: code, group_key: key }).then(function (g) {
+    ocupado(b, false);
+    GROUP = { code: code, key: key };
+    $('#pasoGrupo').classList.add('oculto');
+    $('#resumenGrupo').innerHTML = '<section class="tarjeta" style="border-color:var(--amarillo)">' +
+      '<div style="color:var(--tenue);font-size:13px;letter-spacing:.1em">AGRUPACIÓN ' + escaparHtml(g.group_code) + '</div>' +
+      '<div class="codigo-grande" style="font-size:36px;color:var(--texto)">' + escaparHtml(g.group_display_name) + '</div>' +
+      '<p class="pista" style="margin:8px 0 0">' + g.members_authorized + ' de ' + (g.members_declared || g.members_registered) +
+      ' integrantes ya dieron su autorización.</p></section>';
+    $('#formulario').classList.remove('oculto');
+    if (!SIGNATURE_PAD && CONFIG.formularios.firma_integrantes) SIGNATURE_PAD = createSignaturePad($('#lienzoFirma'));
+  }).catch(function (e) {
+    ocupado(b, false);
+    mostrarAviso('#avisoGlobal', 'error', 'No encontramos la agrupación', e.message);
+  });
+}
+
+function submitMember() {
+  $$('.campo, .check').forEach(function (c) { c.classList.remove('malo'); });
+  var d = {};
+  ['full_name', 'id_number', 'birth_date', 'artistic_role', 'hp_field'].forEach(function (id) { d[id] = ($('#' + id).value || '').trim(); });
+  ['adult_confirmation', 'accept_terms', 'accept_data_processing', 'accept_image_voice'].forEach(function (id) { d[id] = $('#' + id).checked; });
+  var errorCount = 0;
+  [['full_name', 'Escribe tu nombre completo.'], ['id_number', 'Escribe tu documento.'], ['birth_date', 'Indica tu fecha de nacimiento.'],
+   ['artistic_role', 'Indica tu rol en la agrupación.']].forEach(function (p) { if (!d[p[0]]) { markError(p[0], p[1]); errorCount++; } });
+  [['adult_confirmation', 'Debes confirmar que eres mayor de edad.'], ['accept_terms', 'Debes aceptar los términos.'],
+   ['accept_data_processing', 'Debes autorizar el tratamiento de datos.']].forEach(function (p) { if (!d[p[0]]) { markError(p[0], p[1]); errorCount++; } });
+  if (CONFIG.formularios.firma_integrantes) {
+    if (!SIGNATURE_PAD || SIGNATURE_PAD.isEmpty()) { markError('lienzoFirma', 'Falta tu firma.'); errorCount++; }
+    else d.signature_png = SIGNATURE_PAD.png();
+  }
+  if (errorCount) { mostrarAviso('#avisoGlobal', 'error', 'Revisa el formulario', 'Hay ' + errorCount + ' campo(s) por completar.'); return; }
+
+  d.group_code = GROUP.code;
+  d.group_key = GROUP.key;
+  d.client_submission_id = idEnvio('integrante-' + GROUP.code);
+  d.form_elapsed_ms = formElapsedMs();
+  d.source = 'web';
+  var b = $('#btnEnviar');
+  ocupado(b, true, 'Registrando…');
+  llamar('registrar_integrante', d).then(function (r) {
+    ocupado(b, false);
+    if (r.member_status !== 'AUTORIZADO') {
+      nuevoIdEnvio('integrante-' + GROUP.code);
+      var errorList = (r.errores || []).map(function (e) { return '• ' + escaparHtml(e.mensaje); }).join('<br>');
+      (r.errores || []).forEach(function (e) { markError(e.campo === 'signature_png' ? 'lienzoFirma' : e.campo, e.mensaje); });
+      $('#avisoGlobal').innerHTML = '<div class="aviso ' + (r.member_status === 'NO CUMPLE' ? 'error' : 'alerta') + '"><b>' +
+        escaparHtml(r.member_status) + '</b>' + escaparHtml(r.mensaje) + (errorList ? '<br>' + errorList : '') + '</div>';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    $('#formulario').classList.add('oculto');
+    $('#resultado').classList.remove('oculto');
+    $('#resultado').innerHTML = '<div class="aviso ok"><b>' + (r.actualizado ? 'Autorización actualizada' : 'Autorización registrada') +
+      '</b>' + escaparHtml(r.mensaje) + '</div>' +
+      '<section class="tarjeta"><h2>Listo</h2><p class="pista" style="margin:0">Presenta tu documento original el día de la audición: ' +
+      'en el check-in verificamos a cada integrante.</p></section>';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }).catch(function (e) {
+    ocupado(b, false);
+    mostrarAviso('#avisoGlobal', 'error', 'No pudimos registrar tu autorización', e.message + ' — puedes intentarlo de nuevo sin duplicar.');
+  });
+}
+</script>
+</body>
+</html>

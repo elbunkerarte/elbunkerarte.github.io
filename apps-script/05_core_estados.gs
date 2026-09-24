@@ -6,6 +6,8 @@
 var ESTADO = {
   CONFIRMADO: 'CONFIRMADO',       // has code + slot, not arrived yet
   CHECK_IN: 'CHECK-IN',           // arrived and verified with physical ID
+  PRECOLA: 'PRECOLA',             // waiting next to the stage
+  EN_AUDICION: 'EN AUDICION',     // on stage right now
   NO_SHOW: 'NO SHOW',             // did not arrive / did not audition in slot
   CONTINGENCIA: 'CONTINGENCIA',   // lost the slot, waiting for a free window
   REALIZADA: 'REALIZADA',         // audition actually happened -> can be scored
@@ -20,12 +22,14 @@ var ESTADO = {
  */
 var TRANSICIONES = {
   'CONFIRMADO':      ['CHECK-IN', 'NO SHOW', 'CONTINGENCIA', 'INCIDENTE'],
-  'CHECK-IN':        ['REALIZADA', 'CONTINGENCIA', 'NO SHOW', 'INCIDENTE'],
-  'CONTINGENCIA':    ['CHECK-IN', 'REALIZADA', 'NO AUDICIONADO', 'INCIDENTE'],
+  'CHECK-IN':        ['PRECOLA', 'EN AUDICION', 'REALIZADA', 'CONTINGENCIA', 'NO SHOW', 'INCIDENTE'],
+  'PRECOLA':         ['EN AUDICION', 'REALIZADA', 'CONTINGENCIA', 'NO SHOW', 'INCIDENTE'],
+  'EN AUDICION':     ['REALIZADA', 'INCIDENTE'],
+  'CONTINGENCIA':    ['CHECK-IN', 'PRECOLA', 'EN AUDICION', 'REALIZADA', 'NO AUDICIONADO', 'INCIDENTE'],
   'NO SHOW':         ['CONTINGENCIA', 'NO AUDICIONADO', 'INCIDENTE'],
   'REALIZADA':       ['INCIDENTE'],
   'NO AUDICIONADO':  ['INCIDENTE'],
-  'INCIDENTE':       ['CHECK-IN', 'CONTINGENCIA', 'REALIZADA', 'NO AUDICIONADO', 'NO SHOW']
+  'INCIDENTE':       ['CHECK-IN', 'PRECOLA', 'EN AUDICION', 'CONTINGENCIA', 'REALIZADA', 'NO AUDICIONADO', 'NO SHOW']
 };
 
 /** States that mean "this person can still be selected". */
@@ -41,6 +45,8 @@ function normalizarEstado(estado) {
   if (e === 'CHECK IN') e = 'CHECK-IN';
   if (e === 'NO-SHOW') e = 'NO SHOW';
   if (e === 'NO-AUDICIONADO') e = 'NO AUDICIONADO';
+  if (e === 'EN-AUDICION' || e === 'AUDICION') e = 'EN AUDICION';
+  if (e === 'PRE-COLA' || e === 'PRE COLA') e = 'PRECOLA';
   return e;
 }
 
@@ -175,9 +181,10 @@ function margenSeguro(v) {
 }
 
 /**
- * Hard close at 21:30: nobody starts a new audition after this.
+ * Hard close (21:00 by default): nobody starts a new audition after this.
  * Everyone still pending becomes NO AUDICIONADO, which excludes them from the
- * selection - exactly as the spec requires.
+ * selection - exactly as the spec requires. Someone already ON STAGE is left
+ * alone to finish; the stage manager then marks the audition as done.
  */
 function cerrarJornada(registros, opciones) {
   opciones = opciones || {};
@@ -189,7 +196,7 @@ function cerrarJornada(registros, opciones) {
     var r = registros[i];
     if (!normalizarTexto(r.code)) continue;
     var estado = normalizarEstado(r.attendance_status || ESTADO.CONFIRMADO);
-    if (estado === ESTADO.REALIZADA || estado === ESTADO.NO_AUDICIONADO) continue;
+    if (estado === ESTADO.REALIZADA || estado === ESTADO.NO_AUDICIONADO || estado === ESTADO.EN_AUDICION) continue;
 
     cambios.push({
       code: r.code,

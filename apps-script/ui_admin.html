@@ -13,12 +13,14 @@
 
   <div id="avisoGlobal"></div>
 
-  <div class="pestanas">
+  <div class="pestanas" role="tablist">
     <button class="pestana activa" data-panel="registro">Inscritos</button>
+    <button class="pestana" data-panel="grupos">Agrupaciones</button>
     <button class="pestana" data-panel="codigos">Cerrar los 100</button>
     <button class="pestana" data-panel="cambios">Cambios de horario</button>
+    <button class="pestana" data-panel="pistas">Pistas</button>
     <button class="pestana" data-panel="mensajes">Comunicación</button>
-    <button class="pestana" data-panel="herramientas">Respaldo y herramientas</button>
+    <button class="pestana" data-panel="herramientas">Respaldo y sistema</button>
   </div>
 
   <!-- ============================ INSCRITOS ============================ -->
@@ -26,26 +28,33 @@
     <div class="rejilla metricas" id="metricas" style="margin-bottom:16px"></div>
     <div class="tarjeta">
       <div class="rejilla dos" style="margin-bottom:12px">
-        <div class="campo" style="margin:0">
-          <input type="text" id="buscar" placeholder="Buscar por nombre, código o documento">
-        </div>
+        <div class="campo" style="margin:0"><input type="text" id="buscar" placeholder="Buscar por nombre, código, GRP o documento"></div>
         <div class="campo" style="margin:0">
           <select id="filtro">
-            <option value="TODOS">Todos los estados</option>
-            <option value="APTO">APTO</option>
-            <option value="REVISION">REVISIÓN</option>
-            <option value="INCOMPLETO">INCOMPLETO</option>
-            <option value="NO_CUMPLE">NO CUMPLE</option>
-            <option value="DUPLICADO">DUPLICADO</option>
+            <option value="TODOS">Todos</option><option value="APTO">APTO</option><option value="REVISION">REVISIÓN</option>
+            <option value="INCOMPLETO">INCOMPLETO</option><option value="NO_CUMPLE">NO CUMPLE</option>
+            <option value="DUPLICADO">DUPLICADO</option><option value="AGRUPACIONES">Solo dúos y agrupaciones</option>
+            <option value="CON_CODIGO">Con código</option>
           </select>
         </div>
       </div>
-      <div class="tabla-envoltura" style="max-height:540px;overflow-y:auto"><table>
-        <thead><tr><th>Código</th><th>Nombre</th><th>Doc.</th><th>Edad</th><th>Sector</th>
-          <th>Disciplina</th><th>Estado</th><th>Motivo</th><th>Bloque</th><th>Acción</th></tr></thead>
+      <div class="tabla-envoltura" style="max-height:560px;overflow-y:auto"><table>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Modalidad</th><th>Doc.</th><th>Edad</th><th>Género</th>
+          <th>Estado</th><th>Video</th><th>Pista</th><th>Motivo</th><th>Bloque</th><th>Decisión</th></tr></thead>
         <tbody id="cuerpoRegistro"></tbody>
       </table></div>
       <p class="pista" id="conteoTabla" style="margin:12px 0 0"></p>
+    </div>
+  </div>
+
+  <!-- ========================== AGRUPACIONES =========================== -->
+  <div class="panel" id="panel-grupos">
+    <div class="tarjeta">
+      <h2>Agrupaciones y dúos</h2>
+      <p class="pista">Una agrupación = un proyecto = un cupo. Cada integrante autoriza por sí mismo con el enlace de su grupo.
+        Cuando dos agrupaciones tienen un nombre equivalente, <b>tú decides</b> si son el mismo proyecto: el sistema no fusiona nada.</p>
+      <button class="boton fantasma chico" id="btnCargarGrupos" style="margin-bottom:12px">Actualizar</button>
+      <div id="salidaGrupos"></div>
     </div>
   </div>
 
@@ -53,20 +62,17 @@
   <div class="panel" id="panel-codigos">
     <div class="tarjeta">
       <h2>Paso 1 · Revalidar todo</h2>
-      <p class="pista">Vuelve a aplicar edad, residencia, formato y duplicados sobre todas las filas.
-        Úsalo tras corregir datos a mano o cambiar la configuración. No quita códigos ya emitidos.</p>
+      <p class="pista">Vuelve a aplicar edad, residencia, formato, duplicados y agrupaciones repetidas. Respeta tus decisiones
+        manuales y nunca quita códigos ya emitidos.</p>
       <button class="boton fantasma" id="btnRevalidar">Revalidar inscripciones</button>
       <div id="salidaRevalidar" style="margin-top:12px"></div>
     </div>
     <div class="tarjeta">
       <h2>Paso 2 · Emitir B-001 … B-100</h2>
-      <p class="pista">Asigna código, bloque y horario a los APTO, en orden de inscripción.
-        Es <b>idempotente</b>: puedes correrlo varias veces y nunca reasigna ni reutiliza un código.
-        Los duplicados y los no aptos no consumen cupo.</p>
-      <div class="aviso alerta" style="font-size:13px">
-        <b>Revisa antes de emitir</b>
-        Una vez emitido, el código de una persona no cambia nunca — ni siquiera si cambia de horario.
-      </div>
+      <p class="pista">Asigna código, bloque y horario a los APTO, en orden de inscripción. Una agrupación recibe un solo código.
+        Es <b>idempotente</b>: nunca reasigna ni reutiliza un código. Los REVISIÓN no reciben código hasta que decidas.</p>
+      <div class="aviso alerta" style="font-size:14px"><b>Revisa antes de emitir</b>
+        Resuelve primero las agrupaciones repetidas y las inscripciones en revisión.</div>
       <button class="boton" id="btnCodigos">Emitir códigos y asignar bloques</button>
       <div id="salidaCodigos" style="margin-top:12px"></div>
     </div>
@@ -87,22 +93,43 @@
     </div>
   </div>
 
+  <!-- ============================== PISTAS ============================= -->
+  <div class="panel" id="panel-pistas">
+    <div class="tarjeta">
+      <h2>Pistas</h2>
+      <p class="pista">Estados: PISTA PENDIENTE → RECIBIDA → VALIDADA (o CON PROBLEMA). Los archivos quedan en
+        <b>Audio/B-XXX/</b> con el nombre B-XXX_ARTISTA_CANCION. Descarga la carpeta completa antes del evento para el técnico
+        (copia offline) y pide a cada participante su USB de respaldo.</p>
+      <div class="rejilla dos" style="margin-bottom:12px">
+        <button class="boton fantasma" id="btnCargarPistas">Actualizar lista</button>
+        <button class="boton fantasma" id="btnCarpetas">Crear carpetas Audio/B-XXX</button>
+      </div>
+      <div id="salidaCarpetas"></div>
+      <div id="salidaPistas"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Subir una pista recibida por WhatsApp</h2>
+      <div class="rejilla dos">
+        <div class="campo"><label for="pistaCodigo">Código</label><input type="text" id="pistaCodigo" placeholder="B-012"></div>
+        <div class="campo"><label for="pistaCancion">Canción</label><input type="text" id="pistaCancion"></div>
+      </div>
+      <div class="campo"><label for="pistaArchivo">Archivo</label><input type="file" id="pistaArchivo" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"></div>
+      <button class="boton" id="btnSubirPistaAdmin">Subir y renombrar</button>
+      <div id="salidaSubida" style="margin-top:12px"></div>
+    </div>
+  </div>
+
   <!-- =========================== COMUNICACIÓN ========================== -->
   <div class="panel" id="panel-mensajes">
     <div class="tarjeta">
       <h2>Generar mensajes</h2>
-      <p class="pista">Genera el texto exacto para cada participante. El envío por WhatsApp lo hace una
-        persona con el enlace generado; el sistema nunca escribe por ti en WhatsApp.</p>
+      <p class="pista">El sistema prepara el texto exacto. El envío por WhatsApp lo hace una persona desde el número oficial con el
+        enlace generado (enviar automáticamente exige la API paga de WhatsApp Business). Solo se genera enlace de WhatsApp para
+        quien autorizó ese canal.</p>
       <div class="rejilla dos">
         <div class="campo"><label for="plantilla">Plantilla</label>
           <select id="plantilla">
-            <option value="RECEPCION">1. Recepción de inscripción</option>
-            <option value="ASIGNACION">2. Asignación de código y horario</option>
-            <option value="CAMBIO_APROBADO">3. Cambio aprobado</option>
-            <option value="CAMBIO_RECHAZADO">4. Cambio no aprobado</option>
-            <option value="RECORDATORIO_24H">5. Recordatorio 24 h</option>
-            <option value="RECORDATORIO_DIA">6. Recordatorio del día</option>
-            <option value="CONTINGENCIA">7. Contingencia / no show</option>
+            <? plantillasDisponibles().forEach(function (t) { ?><option value="<?= t.id ?>"><?= t.nombre ?></option><? }); ?>
           </select></div>
         <div class="campo"><label for="filtroBloqueMsg">Filtrar por bloque (opcional)</label>
           <input type="number" id="filtroBloqueMsg" min="1" max="10" placeholder="Todos"></div>
@@ -111,47 +138,71 @@
         <button class="boton fantasma" id="btnGenerar">Generar textos</button>
         <button class="boton" id="btnCorreos">Enviar por correo</button>
       </div>
-      <div class="aviso alerta" style="font-size:13px;margin-top:12px">
-        <b>Cuota de correo</b>
-        Una cuenta Gmail normal envía ~100 correos al día. Con 100 participantes, envía por bloques
-        o usa WhatsApp como canal principal (es lo que recomienda el plan).
-      </div>
+      <div class="aviso alerta" style="font-size:14px;margin-top:12px"><b>Cuota de correo</b>
+        Una cuenta Gmail envía ~100 correos al día. WhatsApp es el canal principal.</div>
       <div id="salidaMensajes" style="margin-top:12px"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Contactos para la lista de difusión</h2>
+      <p class="pista">Descarga un archivo de contactos (.vcf) con quienes autorizaron WhatsApp, para importarlo en el teléfono del
+        número oficial y crear la lista de difusión o el grupo. La difusión solo llega a quien también guardó el número oficial.</p>
+      <div class="rejilla dos">
+        <button class="boton fantasma" data-contactos="CON_CODIGO">Con código</button>
+        <button class="boton fantasma" data-contactos="APTOS">Aptos y con código</button>
+      </div>
+      <div id="salidaContactos" style="margin-top:12px"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Videos</h2>
+      <p class="pista">Comprueba que los enlaces se puedan abrir sin iniciar sesión (corre solo cada hora; aquí lo fuerzas).
+        Instagram y TikTok no se pueden verificar automáticamente: quedan como NO VERIFICABLE para revisión manual.</p>
+      <div class="rejilla dos">
+        <button class="boton fantasma" id="btnVideosPendientes">Verificar pendientes</button>
+        <button class="boton fantasma" id="btnVideosTodos">Verificar todos otra vez</button>
+      </div>
+      <div id="salidaVideos" style="margin-top:12px"></div>
     </div>
   </div>
 
   <!-- =========================== HERRAMIENTAS ========================== -->
   <div class="panel" id="panel-herramientas">
     <div class="tarjeta">
-      <h2>Respaldo</h2>
-      <p class="pista">Genera un XLSX + un JSON en Drive. Hazlo antes del evento y al cerrar la jornada.</p>
+      <h2>Respaldos</h2>
+      <p class="pista">Cada respaldo crea un XLSX (con las agrupaciones colapsables) y un JSON restaurable en Drive. Hay uno
+        automático cada noche. Haz uno con etiqueta en cada hito.</p>
       <div class="rejilla dos">
-        <button class="boton fantasma" id="btnExportar">Exportar XLSX</button>
+        <div class="campo" style="margin:0"><select id="etiquetaRespaldo">
+          <option value="MANUAL">Manual</option><option value="PRE-EVENTO">Pre-evento</option><option value="AGENDA">Agenda</option>
+          <option value="POST-EVENTO">Post-evento</option><option value="RESULTADOS">Resultados</option></select></div>
         <button class="boton" id="btnRespaldar">Respaldo completo</button>
+        <button class="boton fantasma" id="btnExportar">Solo exportar XLSX</button>
+        <button class="boton fantasma" id="btnRespaldoAudios">Respaldar audios</button>
       </div>
       <div id="salidaRespaldo" style="margin-top:12px"></div>
     </div>
     <div class="tarjeta">
       <h2>Vistas y cierre</h2>
-      <p class="pista">AGENDA, CHECK-IN, RESULTADOS y DASHBOARD se reconstruyen desde REGISTRO.</p>
+      <p class="pista">AGENDA, CHECK-IN, AGRUPACIONES, PISTAS, RESULTADOS y DASHBOARD se reconstruyen desde REGISTRO.</p>
       <div class="rejilla dos">
         <button class="boton fantasma" id="btnVistas">Refrescar vistas</button>
-        <button class="boton peligro" id="btnCerrar">Cerrar jornada (21:30)</button>
+        <button class="boton peligro" id="btnCerrar">Cerrar jornada</button>
       </div>
       <div id="salidaVistas" style="margin-top:12px"></div>
+    </div>
+    <div class="tarjeta" id="tarjetaSistema">
+      <h2>Estado del sistema</h2>
+      <p class="pista">Entorno, marca de la hoja, esquema, formularios, datos legales y ausencia de datos de prueba.</p>
+      <button class="boton fantasma" id="btnSistema">Revisar</button>
+      <div id="salidaSistema" style="margin-top:12px"></div>
     </div>
     <div class="tarjeta" id="tarjetaUsuarios">
       <h2>Accesos del equipo</h2>
       <p class="pista">Cada persona recibe su propio enlace. No se comparten entre roles.</p>
       <div class="rejilla dos">
-        <div class="campo"><label for="nuevoAlias">Alias</label>
-          <input type="text" id="nuevoAlias" placeholder="checkin-3"></div>
+        <div class="campo"><label for="nuevoAlias">Alias</label><input type="text" id="nuevoAlias" placeholder="checkin-3"></div>
         <div class="campo"><label for="nuevoRol">Rol</label>
-          <select id="nuevoRol">
-            <option value="logistica">logistica</option><option value="checkin">checkin</option>
-            <option value="jurado">jurado</option><option value="direccion">direccion</option>
-            <option value="admin">admin</option>
-          </select></div>
+          <select id="nuevoRol"><option value="logistica">logistica</option><option value="checkin">checkin</option>
+            <option value="jurado">jurado</option><option value="direccion">direccion</option><option value="admin">admin</option></select></div>
       </div>
       <div class="campo"><label for="nuevaNota">Nota (para jurados escribe "jurado 1", "jurado 2" o "jurado 3")</label>
         <input type="text" id="nuevaNota" placeholder="jurado 1"></div>
@@ -166,10 +217,10 @@
 window.ENTORNO = '<?= ENTORNO ?>';
 window.TOKEN = '<?= token ?>';
 var ROL = '<?= rol ?>';
+var BASE_URL = '<?= BASE_URL ?>';
 
 document.addEventListener('DOMContentLoaded', function () {
-  if (ROL !== 'admin') $('#tarjetaUsuarios').classList.add('oculto');
-
+  if (ROL !== 'admin') { $('#tarjetaUsuarios').classList.add('oculto'); $('#tarjetaSistema').classList.add('oculto'); }
   $$('.pestana').forEach(function (p) {
     p.addEventListener('click', function () {
       $$('.pestana').forEach(function (x) { x.classList.remove('activa'); });
@@ -177,9 +228,10 @@ document.addEventListener('DOMContentLoaded', function () {
       p.classList.add('activa');
       $('#panel-' + p.dataset.panel).classList.add('activo');
       if (p.dataset.panel === 'cambios') cargarCambios();
+      if (p.dataset.panel === 'grupos') loadGroups();
+      if (p.dataset.panel === 'pistas') loadTracks();
     });
   });
-
   cargarRegistro();
   $('#buscar').addEventListener('input', debounce(cargarRegistro, 350));
   $('#filtro').addEventListener('change', cargarRegistro);
@@ -187,18 +239,27 @@ document.addEventListener('DOMContentLoaded', function () {
   $('#btnCodigos').addEventListener('click', emitirCodigos);
   $('#btnBloques').addEventListener('click', verBloques);
   $('#btnCargarCambios').addEventListener('click', cargarCambios);
+  $('#btnCargarGrupos').addEventListener('click', loadGroups);
+  $('#btnCargarPistas').addEventListener('click', loadTracks);
+  $('#btnCarpetas').addEventListener('click', prepareAudioFolders);
+  $('#btnSubirPistaAdmin').addEventListener('click', uploadTrackAsAdmin);
   $('#btnGenerar').addEventListener('click', generarMensajes);
   $('#btnCorreos').addEventListener('click', enviarCorreos);
-  $('#btnExportar').addEventListener('click', function () { respaldo('exportar', 'XLSX generado'); });
-  $('#btnRespaldar').addEventListener('click', function () { respaldo('respaldar', 'Respaldo completo generado'); });
+  $$('[data-contactos]').forEach(function (b) { b.addEventListener('click', function () { exportContacts(b); }); });
+  $('#btnVideosPendientes').addEventListener('click', function () { checkVideos(false); });
+  $('#btnVideosTodos').addEventListener('click', function () { checkVideos(true); });
+  $('#btnRespaldar').addEventListener('click', function () { respaldo('respaldar', $('#btnRespaldar')); });
+  $('#btnExportar').addEventListener('click', function () { respaldo('exportar', $('#btnExportar')); });
+  $('#btnRespaldoAudios').addEventListener('click', backupAudio);
   $('#btnVistas').addEventListener('click', refrescarVistas);
   $('#btnCerrar').addEventListener('click', cerrarJornada);
+  $('#btnSistema').addEventListener('click', loadSystemHealth);
   $('#btnUsuario').addEventListener('click', crearUsuario);
 });
 
-function debounce(fn, ms) {
-  var t; return function () { clearTimeout(t); t = setTimeout(fn, ms); };
-}
+function debounce(fn, ms) { var t; return function () { clearTimeout(t); t = setTimeout(fn, ms); }; }
+function muted(t) { return '<span style="color:var(--tenue)">' + escaparHtml(t) + '</span>'; }
+var MODE_LABELS = { SOLISTA: 'Solista', DUO: 'Dúo', AGRUPACION: 'Agrupación' };
 
 // ------------------------------- registro ----------------------------------
 function cargarRegistro() {
@@ -208,28 +269,30 @@ function cargarRegistro() {
       $('#conteoTabla').textContent = 'Mostrando ' + r.mostrados + ' de ' + r.total + ' inscripciones.';
       $('#cuerpoRegistro').innerHTML = r.filas.map(function (f) {
         return '<tr>' +
-          '<td>' + (f.code ? '<b>' + escaparHtml(f.code) + '</b>' : '<span style="color:var(--tenue)">—</span>') + '</td>' +
-          '<td>' + escaparHtml(f.full_name) + (f.artistic_name ? '<br><span style="color:var(--tenue);font-size:11.5px">' + escaparHtml(f.artistic_name) + '</span>' : '') + '</td>' +
-          '<td>' + escaparHtml(f.id_number) + '</td>' +
-          '<td>' + escaparHtml(f.age) + '</td>' +
-          '<td>' + escaparHtml(f.neighborhood_sector) + '</td>' +
-          '<td>' + escaparHtml(f.discipline) + '</td>' +
-          '<td>' + etiquetaEstado(f.eligibility_status) + '</td>' +
-          '<td style="white-space:normal;max-width:210px;font-size:11.5px;color:var(--tenue)">' +
-            escaparHtml(f.duplicate_reason || f.validation_notes || '') + '</td>' +
+          '<td>' + (f.code ? '<b>' + escaparHtml(f.code) + '</b>' : muted('—')) + '</td>' +
+          '<td>' + escaparHtml(f.full_name) + (f.artistic_name ? '<br>' + muted(f.artistic_name) : '') + '</td>' +
+          '<td>' + escaparHtml(MODE_LABELS[f.participation_mode] || (f.legacy ? 'Formulario v1' : '')) +
+            (f.group_code ? '<br>' + muted(f.group_code + ' · ' + f.members_declared + ' int.') : '') + '</td>' +
+          '<td>' + escaparHtml(f.id_number) + '</td><td>' + escaparHtml(f.age) + '</td>' +
+          '<td>' + escaparHtml(f.genre_primary) + '</td>' +
+          '<td>' + etiquetaEstado(f.eligibility_status) + (f.eligibility_override ? '<br>' + muted('decisión manual') : '') + '</td>' +
+          '<td>' + etiquetaEstado(f.video_check_status) + '</td>' +
+          '<td>' + etiquetaEstado(f.track_status) + '</td>' +
+          '<td style="white-space:normal;max-width:220px;font-size:12px;color:var(--tenue)">' +
+            escaparHtml(f.duplicate_reason || f.validation_notes || '') +
+            (f.group_match_status === 'POSIBLE_REPETIDA' ? '<br><b style="color:var(--amarillo)">Posible agrupación repetida. Verifica en Agrupaciones.</b>' : '') + '</td>' +
           '<td>' + escaparHtml(f.final_block || f.original_block || '') + '</td>' +
           '<td><select class="cambiarEstado" data-id="' + escaparHtml(f.submission_id) + '" style="padding:5px;font-size:12px">' +
             ['', 'APTO', 'REVISION', 'INCOMPLETO', 'NO_CUMPLE', 'DUPLICADO'].map(function (e) {
-              return '<option value="' + e + '">' + (e || 'Cambiar a…') + '</option>';
-            }).join('') + '</select></td>' +
-        '</tr>';
-      }).join('') || '<tr><td colspan="10" style="color:var(--tenue)">Sin resultados.</td></tr>';
+              return '<option value="' + e + '">' + (e || 'Decidir…') + '</option>';
+            }).join('') + '</select></td></tr>';
+      }).join('') || '<tr><td colspan="12" style="color:var(--tenue)">Sin resultados.</td></tr>';
 
       $$('.cambiarEstado').forEach(function (s) {
         s.addEventListener('change', function () {
           if (!s.value) return;
-          var motivo = prompt('Motivo del cambio a ' + s.value + ' (queda registrado):');
-          if (motivo === null) { s.value = ''; return; }
+          var motivo = prompt('Motivo de la decisión ' + s.value + ' (queda registrado y la revalidación lo respeta):');
+          if (!motivo) { s.value = ''; return; }
           llamar('marcar_elegibilidad', { submission_id: s.dataset.id, eligibility_status: s.value, motivo: motivo })
             .then(function () { cargarRegistro(); })
             .catch(function (e) { mostrarAviso('#avisoGlobal', 'error', 'No se pudo cambiar', e.message); });
@@ -240,19 +303,66 @@ function cargarRegistro() {
 }
 
 function pintarMetricas(r) {
-  var m = [
-    ['Inscritos', r.total, ''], ['Únicos', r.unicos, ''],
-    ['Aptos', r.apto, 'destacada'], ['Con código', r.con_codigo, 'destacada'],
-    ['Duplicados', r.duplicado, ''], ['Revisión', r.revision, ''],
-    ['Incompletos', r.incompleto, ''], ['No cumplen', r.no_cumple, '']
-  ];
+  var m = [['Recibidas', r.total, ''], ['Válidas', r.validos, ''], ['Aptos', r.apto, 'destacada'], ['Con código', r.con_codigo, 'destacada'],
+           ['Revisión', r.revision, ''], ['Duplicados', r.duplicado, ''], ['Incompletos', r.incompleto, ''], ['No cumplen', r.no_cumple, ''],
+           ['Solistas', r.solistas, ''], ['Dúos', r.duos, ''], ['Agrupaciones', r.agrupaciones, '']];
   $('#metricas').innerHTML = m.map(function (x) {
     return '<div class="metrica ' + x[2] + '"><div class="n">' + x[1] + '</div><div class="t">' + x[0] + '</div></div>';
   }).join('');
-  $('#resumenCabecera').innerHTML =
-    '<span class="chip">Aptos <b>' + r.apto + '</b></span>' +
-    '<span class="chip">Con código <b>' + r.con_codigo + '</b></span>' +
-    '<span class="chip">Duplicados <b>' + r.duplicado + '</b></span>';
+  $('#resumenCabecera').innerHTML = '<span class="chip">Aptos <b>' + r.apto + '</b></span>' +
+    '<span class="chip">Con código <b>' + r.con_codigo + '</b></span><span class="chip">En revisión <b>' + r.revision + '</b></span>';
+}
+
+// ----------------------------- agrupaciones --------------------------------
+function loadGroups() {
+  $('#salidaGrupos').innerHTML = muted('Cargando…');
+  llamar('listar_agrupaciones').then(function (r) {
+    if (!r.agrupaciones.length) { $('#salidaGrupos').innerHTML = '<div class="aviso info"><b>Sin agrupaciones</b>Aún no hay dúos ni agrupaciones inscritos.</div>'; return; }
+    $('#salidaGrupos').innerHTML = r.agrupaciones.map(function (g) {
+      var isRepeated = g.group_match_status === 'POSIBLE_REPETIDA';
+      return '<details class="tarjeta" style="margin-bottom:10px;' + (isRepeated ? 'border-color:var(--amarillo)' : '') + '"' + (isRepeated ? ' open' : '') + '>' +
+        '<summary style="cursor:pointer;list-style:none"><b style="font-size:17px">' + escaparHtml(g.group_code) + ' · ' + escaparHtml(g.group_display_name) + '</b> ' +
+        (g.code ? '<span class="chip">' + escaparHtml(g.code) + '</span> ' : '') + etiquetaEstado(g.eligibility_status) + ' ' +
+        muted(MODE_LABELS[g.participation_mode] + ' · autorizados ' + g.members_authorized + '/' + g.members_declared) + '</summary>' +
+        (isRepeated ? '<div class="aviso alerta" style="margin-top:12px"><b>Posible agrupación repetida</b>Verifique si corresponde al mismo proyecto que ' +
+          escaparHtml(g.group_match_ref) + '. Si es el mismo, se mantiene un solo cupo; si no, ambas siguen y queda registrada tu decisión.' +
+          '<div class="rejilla dos" style="margin-top:10px"><button class="boton chico" data-coincide="MISMO" data-id="' + escaparHtml(g.submission_id) + '">Es el mismo proyecto</button>' +
+          '<button class="boton chico fantasma" data-coincide="DISTINTO" data-id="' + escaparHtml(g.submission_id) + '">Son proyectos distintos</button></div></div>' : '') +
+        '<p class="pista" style="margin:12px 0 8px">Líder: ' + escaparHtml(g.leader_name) + ' · ' + escaparHtml(g.leader_whatsapp) + '</p>' +
+        '<div class="tabla-envoltura"><table><thead><tr><th>Integrante</th><th>Documento</th><th>Edad</th><th>Rol</th><th>Términos/Datos/Imagen</th><th>Firma</th><th>Estado</th><th>Alerta</th></tr></thead><tbody>' +
+        g.members.map(function (m) {
+          return '<tr><td>' + escaparHtml(m.full_name) + (m.is_leader ? ' (líder)' : '') + '</td><td>' + escaparHtml(m.id_number) + '</td><td>' + escaparHtml(m.age) + '</td>' +
+            '<td>' + escaparHtml(m.artistic_role) + '</td><td>' + [m.consent_terms, m.consent_data, m.consent_image].map(function (v) { return v ? 'SI' : 'NO'; }).join(' / ') + '</td>' +
+            '<td>' + (m.signature ? 'SI' : (m.is_leader ? 'Formulario 1' : muted('NO'))) + '</td><td>' + etiquetaEstado(m.member_status) + '</td>' +
+            '<td style="white-space:normal;font-size:12px;color:var(--amarillo)">' + escaparHtml(m.member_alert || '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<div class="rejilla dos" style="margin-top:12px">' +
+        '<button class="boton chico fantasma" data-copiar="' + escaparHtml(g.members_link) + '">Copiar enlace de integrantes</button>' +
+        '<a class="boton chico fantasma" target="_blank" rel="noopener" href="' + BASE_URL + '?p=constancia&g=' + encodeURIComponent(g.group_code) + '&t=' + encodeURIComponent(window.TOKEN) + '">Constancia imprimible</a>' +
+        '<button class="boton chico fantasma" data-declarados="' + escaparHtml(g.submission_id) + '" data-actual="' + g.members_declared + '">Cambiar integrantes declarados</button></div>' +
+        '</details>';
+    }).join('');
+    $$('[data-coincide]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var motivo = prompt('Motivo de la decisión (queda en el registro):');
+        if (motivo === null) return;
+        llamar('resolver_coincidencia_grupo', { submission_id: b.dataset.id, decision: b.dataset.coincide, motivo: motivo })
+          .then(function (res) { mostrarAviso('#avisoGlobal', 'ok', 'Decisión registrada', res.decision + ' → ' + res.eligibility_status); loadGroups(); })
+          .catch(function (e) { mostrarAviso('#avisoGlobal', 'error', 'No se pudo registrar', e.message); });
+      });
+    });
+    $$('[data-copiar]').forEach(function (b) { b.addEventListener('click', function () { copyText(b.dataset.copiar, b); }); });
+    $$('[data-declarados]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var n = prompt('Nuevo número de integrantes en escena (actual ' + b.dataset.actual + '):');
+        if (!n) return;
+        var motivo = prompt('Motivo:') || '';
+        llamar('actualizar_integrantes', { submission_id: b.dataset.declarados, members_declared: n, motivo: motivo })
+          .then(function () { loadGroups(); })
+          .catch(function (e) { mostrarAviso('#avisoGlobal', 'error', 'No se pudo cambiar', e.message); });
+      });
+    });
+  }).catch(function (e) { mostrarAviso('#salidaGrupos', 'error', 'Error', e.message); });
 }
 
 // -------------------------------- códigos ----------------------------------
@@ -261,15 +371,14 @@ function revalidar() {
   llamar('revalidar_todo').then(function (r) {
     ocupado(b, false);
     mostrarAviso('#salidaRevalidar', 'ok', r.revalidados + ' inscripciones revalidadas',
-      'Aptos: ' + r.resumen.apto + ' · Duplicados: ' + r.resumen.duplicado +
-      ' · Revisión: ' + r.resumen.revision + ' · No cumplen: ' + r.resumen.no_cumple);
+      'Aptos: ' + r.resumen.apto + ' · Duplicados: ' + r.resumen.duplicado + ' · Revisión: ' + r.resumen.revision +
+      ' · Incompletos: ' + r.resumen.incompleto + ' · No cumplen: ' + r.resumen.no_cumple);
     cargarRegistro();
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaRevalidar', 'error', 'Error', e.message); });
 }
 
 function emitirCodigos() {
-  if (!confirm('Se emitirán códigos definitivos a todos los APTO sin código.\n\n' +
-               'Un código emitido NO se reasigna nunca. ¿Continuar?')) return;
+  if (!confirm('Se emitirán códigos definitivos a todos los APTO sin código.\n\nUn código emitido NO se reasigna nunca. ¿Continuar?')) return;
   var b = $('#btnCodigos'); ocupado(b, true, 'Emitiendo...');
   llamar('asignar_codigos').then(function (r) {
     ocupado(b, false);
@@ -284,11 +393,9 @@ function verBloques() {
   var b = $('#btnBloques'); ocupado(b, true, 'Consultando...');
   llamar('bloques_disponibles').then(function (r) {
     ocupado(b, false);
-    $('#salidaBloques').innerHTML = '<div class="tabla-envoltura"><table>' +
-      '<thead><tr><th>Bloque</th><th>Ventana</th><th>Ocupados</th><th>Cupo</th><th>Disponibles</th></tr></thead><tbody>' +
+    $('#salidaBloques').innerHTML = '<div class="tabla-envoltura"><table><thead><tr><th>Bloque</th><th>Ventana</th><th>Ocupados</th><th>Cupo</th><th>Disponibles</th></tr></thead><tbody>' +
       r.bloques.map(function (x) {
-        return '<tr><td><b>' + x.block_id + '</b></td><td>' + escaparHtml(x.ventana) + '</td>' +
-          '<td>' + x.ocupados + '</td><td>' + x.cupo + '</td>' +
+        return '<tr><td><b>' + x.block_id + '</b></td><td>' + escaparHtml(x.ventana) + '</td><td>' + x.ocupados + '</td><td>' + x.cupo + '</td>' +
           '<td style="color:' + (x.disponibles ? 'var(--ok)' : 'var(--error)') + '"><b>' + x.disponibles + '</b></td></tr>';
       }).join('') + '</tbody></table></div>';
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaBloques', 'error', 'Error', e.message); });
@@ -299,50 +406,26 @@ function cargarCambios() {
   Promise.all([llamar('listar_cambios', { estado: 'TODOS' }), llamar('bloques_disponibles')])
     .then(function (res) {
       var cambios = res[0].cambios, bloques = res[1].bloques;
-      if (!cambios.length) {
-        $('#salidaCambios').innerHTML = '<div class="aviso info"><b>Sin solicitudes</b>Nadie ha pedido cambio de horario.</div>';
-        return;
-      }
+      if (!cambios.length) { $('#salidaCambios').innerHTML = '<div class="aviso info"><b>Sin solicitudes</b>Nadie ha pedido cambio de horario.</div>'; return; }
       var opciones = bloques.map(function (x) {
-        return '<option value="' + x.block_id + '"' + (x.disponibles ? '' : ' disabled') + '>' +
-          'Bloque ' + x.block_id + ' (' + x.ventana + ') · ' + x.disponibles + ' libres</option>';
+        return '<option value="' + x.block_id + '"' + (x.disponibles ? '' : ' disabled') + '>Bloque ' + x.block_id + ' (' + x.ventana + ') · ' + x.disponibles + ' libres</option>';
       }).join('');
-
       $('#salidaCambios').innerHTML = cambios.map(function (c) {
         var pendiente = String(c.estado).toUpperCase() === 'PENDIENTE';
-        return '<div class="tarjeta" style="margin-bottom:12px;' +
-          (pendiente ? 'border-color:var(--alerta)' : '') + '">' +
-          '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">' +
-            '<div><b style="font-size:17px">' + escaparHtml(c.code) + '</b> · ' + escaparHtml(c.full_name) +
-            '<div style="color:var(--tenue);font-size:12.5px">Horario actual: bloque ' +
-            escaparHtml(c.original_block) + ' · ' + escaparHtml(c.original_time) +
-            ' · Solicitud ' + escaparHtml(c.solicitud_id) + '</div></div>' +
-            '<div>' + etiquetaEstado(c.estado) + '</div></div>' +
-          '<p class="pista" style="margin:10px 0"><b>Motivo:</b> ' + escaparHtml(c.reason_short) +
-            '<br><b>Contacto:</b> ' + escaparHtml(c.contact) + '</p>' +
+        return '<div class="tarjeta" style="margin-bottom:12px;' + (pendiente ? 'border-color:var(--amarillo)' : '') + '">' +
+          '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><b style="font-size:17px">' + escaparHtml(c.code) + '</b> · ' + escaparHtml(c.full_name) +
+          '<div style="color:var(--tenue);font-size:12.5px">Horario actual: bloque ' + escaparHtml(c.original_block) + ' · ' + escaparHtml(c.original_time) +
+          ' · Solicitud ' + escaparHtml(c.solicitud_id) + '</div></div><div>' + etiquetaEstado(c.estado) + '</div></div>' +
+          '<p class="pista" style="margin:10px 0"><b>Motivo:</b> ' + escaparHtml(c.reason_short) + '<br><b>Contacto:</b> ' + escaparHtml(c.contact) + '</p>' +
           (pendiente
-            ? '<div class="rejilla dos" style="align-items:end">' +
-              '<div class="campo" style="margin:0"><label>Nuevo bloque</label>' +
-              '<select data-destino="' + escaparHtml(c.solicitud_id) + '">' + opciones + '</select></div>' +
-              '<div class="rejilla dos" style="gap:8px">' +
-              '<button class="boton chico" data-aprobar="' + escaparHtml(c.solicitud_id) + '">Aprobar</button>' +
-              '<button class="boton chico fantasma" data-rechazar="' + escaparHtml(c.solicitud_id) + '">Rechazar</button>' +
-              '</div></div>'
-            : '<p class="pista" style="margin:0">Resuelto ' + escaparHtml(c.resuelto_at) + ' por ' +
-              escaparHtml(c.resuelto_by) + (c.nueva_hora ? ' · nueva hora ' + escaparHtml(c.nueva_hora) : '') + '</p>') +
-        '</div>';
+            ? '<div class="rejilla dos" style="align-items:end"><div class="campo" style="margin:0"><label>Nuevo bloque</label><select data-destino="' + escaparHtml(c.solicitud_id) + '">' + opciones + '</select></div>' +
+              '<div class="rejilla dos" style="gap:8px"><button class="boton chico" data-aprobar="' + escaparHtml(c.solicitud_id) + '">Aprobar</button>' +
+              '<button class="boton chico fantasma" data-rechazar="' + escaparHtml(c.solicitud_id) + '">Rechazar</button></div></div>'
+            : '<p class="pista" style="margin:0">Resuelto ' + escaparHtml(c.resuelto_at) + ' por ' + escaparHtml(c.resuelto_by) + (c.nueva_hora ? ' · nueva hora ' + escaparHtml(c.nueva_hora) : '') + '</p>') +
+          '</div>';
       }).join('');
-
-      $$('[data-aprobar]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var id = b.dataset.aprobar;
-          var destino = $('[data-destino="' + id + '"]').value;
-          resolver(id, true, destino);
-        });
-      });
-      $$('[data-rechazar]').forEach(function (b) {
-        b.addEventListener('click', function () { resolver(b.dataset.rechazar, false, ''); });
-      });
+      $$('[data-aprobar]').forEach(function (b) { b.addEventListener('click', function () { resolver(b.dataset.aprobar, true, $('[data-destino="' + b.dataset.aprobar + '"]').value); }); });
+      $$('[data-rechazar]').forEach(function (b) { b.addEventListener('click', function () { resolver(b.dataset.rechazar, false, ''); }); });
     })
     .catch(function (e) { mostrarAviso('#salidaCambios', 'error', 'Error', e.message); });
 }
@@ -351,11 +434,59 @@ function resolver(id, aprobar, bloque) {
   var obs = prompt(aprobar ? 'Observación (opcional):' : 'Motivo del rechazo (se comunica al participante):');
   if (obs === null) return;
   llamar('resolver_cambio', { solicitud_id: id, aprobar: aprobar, nuevo_bloque: bloque, observacion: obs })
-    .then(function (r) {
-      mostrarAviso('#avisoGlobal', 'ok', r.estado, r.mensaje);
-      cargarCambios(); cargarRegistro();
-    })
+    .then(function (r) { mostrarAviso('#avisoGlobal', 'ok', r.estado, r.mensaje); cargarCambios(); cargarRegistro(); })
     .catch(function (e) { mostrarAviso('#avisoGlobal', 'error', 'No se pudo resolver', e.message); });
+}
+
+// --------------------------------- pistas ----------------------------------
+var TRACK_STATES = ['PISTA PENDIENTE', 'PISTA RECIBIDA', 'PISTA VALIDADA', 'PISTA CON PROBLEMA', 'NO APLICA'];
+function loadTracks() {
+  $('#salidaPistas').innerHTML = muted('Cargando…');
+  llamar('listar_pistas').then(function (r) {
+    var resumen = Object.keys(r.por_estado).map(function (k) { return '<span class="chip">' + escaparHtml(k) + ' <b>' + r.por_estado[k] + '</b></span>'; }).join(' ');
+    $('#salidaPistas').innerHTML = '<div class="datos-evento" style="margin-bottom:12px">' + resumen +
+      (r.carpeta_audio ? ' <a class="chip" target="_blank" rel="noopener" href="' + escaparHtml(r.carpeta_audio) + '">Abrir carpeta Audio</a>' : '') + '</div>' +
+      '<div class="tabla-envoltura" style="max-height:520px;overflow-y:auto"><table><thead><tr><th>Código</th><th>Bloque</th><th>Artista</th><th>Canción</th><th>Método</th><th>Estado</th><th>Archivo</th><th>Marcar</th></tr></thead><tbody>' +
+      r.pistas.map(function (p) {
+        return '<tr><td><b>' + escaparHtml(p.code || '—') + '</b></td><td>' + escaparHtml(p.final_block || '') + ' ' + muted(p.final_time || '') + '</td>' +
+          '<td>' + escaparHtml(p.artistic_name) + '</td><td>' + escaparHtml(p.song_name || '') + '</td><td>' + escaparHtml(p.track_method || '') + '</td>' +
+          '<td>' + etiquetaEstado(p.track_status) + '</td>' +
+          '<td>' + (p.track_file_url ? '<a target="_blank" rel="noopener" href="' + escaparHtml(p.track_file_url) + '">' + escaparHtml(p.track_file_name) + '</a>' : muted('—')) + '</td>' +
+          '<td>' + (p.code ? '<select data-pista="' + escaparHtml(p.code) + '" style="padding:5px;font-size:12px"><option value="">Cambiar…</option>' +
+            TRACK_STATES.map(function (s) { return '<option>' + s + '</option>'; }).join('') + '</select>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    $$('[data-pista]').forEach(function (s) {
+      s.addEventListener('change', function () {
+        if (!s.value) return;
+        var nota = prompt('Nota (opcional):') || '';
+        llamar('marcar_pista', { code: s.dataset.pista, track_status: s.value, nota: nota })
+          .then(function () { loadTracks(); })
+          .catch(function (e) { mostrarAviso('#avisoGlobal', 'error', 'No se pudo marcar', e.message); });
+      });
+    });
+  }).catch(function (e) { mostrarAviso('#salidaPistas', 'error', 'Error', e.message); });
+}
+
+function prepareAudioFolders() {
+  var b = $('#btnCarpetas'); ocupado(b, true, 'Creando…');
+  llamar('preparar_carpetas_audio').then(function (r) {
+    ocupado(b, false);
+    $('#salidaCarpetas').innerHTML = '<div class="aviso ok"><b>Carpetas listas</b>' + r.creadas + ' nuevas, ' + r.existentes +
+      ' ya existían. <a target="_blank" rel="noopener" href="' + escaparHtml(r.carpeta) + '">Abrir carpeta Audio</a></div>';
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaCarpetas', 'error', 'Error', e.message); });
+}
+
+function uploadTrackAsAdmin() {
+  var f = $('#pistaArchivo').files[0];
+  var code = $('#pistaCodigo').value.trim().toUpperCase();
+  if (!f || !code) { mostrarAviso('#salidaSubida', 'error', 'Faltan datos', 'Escribe el código y elige el archivo.'); return; }
+  var b = $('#btnSubirPistaAdmin'); ocupado(b, true, 'Subiendo…');
+  fileToBase64(f).then(function (b64) {
+    return llamar('subir_pista_admin', { code: code, song_name: $('#pistaCancion').value.trim(), file_name: f.name, file_base64: b64, method: 'WHATSAPP' });
+  }).then(function (r) {
+    ocupado(b, false);
+    mostrarAviso('#salidaSubida', 'ok', 'Pista guardada', r.track_file_name + ' (' + Math.round(r.bytes / 1024) + ' KB)');
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaSubida', 'error', 'No se pudo subir', e.message); });
 }
 
 // ------------------------------ comunicación -------------------------------
@@ -364,49 +495,70 @@ function generarMensajes() {
   llamar('mensajes', { plantilla: $('#plantilla').value, bloque: $('#filtroBloqueMsg').value })
     .then(function (r) {
       ocupado(b, false);
-      $('#salidaMensajes').innerHTML =
-        '<div class="aviso ok"><b>' + r.total + ' mensajes generados</b>' + escaparHtml(r.nombre) + '</div>' +
-        '<div class="tabla-envoltura" style="max-height:420px;overflow-y:auto"><table>' +
-        '<thead><tr><th>Código</th><th>Nombre</th><th>WhatsApp</th><th>Mensaje</th></tr></thead><tbody>' +
+      $('#salidaMensajes').innerHTML = '<div class="aviso ok"><b>' + r.total + ' mensajes generados</b>' + escaparHtml(r.nombre) + '</div>' +
+        '<div class="tabla-envoltura" style="max-height:440px;overflow-y:auto"><table><thead><tr><th>Código</th><th>Nombre</th><th>WhatsApp</th><th>Mensaje</th></tr></thead><tbody>' +
         r.mensajes.map(function (m) {
-          return '<tr><td><b>' + escaparHtml(m.code) + '</b></td><td>' + escaparHtml(m.full_name) + '</td>' +
-            '<td>' + (m.whatsapp_url
-              ? '<a class="boton chico" style="text-decoration:none" href="' + escaparHtml(m.whatsapp_url) +
-                '" target="_blank" rel="noopener">Abrir chat</a>'
-              : '<span style="color:var(--tenue)">sin número</span>') + '</td>' +
-            '<td style="white-space:pre-wrap;max-width:460px;font-size:11.5px">' + escaparHtml(m.cuerpo) + '</td></tr>';
+          return '<tr><td><b>' + escaparHtml(m.code || m.submission_id) + '</b></td><td>' + escaparHtml(m.full_name) + '</td>' +
+            '<td>' + (m.whatsapp_url ? '<a class="boton chico" style="text-decoration:none" href="' + escaparHtml(m.whatsapp_url) + '" target="_blank" rel="noopener">Abrir chat</a>'
+                                      : muted(m.sin_whatsapp || 'sin número')) + '</td>' +
+            '<td style="white-space:pre-wrap;max-width:480px;font-size:12px">' + escaparHtml(m.cuerpo) + '</td></tr>';
         }).join('') + '</tbody></table></div>';
     })
     .catch(function (e) { ocupado(b, false); mostrarAviso('#salidaMensajes', 'error', 'Error', e.message); });
 }
 
 function enviarCorreos() {
-  if (!confirm('Se enviarán correos reales a los participantes del filtro actual. ¿Continuar?')) return;
+  if (!confirm('Se enviarán correos reales a las personas del filtro actual. ¿Continuar?')) return;
   var b = $('#btnCorreos'); ocupado(b, true, 'Enviando...');
   llamar('enviar_correos', { plantilla: $('#plantilla').value, bloque: $('#filtroBloqueMsg').value })
     .then(function (r) {
       ocupado(b, false);
-      mostrarAviso('#salidaMensajes', r.omitidos.length ? 'alerta' : 'ok',
-        r.enviados + ' correos enviados',
-        (r.omitidos.length ? r.omitidos.length + ' omitidos. ' : '') +
-        'Cuota restante hoy: ' + r.cuota_restante + '. ' + (r.nota || ''));
+      mostrarAviso('#salidaMensajes', r.omitidos.length ? 'alerta' : 'ok', r.enviados + ' correos enviados',
+        (r.omitidos.length ? r.omitidos.length + ' omitidos. ' : '') + 'Cuota restante hoy: ' + r.cuota_restante + '. ' + (r.nota || ''));
     })
     .catch(function (e) { ocupado(b, false); mostrarAviso('#salidaMensajes', 'error', 'Error', e.message); });
 }
 
+function exportContacts(b) {
+  ocupado(b, true, 'Generando…');
+  llamar('exportar_contactos', { alcance: b.dataset.contactos }).then(function (r) {
+    ocupado(b, false);
+    var url = URL.createObjectURL(new Blob([r.vcf], { type: 'text/vcard' }));
+    $('#salidaContactos').innerHTML = '<div class="aviso ok"><b>' + r.total + ' contactos</b>' +
+      '<a download="' + escaparHtml(r.archivo) + '" href="' + url + '">Descargar ' + escaparHtml(r.archivo) + '</a> · ' +
+      '<a target="_blank" rel="noopener" href="' + escaparHtml(r.url) + '">Copia en Drive</a></div>';
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaContactos', 'error', 'Error', e.message); });
+}
+
+function checkVideos(todos) {
+  var b = todos ? $('#btnVideosTodos') : $('#btnVideosPendientes');
+  ocupado(b, true, 'Verificando…');
+  llamar('verificar_videos', { todos: todos }).then(function (r) {
+    ocupado(b, false);
+    mostrarAviso('#salidaVideos', 'ok', r.revisados + ' enlaces revisados',
+      Object.keys(r.por_estado).map(function (k) { return k + ': ' + r.por_estado[k]; }).join(' · ') || 'Nada pendiente.');
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaVideos', 'error', 'Error', e.message); });
+}
+
 // ------------------------------ herramientas -------------------------------
-function respaldo(accion, titulo) {
-  var b = accion === 'exportar' ? $('#btnExportar') : $('#btnRespaldar');
+function respaldo(accion, b) {
   ocupado(b, true, 'Generando...');
-  llamar(accion).then(function (r) {
+  llamar(accion, { etiqueta: $('#etiquetaRespaldo').value }).then(function (r) {
     ocupado(b, false);
     var x = r.xlsx || r;
-    $('#salidaRespaldo').innerHTML = '<div class="aviso ok"><b>' + titulo + '</b>' +
+    $('#salidaRespaldo').innerHTML = '<div class="aviso ok"><b>' + (r.etiqueta ? 'Respaldo ' + escaparHtml(r.etiqueta) : 'XLSX generado') + '</b>' +
       '<a href="' + escaparHtml(x.url) + '" target="_blank" rel="noopener">' + escaparHtml(x.nombre) + '</a>' +
-      (r.json ? ' · <a href="' + escaparHtml(r.json.url) + '" target="_blank" rel="noopener">' +
-        escaparHtml(r.json.nombre) + '</a>' : '') +
-      (r.carpeta ? '<br><a href="' + escaparHtml(r.carpeta) + '" target="_blank" rel="noopener">Abrir carpeta de respaldos</a>' : '') +
-      '</div>';
+      (r.json ? ' · <a href="' + escaparHtml(r.json.url) + '" target="_blank" rel="noopener">' + escaparHtml(r.json.nombre) + '</a>' : '') +
+      (r.carpeta ? '<br><a href="' + escaparHtml(r.carpeta) + '" target="_blank" rel="noopener">Abrir carpeta de respaldos</a>' : '') + '</div>';
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaRespaldo', 'error', 'Error', e.message); });
+}
+
+function backupAudio() {
+  var b = $('#btnRespaldoAudios'); ocupado(b, true, 'Copiando…');
+  llamar('respaldar_audios').then(function (r) {
+    ocupado(b, false);
+    mostrarAviso('#salidaRespaldo', r.completo ? 'ok' : 'alerta', r.completo ? 'Audios respaldados' : 'Respaldo parcial',
+      r.copiados + ' copiados, ' + r.ya_estaban + ' ya estaban.' + (r.completo ? '' : ' Pulsa de nuevo para continuar.'));
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaRespaldo', 'error', 'Error', e.message); });
 }
 
@@ -414,20 +566,33 @@ function refrescarVistas() {
   var b = $('#btnVistas'); ocupado(b, true, 'Refrescando...');
   llamar('refrescar_vistas').then(function (r) {
     ocupado(b, false);
-    mostrarAviso('#salidaVistas', 'ok', 'Vistas actualizadas',
-      'AGENDA ' + r.agenda + ' · CHECK-IN ' + r.check_in + ' · RESULTADOS ' + r.resultados);
+    mostrarAviso('#salidaVistas', 'ok', 'Vistas actualizadas', 'AGENDA ' + r.agenda + ' · CHECK-IN ' + r.check_in +
+      ' · AGRUPACIONES ' + r.agrupaciones + ' · PISTAS ' + r.pistas + ' · RESULTADOS ' + r.resultados);
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaVistas', 'error', 'Error', e.message); });
 }
 
 function cerrarJornada() {
-  if (!confirm('CIERRE DEFINITIVO.\n\nTodo participante que no haya audicionado quedará NO AUDICIONADO ' +
-               'y no entrará a la selección.\n\n¿Confirmas que ya son las 21:30 y no hay más audiciones?')) return;
+  if (!confirm('CIERRE DEFINITIVO.\n\nTodo participante que no haya audicionado quedará NO AUDICIONADO y no entrará a la selección ' +
+               '(quien esté en escena termina).\n\n¿Confirmas que ya es la hora de cierre y no hay más audiciones?')) return;
   var b = $('#btnCerrar'); ocupado(b, true, 'Cerrando...');
   llamar('cerrar_jornada').then(function (r) {
     ocupado(b, false);
-    mostrarAviso('#salidaVistas', 'ok', 'Jornada cerrada',
-      r.cerrados + ' participantes quedaron NO AUDICIONADOS.');
+    mostrarAviso('#salidaVistas', 'ok', 'Jornada cerrada', r.cerrados + ' participantes quedaron NO AUDICIONADOS.');
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaVistas', 'error', 'Error', e.message); });
+}
+
+function loadSystemHealth() {
+  var b = $('#btnSistema'); ocupado(b, true, 'Revisando…');
+  llamar('estado_sistema').then(function (r) {
+    ocupado(b, false);
+    var s = r.salud;
+    var ok = s.llaves_coinciden && s.esquema_completo && s.produccion_limpia;
+    $('#salidaSistema').innerHTML = '<div class="aviso ' + (ok ? 'ok' : 'error') + '"><b>' + (ok ? 'Sistema consistente' : 'Revisar') + '</b>' +
+      'Entorno ' + escaparHtml(s.entorno) + ' · hoja marcada ' + escaparHtml(s.marca_hoja) + ' · esquema ' + (s.esquema_completo ? 'completo' : 'INCOMPLETO') +
+      ' · datos de prueba: ' + s.datos_de_prueba.proyectos_de_prueba + '<br>Legal verificado: ' + (s.legal.datos_verificados ? 'SI' : 'NO') +
+      ' · pendientes: ' + escaparHtml(s.legal.pendientes.join(', ') || 'ninguno') + ' · términos ' + escaparHtml(s.legal.terms_version) + '</div>' +
+      '<pre style="white-space:pre-wrap;font-size:12px;color:var(--tenue)">' + escaparHtml(JSON.stringify(s, null, 2)) + '</pre>';
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaSistema', 'error', 'Error', e.message); });
 }
 
 function crearUsuario() {
@@ -435,8 +600,7 @@ function crearUsuario() {
   llamar('crear_usuario', { alias: $('#nuevoAlias').value, rol: $('#nuevoRol').value, nota: $('#nuevaNota').value })
     .then(function (r) {
       ocupado(b, false);
-      $('#salidaUsuario').innerHTML = '<div class="aviso ok"><b>' + escaparHtml(r.alias) + ' (' +
-        escaparHtml(r.rol) + ')</b>Entrégale SOLO este enlace:<br>' +
+      $('#salidaUsuario').innerHTML = '<div class="aviso ok"><b>' + escaparHtml(r.alias) + ' (' + escaparHtml(r.rol) + ')</b>Entrégale SOLO este enlace:<br>' +
         '<input type="text" readonly value="' + escaparHtml(r.url) + '" style="margin-top:8px;font-size:12px"></div>';
     })
     .catch(function (e) { ocupado(b, false); mostrarAviso('#salidaUsuario', 'error', 'Error', e.message); });

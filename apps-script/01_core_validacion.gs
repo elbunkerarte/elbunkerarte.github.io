@@ -22,16 +22,50 @@ var MOTIVO_DUPLICADO = {
   TELEFONO: 'TELEFONO_REPETIDO'
 };
 
-/** Fields that must be present and non-empty for a submission to be complete. */
+/**
+ * Fields that must be present and non-empty for a submission to be complete.
+ * Iteration 2 replaced the generic "discipline" with participation mode and
+ * main genre, and added the performance, equipment and backing-track answers.
+ * Yes/No answers count as present when answered either way.
+ */
 var CAMPOS_OBLIGATORIOS = [
   'full_name', 'id_number', 'birth_date', 'neighborhood_sector',
-  'resides_in_sabaneta', 'email', 'whatsapp', 'discipline',
-  'audition_description', 'availability_statement',
+  'resides_in_sabaneta', 'email', 'whatsapp',
+  'participation_mode', 'genre_primary', 'audition_description',
+  'presentation_format', 'own_equipment', 'track_uses',
+  'adult_confirmation', 'availability_statement',
   'accept_terms', 'accept_data_processing'
 ];
 
-/** Consents that must be explicitly true. image/voice + whatsapp are optional. */
-var CONSENTIMIENTOS_OBLIGATORIOS = ['accept_terms', 'accept_data_processing'];
+/**
+ * Statements that must be explicitly true. Silence is never an authorization:
+ * an unticked box and a missing field are the same thing here.
+ * WhatsApp and image/voice are independent, optional authorizations.
+ */
+var CONSENTIMIENTOS_OBLIGATORIOS = ['accept_terms', 'accept_data_processing', 'adult_confirmation', 'availability_statement'];
+
+/** Participation modes. A duo or a group is ONE project and takes ONE seat. */
+var PARTICIPATION_MODE = { SOLISTA: 'SOLISTA', DUO: 'DUO', AGRUPACION: 'AGRUPACION' };
+
+var PRESENTATION_FORMATS = ['VOZ_PISTA', 'VOZ_INSTRUMENTO', 'INSTRUMENTAL', 'DJ_SET', 'FREESTYLE_PERFORMANCE', 'OTRA'];
+
+var TRACK_METHODS = ['ARCHIVO', 'USB', 'WHATSAPP', 'OTRO'];
+
+var TRACK_STATUS = {
+  NO_APLICA: 'NO APLICA',
+  PENDIENTE: 'PISTA PENDIENTE',
+  RECIBIDA: 'PISTA RECIBIDA',
+  VALIDADA: 'PISTA VALIDADA',
+  PROBLEMA: 'PISTA CON PROBLEMA'
+};
+
+var VIDEO_STATUS = {
+  SIN_VIDEO: 'SIN VIDEO',
+  PENDIENTE: 'PENDIENTE',
+  ACCESIBLE: 'ACCESIBLE',
+  NO_ACCESIBLE: 'NO ACCESIBLE',
+  NO_VERIFICABLE: 'NO VERIFICABLE'
+};
 
 // ---------------------------------------------------------------------------
 // Normalization
@@ -173,10 +207,11 @@ function esVerdadero(valor) {
  */
 function validarInscripcion(datos, opciones) {
   opciones = opciones || {};
-  var fechaEvento = opciones.fecha_evento || '2026-10-02';
+  var fechaEvento = opciones.fecha_evento || '2026-10-23';
   var edadMinima = opciones.edad_minima === undefined ? 18 : opciones.edad_minima;
-  var edadMaxima = opciones.edad_maxima === undefined ? 28 : opciones.edad_maxima;
+  var edadMaxima = opciones.edad_maxima === undefined ? 30 : opciones.edad_maxima;
   var exigirVideo = !!opciones.exigir_video;
+  var maxMembers = opciones.integrantes_max || 15;
 
   var errores = [];
   var avisos = [];
@@ -189,13 +224,17 @@ function validarInscripcion(datos, opciones) {
     if (vacio) errores.push({ campo: campo, codigo: 'FALTANTE', mensaje: 'Campo obligatorio sin diligenciar.' });
   }
 
-  // 2. Mandatory consents ---------------------------------------------------
+  // 2. Mandatory consents and statements -------------------------------------
   for (var c = 0; c < CONSENTIMIENTOS_OBLIGATORIOS.length; c++) {
     var consent = CONSENTIMIENTOS_OBLIGATORIOS[c];
-    if (!esVerdadero(datos[consent])) {
-      errores.push({ campo: consent, codigo: 'CONSENTIMIENTO', mensaje: 'Autorizacion obligatoria no otorgada.' });
+    var yaFalta = errores.some(function (e) { return e.campo === consent; });
+    if (!yaFalta && !esVerdadero(datos[consent])) {
+      errores.push({ campo: consent, codigo: 'CONSENTIMIENTO', mensaje: 'Declaracion o autorizacion obligatoria no otorgada.' });
     }
   }
+
+  // 2b. Project shape (iteration 2) ------------------------------------------
+  projectShapeErrors(datos, maxMembers).forEach(function (e) { errores.push(e); });
 
   var incompleto = errores.length > 0;
 
@@ -307,16 +346,18 @@ function detectarDuplicado(candidato, existentes) {
     // A row already marked DUPLICATE must not itself absorb a seat, but it still
     // counts as evidence of a prior collision, so it is compared normally.
 
-    if (cedula && fila.normalized_id_number === cedula) {
+    // Stored values are normalized again: Sheets may hand back a numeric ID
+    // (1036448960) where the candidate carries the text "1036448960".
+    if (cedula && normalizarCedula(fila.normalized_id_number) === cedula) {
       duplicado = true;
       if (!principal) principal = fila.submission_id || '';
       if (razones.indexOf(MOTIVO_DUPLICADO.CEDULA) === -1) razones.push(MOTIVO_DUPLICADO.CEDULA);
     }
-    if (email && fila.normalized_email === email && razones.indexOf(MOTIVO_DUPLICADO.EMAIL) === -1) {
+    if (email && normalizarEmail(fila.normalized_email) === email && razones.indexOf(MOTIVO_DUPLICADO.EMAIL) === -1) {
       razones.push(MOTIVO_DUPLICADO.EMAIL);
       if (!principal) principal = fila.submission_id || '';
     }
-    if (telefono && fila.normalized_phone === telefono && razones.indexOf(MOTIVO_DUPLICADO.TELEFONO) === -1) {
+    if (telefono && normalizarTelefono(fila.normalized_phone) === telefono && razones.indexOf(MOTIVO_DUPLICADO.TELEFONO) === -1) {
       razones.push(MOTIVO_DUPLICADO.TELEFONO);
       if (!principal) principal = fila.submission_id || '';
     }
@@ -328,4 +369,246 @@ function detectarDuplicado(candidato, existentes) {
     duplicate_reason: razones.join('|'),
     registro_principal: principal
   };
+}
+
+// ---------------------------------------------------------------------------
+// Iteration 2: project shape, groups, members, test-data markers
+// ---------------------------------------------------------------------------
+
+/** "Solista", "Dúo", "duo", "Agrupación" ... -> SOLISTA / DUO / AGRUPACION, or ''. */
+function normalizeParticipationMode(value) {
+  var v = normalizarComparable(value).replace(/[^A-Z]/g, '');
+  if (v === 'SOLISTA' || v === 'SOLO') return PARTICIPATION_MODE.SOLISTA;
+  if (v === 'DUO') return PARTICIPATION_MODE.DUO;
+  if (v === 'AGRUPACION' || v === 'GRUPO' || v === 'BANDA') return PARTICIPATION_MODE.AGRUPACION;
+  return '';
+}
+
+function isGroupMode(mode) {
+  var m = normalizeParticipationMode(mode);
+  return m === PARTICIPATION_MODE.DUO || m === PARTICIPATION_MODE.AGRUPACION;
+}
+
+/** Answers that only exist for some shapes of project (groups, backing track, equipment). */
+function projectShapeErrors(datos, maxMembers) {
+  var errors = [];
+  var modeRaw = normalizarTexto(datos.participation_mode);
+  var mode = normalizeParticipationMode(modeRaw);
+
+  if (modeRaw && !mode) {
+    errors.push({ campo: 'participation_mode', codigo: 'FORMATO', mensaje: 'Modalidad invalida: elige Solista, Duo o Agrupacion.' });
+  }
+  if (isGroupMode(mode)) {
+    if (!normalizarTexto(datos.artistic_name)) {
+      errors.push({ campo: 'artistic_name', codigo: 'FALTANTE', mensaje: 'Escribe el nombre artistico de la agrupacion.' });
+    }
+    var declared = parseInt(datos.members_declared, 10);
+    if (!normalizarTexto(datos.members_declared)) {
+      errors.push({ campo: 'members_declared', codigo: 'FALTANTE', mensaje: 'Indica cuantos integrantes estaran en escena.' });
+    } else if (mode === PARTICIPATION_MODE.DUO && declared !== 2) {
+      errors.push({ campo: 'members_declared', codigo: 'FORMATO', mensaje: 'Un duo tiene exactamente 2 integrantes.' });
+    } else if (mode === PARTICIPATION_MODE.AGRUPACION && !(declared >= 3 && declared <= maxMembers)) {
+      errors.push({ campo: 'members_declared', codigo: 'FORMATO', mensaje: 'Una agrupacion tiene entre 3 y ' + maxMembers + ' integrantes en escena.' });
+    }
+  }
+
+  var format = normalizarComparable(datos.presentation_format).replace(/[\s-]+/g, '_');
+  if (format && PRESENTATION_FORMATS.indexOf(format) === -1) {
+    errors.push({ campo: 'presentation_format', codigo: 'FORMATO', mensaje: 'Forma de presentacion invalida.' });
+  }
+  if (format === 'OTRA' && !normalizarTexto(datos.presentation_other)) {
+    errors.push({ campo: 'presentation_other', codigo: 'FALTANTE', mensaje: 'Describe brevemente como sera tu presentacion.' });
+  }
+
+  if (esVerdadero(datos.own_equipment) && !normalizarTexto(datos.own_equipment_detail)) {
+    errors.push({ campo: 'own_equipment_detail', codigo: 'FALTANTE', mensaje: 'Cuentanos que instrumento o equipo llevaras.' });
+  }
+
+  if (esVerdadero(datos.track_uses)) {
+    var method = normalizarComparable(datos.track_method);
+    if (!method) {
+      errors.push({ campo: 'track_method', codigo: 'FALTANTE', mensaje: 'Indica como entregaras la pista.' });
+    } else if (TRACK_METHODS.indexOf(method) === -1) {
+      errors.push({ campo: 'track_method', codigo: 'FORMATO', mensaje: 'Metodo de entrega de pista invalido.' });
+    } else if (method === 'OTRO' && !normalizarTexto(datos.track_method_other)) {
+      errors.push({ campo: 'track_method_other', codigo: 'FALTANTE', mensaje: 'Describe el metodo de entrega de la pista.' });
+    }
+  }
+  return errors;
+}
+
+/**
+ * Comparison key for group names. It only feeds duplicate DETECTION: the name
+ * the group typed is stored untouched, spelling is never "fixed" and nothing is
+ * merged automatically - the operator decides.
+ *   "El Arte es La Solución", "el arte es la solucion", "EL-ARTE, ES LA SOLUCIÓN!"
+ *   all produce "el arte es la solucion".
+ */
+function groupMatchKey(name) {
+  return normalizarTexto(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9ñ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Looks for an earlier group project with the same match key.
+ * Returns { match: bool, ref: submission_id, name: display name } - never merges.
+ */
+function detectGroupMatch(candidate, existing) {
+  var key = candidate.group_match_key || groupMatchKey(candidate.group_display_name || candidate.artistic_name);
+  if (!key) return { match: false, ref: '', name: '' };
+  for (var i = 0; i < existing.length; i++) {
+    var row = existing[i];
+    if (row.submission_id && row.submission_id === candidate.submission_id) continue;
+    if (!isGroupMode(row.participation_mode)) continue;
+    var rowKey = row.group_match_key || groupMatchKey(row.group_display_name || row.artistic_name);
+    if (rowKey && rowKey === key) {
+      return { match: true, ref: row.submission_id || '', name: row.group_display_name || row.artistic_name || '' };
+    }
+  }
+  return { match: false, ref: '', name: '' };
+}
+
+/** GRP-001 style internal group code. */
+function formatGroupCode(n) {
+  var s = String(n);
+  while (s.length < 3) s = '0' + s;
+  return 'GRP-' + s;
+}
+
+/** Next group number: one above the highest ever issued, so numbers are never reused. */
+function nextGroupNumber(rows) {
+  var max = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var m = String(rows[i].group_code || '').match(/^GRP-(\d+)$/i);
+    if (m && parseInt(m[1], 10) > max) max = parseInt(m[1], 10);
+  }
+  return max + 1;
+}
+
+var MEMBER_STATUS = {
+  AUTORIZADO: 'AUTORIZADO',
+  INCOMPLETO: 'INCOMPLETO',
+  NO_CUMPLE: 'NO CUMPLE'
+};
+
+/**
+ * Validates one group member's individual authorization. The leader can not
+ * authorize on behalf of the others, so each member answers for themself.
+ */
+function validateMember(datos, options) {
+  options = options || {};
+  var minAge = options.edad_minima === undefined ? 18 : options.edad_minima;
+  var eventDate = options.fecha_evento || '2026-10-23';
+  var requireSignature = options.firma_obligatoria !== false;
+  var errors = [];
+
+  ['full_name', 'id_number', 'birth_date', 'artistic_role'].forEach(function (field) {
+    if (!normalizarTexto(datos[field])) errors.push({ campo: field, codigo: 'FALTANTE', mensaje: 'Campo obligatorio.' });
+  });
+  ['adult_confirmation', 'accept_terms', 'accept_data_processing'].forEach(function (field) {
+    if (!esVerdadero(datos[field])) errors.push({ campo: field, codigo: 'CONSENTIMIENTO', mensaje: 'Declaracion o autorizacion obligatoria.' });
+  });
+  if (requireSignature && !normalizarTexto(datos.signature_png)) {
+    errors.push({ campo: 'signature_png', codigo: 'FALTANTE', mensaje: 'Falta la firma.' });
+  }
+  if (normalizarTexto(datos.id_number) && !esCedulaValida(datos.id_number)) {
+    errors.push({ campo: 'id_number', codigo: 'FORMATO', mensaje: 'El documento debe tener entre 6 y 10 digitos.' });
+  }
+
+  var age = null;
+  if (normalizarTexto(datos.birth_date)) {
+    if (!parsearFecha(datos.birth_date)) {
+      errors.push({ campo: 'birth_date', codigo: 'FORMATO', mensaje: 'Fecha de nacimiento invalida.' });
+    } else {
+      age = calcularEdad(datos.birth_date, eventDate);
+      if (age < minAge) {
+        errors.push({ campo: 'birth_date', codigo: 'EDAD', mensaje: 'Cada integrante debe ser mayor de ' + minAge + ' anos el dia del evento.' });
+      }
+    }
+  }
+
+  var status = MEMBER_STATUS.AUTORIZADO;
+  if (errors.some(function (e) { return e.codigo === 'EDAD'; })) status = MEMBER_STATUS.NO_CUMPLE;
+  else if (errors.length) status = MEMBER_STATUS.INCOMPLETO;
+  return { status: status, age: age, errors: errors };
+}
+
+/**
+ * Rows created by the seed generator. Production refuses them: the brief
+ * requires that production never receives test data.
+ */
+function isTestData(datos) {
+  if (!datos) return false;
+  if (normalizarComparable(datos.source) === 'SEED') return true;
+  if (/^SEED-/i.test(String(datos.client_submission_id || ''))) return true;
+  return /@ejemplo-bunker\.test$/i.test(normalizarEmail(datos.email));
+}
+
+// ---------------------------------------------------------------------------
+// E-mail typo hint (shared verbatim with the browser via Function#toString)
+// ---------------------------------------------------------------------------
+
+/** Plain Levenshtein distance, small inputs only. */
+function editDistance(a, b) {
+  a = String(a || ''); b = String(b || '');
+  var prev = [], cur = [], i, j;
+  for (j = 0; j <= b.length; j++) prev[j] = j;
+  for (i = 1; i <= a.length; i++) {
+    cur = [i];
+    for (j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * Suggests the likely intended domain for a mistyped common provider
+ * ("gmaik.com" -> "gmail.com"). It is only a hint shown to the person: the
+ * address is never corrected automatically.
+ */
+function suggestEmailDomain(email) {
+  var m = String(email || '').trim().toLowerCase().match(/^([^@\s]+)@([^@\s]+)$/);
+  if (!m) return '';
+  var domain = m[2];
+  var known = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'live.com', 'hotmail.es', 'outlook.es', 'yahoo.es'];
+  if (known.indexOf(domain) !== -1) return '';
+  var best = '', bestDistance = 3;
+  for (var k = 0; k < known.length; k++) {
+    var d = editDistance(domain, known[k]);
+    if (d > 0 && d < bestDistance) { bestDistance = d; best = known[k]; }
+  }
+  return best ? m[1] + '@' + best : '';
+}
+
+// ---------------------------------------------------------------------------
+// Masking for roles that must not see personal data (direction)
+// ---------------------------------------------------------------------------
+
+/** "1036448960" -> "******8960". */
+function maskIdNumber(value) {
+  var digits = normalizarCedula(value);
+  if (!digits) return '';
+  return new Array(Math.max(0, digits.length - 4) + 1).join('*') + digits.slice(-4);
+}
+
+/** "maria.restrepo@gmail.com" -> "m***@gmail.com". */
+function maskEmail(value) {
+  var email = normalizarEmail(value);
+  var at = email.indexOf('@');
+  if (at < 1) return email ? '***' : '';
+  return email.charAt(0) + '***' + email.slice(at);
+}
+
+/** "3012345678" -> "*** *** 5678". */
+function maskPhone(value) {
+  var phone = normalizarTelefono(value);
+  if (!phone) return '';
+  return '*** *** ' + phone.slice(-4);
 }

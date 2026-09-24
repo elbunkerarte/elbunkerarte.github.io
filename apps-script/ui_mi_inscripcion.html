@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?!= incluir('ui_estilos') ?>
+</head>
+<body>
+<? var C = accionConfigPublica(); ?>
+<div class="envoltura">
+  <?!= incluir('ui_cabecera') ?>
+  <h2 class="titulo-pagina">Mi inscripción</h2>
+  <p style="color:var(--tenue);margin-top:0">Consulta tu estado, tu código y horario, el enlace de tu agrupación y envía tu pista.</p>
+
+  <div id="avisoGlobal" role="alert" aria-live="polite"></div>
+
+  <form class="tarjeta" id="formConsulta" novalidate>
+    <div class="rejilla dos">
+      <div class="campo">
+        <label for="id_number">Tu número de cédula <span class="req">*</span></label>
+        <input type="text" id="id_number" inputmode="numeric" maxlength="15" autocomplete="off">
+        <p class="ayuda">Si eres agrupación, la cédula del líder que hizo la inscripción.</p>
+        <div class="error"></div>
+      </div>
+      <div class="campo">
+        <label for="referencia">Código B-XXX o comprobante S-XXXX <span class="req">*</span></label>
+        <input type="text" id="referencia" autocomplete="off" placeholder="B-012 o S-1A2B3C4D" value="<?= codigo ?>">
+        <p class="ayuda">El comprobante aparece al terminar la inscripción y en el correo de recepción.</p>
+        <div class="error"></div>
+      </div>
+    </div>
+    <button type="submit" class="boton" id="btnConsultar">Consultar</button>
+  </form>
+
+  <div id="estado"></div>
+
+  <footer class="pie">
+    <?= C.legal.legal_name ?> · Datos personales y reclamos: <?= C.legal.data_protection_email ?>
+  </footer>
+</div>
+
+<?!= incluir('ui_scripts') ?>
+<script>
+window.ENTORNO = '<?= ENTORNO ?>';
+var CONFIG = <?!= jsonForScript(C) ?>;
+var BASE_URL = '<?= BASE_URL ?>';
+var CURRENT = null;
+
+document.addEventListener('DOMContentLoaded', function () {
+  $('#formConsulta').addEventListener('submit', function (e) { e.preventDefault(); lookUp(); });
+});
+
+function lookupPayload() {
+  var ref = $('#referencia').value.trim().toUpperCase();
+  var d = { id_number: $('#id_number').value.trim(), source: 'web' };
+  if (/^B-?\d+$/.test(ref)) d.code = ref.replace(/^B-?/, 'B-');
+  else d.submission_id = ref;
+  return d;
+}
+
+function lookUp() {
+  $$('.campo').forEach(function (c) { c.classList.remove('malo'); });
+  var d = lookupPayload();
+  if (!d.id_number) { markError('id_number', 'Escribe tu cédula.'); return; }
+  if (!d.code && !d.submission_id) { markError('referencia', 'Escribe tu código o comprobante.'); return; }
+  var b = $('#btnConsultar');
+  ocupado(b, true, 'Consultando…');
+  llamar('mi_inscripcion', d).then(function (r) {
+    ocupado(b, false);
+    CURRENT = { consulta: d, datos: r };
+    render(r);
+  }).catch(function (e) {
+    ocupado(b, false);
+    $('#estado').innerHTML = '';
+    mostrarAviso('#avisoGlobal', 'error', 'No encontramos tu inscripción', e.message);
+  });
+}
+
+function factHtml(k, v) { return '<div class="hecho"><div class="k">' + k + '</div><div class="v" style="font-size:22px">' + escaparHtml(v) + '</div></div>'; }
+
+function render(r) {
+  $('#avisoGlobal').innerHTML = '';
+  var html = '<section class="tarjeta" style="border-color:var(--amarillo)">' +
+    '<div style="color:var(--tenue);font-size:13px;letter-spacing:.1em">' + escaparHtml(r.participation_mode) + ' · ' + escaparHtml(r.submission_id) + '</div>' +
+    '<div class="codigo-grande" style="font-size:34px;color:var(--texto)">' + escaparHtml(r.artistic_name || '') + '</div>' +
+    '<p style="margin:8px 0 0">' + etiquetaEstado(r.eligibility_status) + ' ' + escaparHtml(r.estado_texto) + '</p></section>';
+
+  if (r.code) {
+    html += '<section class="tarjeta"><h2>Tu código y horario</h2><div class="codigo-grande">' + escaparHtml(r.code) + '</div>' +
+      '<div class="hechos" style="margin-top:14px">' + factHtml('Fecha', r.fecha_texto) + factHtml('Llegada', r.hora_llegada) +
+      factHtml('Audición', r.hora_audicion) + factHtml('Lugar', r.lugar) + '</div>' +
+      '<p class="pista" style="margin:0">Tu código no cambia nunca. Si tienes un impedimento real: ' +
+      '<a href="' + BASE_URL + '?p=cambio-horario&code=' + encodeURIComponent(r.code) + '">solicitar cambio de horario</a> (una sola vez).' +
+      (r.change_status && r.change_status !== 'SIN_SOLICITUD' ? ' Estado de tu solicitud: ' + etiquetaEstado(r.change_status) : '') + '</p></section>';
+  }
+
+  if (r.group) {
+    var g = r.group;
+    html += '<section class="tarjeta"><h2>Tu agrupación ' + escaparHtml(g.code) + '</h2>' +
+      '<p style="margin:0 0 10px"><b>' + g.authorized + '</b> de <b>' + (g.declared || g.registered) + '</b> integrantes autorizados · Clave <b style="letter-spacing:.12em">' + escaparHtml(g.key) + '</b></p>' +
+      '<div class="tabla-envoltura" style="margin-bottom:12px"><table><thead><tr><th>Integrante</th><th>Rol</th><th>Estado</th></tr></thead><tbody>' +
+      g.members.map(function (m) { return '<tr><td>' + escaparHtml(m.name) + (m.leader ? ' (líder)' : '') + '</td><td>' + escaparHtml(m.role) + '</td><td>' + etiquetaEstado(m.status) + '</td></tr>'; }).join('') +
+      '</tbody></table></div>' +
+      '<div class="copiable">' + escaparHtml(g.link) + '</div>' +
+      '<div class="rejilla dos" style="margin-top:12px"><button type="button" class="boton fantasma" id="btnCopiarGrupo">Copiar enlace</button>' +
+      '<a class="boton" target="_blank" rel="noopener" href="https://wa.me/?text=' +
+      encodeURIComponent('Cada integrante debe dar su propia autorización para EL BÚNKER aquí: ' + g.link) + '">Enviar por WhatsApp</a></div></section>';
+  }
+
+  var t = r.track;
+  html += '<section class="tarjeta"><h2>Tu pista</h2><p style="margin:0 0 10px">Estado: ' + etiquetaEstado(t.status) +
+    (t.file_name ? ' · Archivo: <b>' + escaparHtml(t.file_name) + '</b>' : '') + '</p>';
+  if (t.can_upload) {
+    html += '<div class="campo"><label for="song_name">Nombre de la canción</label><input type="text" id="song_name" maxlength="120" value="' + escaparHtml(r.song_name) + '"></div>' +
+      '<div class="campo"><label for="archivo">Archivo de audio (' + escaparHtml(t.formats) + ', máximo ' + t.max_mb + ' MB)</label>' +
+      '<input type="file" id="archivo" accept=".' + t.formats.split(',').join(',.') + ',audio/*"><div class="error"></div></div>' +
+      '<p class="ayuda">Lo guardamos como ' + escaparHtml(r.code) + '_NOMBREARTISTICO_NOMBRECANCION. Si envías otro archivo, el anterior se conserva como respaldo. ' +
+      'El día del evento lleva también una copia en USB.</p>' +
+      '<button type="button" class="boton" id="btnSubir">Enviar pista</button><div id="salidaPista" style="margin-top:12px"></div>';
+  } else if (t.uses) {
+    html += '<p class="pista" style="margin:0">Podrás enviar tu pista cuando tengas tu código B-XXX.</p>';
+  } else {
+    html += '<p class="pista" style="margin:0">Indicaste que no usarás pista.</p>';
+  }
+  html += '</section>';
+
+  if (r.video && r.video.status) {
+    html += '<section class="tarjeta"><h2>Tu video</h2><p style="margin:0">' + etiquetaEstado(r.video.status) + ' ' + escaparHtml(r.video.detail || '') + '</p></section>';
+  }
+
+  if (r.whatsapp_oficial) {
+    html += '<section class="tarjeta"><h2>Guarda nuestro número</h2><p style="margin:0 0 12px">Guarda el <b>' +
+      escaparHtml(r.whatsapp_oficial) + '</b> como <b>' + escaparHtml(r.whatsapp_nombre) + '</b>: desde ahí enviamos códigos, horarios y novedades.</p>' +
+      '<button type="button" class="boton fantasma" id="btnGuardarContacto">Guardar contacto</button></section>';
+  }
+  $('#estado').innerHTML = html;
+  if ($('#btnCopiarGrupo')) $('#btnCopiarGrupo').addEventListener('click', function () { copyText(r.group.link, $('#btnCopiarGrupo')); });
+  if ($('#btnGuardarContacto')) $('#btnGuardarContacto').addEventListener('click', function () { downloadContact(r.whatsapp_oficial, r.whatsapp_nombre); });
+  if ($('#btnSubir')) $('#btnSubir').addEventListener('click', uploadTrack);
+}
+
+function uploadTrack() {
+  var r = CURRENT.datos;
+  var input = $('#archivo');
+  $$('.campo').forEach(function (c) { c.classList.remove('malo'); });
+  var f = input.files && input.files[0];
+  if (!f) { markError('archivo', 'Elige el archivo de tu pista.'); return; }
+  var ext = (f.name.split('.').pop() || '').toLowerCase();
+  if (r.track.formats.split(',').indexOf(ext) === -1) { markError('archivo', 'Formato no permitido. Usa: ' + r.track.formats + '.'); return; }
+  if (f.size > r.track.max_mb * 1024 * 1024) { markError('archivo', 'El archivo pesa más de ' + r.track.max_mb + ' MB. Comprímelo o entrégalo en USB.'); return; }
+  var b = $('#btnSubir');
+  ocupado(b, true, 'Enviando ' + Math.round(f.size / 1024 / 1024 * 10) / 10 + ' MB…');
+  fileToBase64(f).then(function (b64) {
+    return llamar('subir_pista', {
+      id_number: CURRENT.consulta.id_number, code: r.code, song_name: $('#song_name').value.trim(),
+      file_name: f.name, file_base64: b64, client_submission_id: 'P' + Date.now().toString(36),
+      form_elapsed_ms: formElapsedMs(), source: 'web'
+    });
+  }).then(function (res) {
+    ocupado(b, false);
+    mostrarAviso('#salidaPista', 'ok', 'Pista recibida', res.mensaje);
+  }).catch(function (e) {
+    ocupado(b, false);
+    mostrarAviso('#salidaPista', 'error', 'No pudimos recibir la pista', e.message);
+  });
+}
+</script>
+</body>
+</html>

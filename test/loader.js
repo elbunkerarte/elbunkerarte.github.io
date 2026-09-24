@@ -17,11 +17,12 @@ const ARCHIVOS_CORE = [
   '02_core_codigos.gs',
   '03_core_agenda.gs',
   '04_core_rubrica.gs',
-  '05_core_estados.gs'
+  '05_core_estados.gs',
+  '06_core_media.gs'
 ];
 
 function cargarCore() {
-  const contexto = vm.createContext({ console, Date, Math, JSON, isFinite, Number, String, Array, Object, RegExp, parseInt, parseFloat });
+  const contexto = vm.createContext({ console, Date, Math, JSON, isFinite, Number, String, Array, Object, RegExp, parseInt, parseFloat, encodeURIComponent, decodeURIComponent });
   for (const archivo of ARCHIVOS_CORE) {
     const codigo = fs.readFileSync(path.join(RAIZ, archivo), 'utf8');
     try {

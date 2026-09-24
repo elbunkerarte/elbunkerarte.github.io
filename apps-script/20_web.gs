@@ -6,7 +6,7 @@
  * re-implemented (and forgotten) in each handler.
  */
 
-var PAGINAS_PUBLICAS = ['inscripcion', 'cambio-horario', 'gracias', 'estado'];
+var PAGINAS_PUBLICAS = ['inscripcion', 'cambio-horario', 'gracias', 'integrantes', 'mi-inscripcion'];
 
 /**
  * Which roles may OPEN each internal page.
@@ -17,10 +17,11 @@ var PAGINAS_PUBLICAS = ['inscripcion', 'cambio-horario', 'gracias', 'estado'];
  * being a real hole.
  */
 var ROLES_POR_PAGINA = {
-  'admin':     [ROL.ADMIN, ROL.LOGISTICA],
-  'checkin':   [ROL.ADMIN, ROL.LOGISTICA, ROL.CHECKIN],
-  'jurado':    [ROL.ADMIN, ROL.JURADO],
-  'dashboard': [ROL.ADMIN, ROL.DIRECCION, ROL.LOGISTICA]
+  'admin':      [ROL.ADMIN, ROL.LOGISTICA],
+  'checkin':    [ROL.ADMIN, ROL.LOGISTICA, ROL.CHECKIN],
+  'jurado':     [ROL.ADMIN, ROL.JURADO],
+  'dashboard':  [ROL.ADMIN, ROL.DIRECCION, ROL.LOGISTICA],
+  'constancia': [ROL.ADMIN, ROL.LOGISTICA, ROL.CHECKIN]
 };
 
 function doGet(e) {
@@ -46,10 +47,13 @@ function doGet(e) {
       'inscripcion':    'ui_inscripcion',
       'cambio-horario': 'ui_cambio',
       'gracias':        'ui_gracias',
+      'integrantes':    'ui_integrantes',
+      'mi-inscripcion': 'ui_mi_inscripcion',
       'admin':          'ui_admin',
       'checkin':        'ui_checkin',
       'jurado':         'ui_jurado',
-      'dashboard':      'ui_dashboard'
+      'dashboard':      'ui_dashboard',
+      'constancia':     'ui_constancia'
     }[pagina];
 
     if (!plantilla) return renderizar('ui_403', { motivo: 'PAGINA_DESCONOCIDA' });
@@ -58,7 +62,9 @@ function doGet(e) {
       token: params.t || '',
       rol: sesion.ok ? sesion.rol : '',
       alias: sesion.ok ? sesion.alias : '',
-      codigo: params.code || ''
+      codigo: params.code || '',
+      grupo: String(params.g || '').toUpperCase().replace(/[^A-Z0-9-]/g, ''),
+      clave: String(params.k || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
     });
   } catch (err) {
     console.error(err);
@@ -80,14 +86,6 @@ function doPost(e) {
   return responder(ejecutarAccion(datos.accion, datos, datos.t || datos.token));
 }
 
-/** Actions that do not require a token. Everything else does. */
-var ACCIONES_PUBLICAS = {
-  'inscribir': true,
-  'solicitar_cambio': true,
-  'consultar_estado': true,
-  'agenda_publica': true,
-  'config_publica': true
-};
 
 /** accion -> { capacidad, fn }. capacidad null means public. */
 function tablaAcciones() {
@@ -98,9 +96,27 @@ function tablaAcciones() {
     'consultar_estado':   { capacidad: null, fn: accionConsultarEstado },
     'agenda_publica':     { capacidad: null, fn: accionAgendaPublica },
     'config_publica':     { capacidad: null, fn: accionConfigPublica },
+    'consultar_agrupacion': { capacidad: null, fn: accionConsultarAgrupacion },
+    'registrar_integrante': { capacidad: null, fn: accionRegistrarIntegrante },
+    'mi_inscripcion':     { capacidad: null, fn: accionMiInscripcion },
+    'subir_pista':        { capacidad: null, fn: accionSubirPista },
+    'verificar_video':    { capacidad: null, fn: accionVerificarVideo },
 
     // ---- logistics / admin ------------------------------------------------
     'listar_registro':    { capacidad: 'registro_lectura',   fn: accionListarRegistro },
+    'listar_registro_enmascarado': { capacidad: 'registro_enmascarado', fn: accionListarRegistroEnmascarado },
+    'listar_agrupaciones': { capacidad: 'agrupaciones',      fn: accionListarAgrupaciones },
+    'resolver_coincidencia_grupo': { capacidad: 'agrupaciones', fn: accionResolverCoincidenciaGrupo },
+    'actualizar_integrantes': { capacidad: 'agrupaciones',   fn: accionActualizarIntegrantesDeclarados },
+    'listar_pistas':      { capacidad: 'pistas',             fn: accionListarPistas },
+    'marcar_pista':       { capacidad: 'pistas',             fn: accionMarcarPista },
+    'subir_pista_admin':  { capacidad: 'pistas',             fn: accionSubirPistaAdmin },
+    'preparar_carpetas_audio': { capacidad: 'pistas',        fn: accionPrepararCarpetasAudio },
+    'respaldar_audios':   { capacidad: 'pistas',             fn: accionRespaldarAudios },
+    'verificar_videos':   { capacidad: 'videos',             fn: accionVerificarVideos },
+    'exportar_contactos': { capacidad: 'comunicacion',       fn: accionExportarContactos },
+    'estado_sistema':     { capacidad: '*',                  fn: accionEstadoSistema },
+    'auditar_datos_prueba': { capacidad: '*',                fn: accionAuditarDatosDePrueba },
     'revalidar_todo':     { capacidad: 'registro_escritura', fn: accionRevalidarTodo },
     'marcar_elegibilidad':{ capacidad: 'registro_escritura', fn: accionMarcarElegibilidad },
     'asignar_codigos':    { capacidad: 'codigos',            fn: accionAsignarCodigos },
@@ -122,6 +138,7 @@ function tablaAcciones() {
     'plan_contingencia':  { capacidad: 'checkin',   fn: accionPlanContingencia },
     'cerrar_jornada':     { capacidad: 'registro_escritura', fn: accionCerrarJornada },
     'nuevo_incidente':    { capacidad: 'incidentes', fn: accionNuevoIncidente },
+    'pistas_evento':      { capacidad: 'pistas_lectura', fn: accionPistasEvento },
 
     // ---- jury -------------------------------------------------------------
     'lista_evaluacion':   { capacidad: 'evaluar',   fn: accionListaEvaluacion },
@@ -129,7 +146,8 @@ function tablaAcciones() {
 
     // ---- results / dashboard ---------------------------------------------
     'dashboard':          { capacidad: 'dashboard', fn: accionDashboard },
-    'resultados':         { capacidad: 'resultados', fn: accionResultados }
+    'resultados':         { capacidad: 'resultados', fn: accionResultados },
+    'registrar_deliberacion': { capacidad: 'deliberar', fn: accionRegistrarDeliberacion }
   };
 }
 
@@ -211,4 +229,17 @@ function incluir(nombre) {
 function api(carga) {
   carga = carga || {};
   return ejecutarAccion(carga.accion, carga, carga.t || carga.token);
+}
+
+/**
+ * Source of the pure helpers the browser also needs (e-mail typo hint), so
+ * the page runs the exact code the tests cover instead of a copy.
+ */
+function sharedClientCode() {
+  return [editDistance, suggestEmailDomain].map(function (f) { return f.toString(); }).join('\n');
+}
+
+/** JSON safe to embed inside a <script> element. */
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }

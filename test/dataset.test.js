@@ -19,7 +19,7 @@ vm.runInContext(
   C, { filename: '41_seed.gs' }
 );
 
-const OPC = { fecha_evento: '2026-10-02', edad_minima: 18, edad_maxima: 28, exigir_video: false };
+const OPC = { fecha_evento: '2026-10-23', edad_minima: 18, edad_maxima: 30, exigir_video: false, integrantes_max: 15 };
 
 /** Replays what accionInscribir does, without Google Sheets. */
 function procesarDataset() {
@@ -40,12 +40,23 @@ function procesarDataset() {
       normalized_phone: C.normalizarTelefono(f.whatsapp)
     };
     const dup = C.detectarDuplicado(candidato, almacenadas);
+    const mode = C.normalizeParticipationMode(f.participation_mode);
+    const groupKey = C.isGroupMode(mode) ? C.groupMatchKey(f.artistic_name) : '';
+    const groupMatch = groupKey
+      ? C.detectGroupMatch({ submission_id: candidato.submission_id, group_match_key: groupKey }, almacenadas)
+      : { match: false };
 
     let estado = veredicto.eligibility_status;
     if (dup.duplicate_flag) estado = 'DUPLICADO';
-    else if (dup.alerta && estado === 'APTO') estado = 'REVISION';
+    else if ((dup.alerta || groupMatch.match) && estado === 'APTO') estado = 'REVISION';
 
     almacenadas.push(Object.assign({}, candidato, {
+      participation_mode: mode,
+      group_code: C.isGroupMode(mode) ? C.formatGroupCode(C.nextGroupNumber(almacenadas)) : '',
+      group_display_name: C.isGroupMode(mode) ? f.artistic_name : '',
+      group_match_key: groupKey,
+      group_match_status: groupMatch.match ? 'POSIBLE_REPETIDA' : '',
+      members_declared: f.members_declared,
       eligibility_status: estado,
       duplicate_flag: dup.duplicate_flag,
       duplicate_reason: dup.duplicate_reason,
@@ -82,17 +93,32 @@ describe('Dataset de prueba: estados de validacion', () => {
   it('detecta los 2 duplicados por documento', () => {
     expect(porEstado.DUPLICADO).toBe(2);
   });
-  it('detecta al menos un NO_CUMPLE por edad y uno por residencia', () => {
-    expect(porEstado.NO_CUMPLE >= 3).toBe(true);
+  it('flags exactly the 4 seeded NO_CUMPLE (too young, too old, outside Sabaneta, 31 on the day)', () => {
+    expect(porEstado.NO_CUMPLE).toBe(4);
   });
-  it('detecta los INCOMPLETO sembrados', () => {
-    expect(porEstado.INCOMPLETO >= 4).toBe(true);
+  it('flags exactly the 7 seeded INCOMPLETO (including a group without size and a duo of three)', () => {
+    expect(porEstado.INCOMPLETO).toBe(7);
   });
-  it('marca en REVISION el video dudoso y las alertas de correo/telefono', () => {
-    expect(porEstado.REVISION >= 3).toBe(true);
+  it('sends to REVISION the dubious video, the e-mail/phone alerts and the repeated group name', () => {
+    expect(porEstado.REVISION).toBe(4);
   });
-  it('quedan mas de 100 APTO, que es lo que hace significativa la prueba de cupo', () => {
-    expect(porEstado.APTO > 100).toBe(true);
+  it('leaves 113 APTO, more than the 100 seats, which is what makes the seat test meaningful', () => {
+    expect(porEstado.APTO).toBe(113);
+  });
+  it('the person who turns exactly 30 on the event day is eligible', () => {
+    expect(R.almacenadas[128].eligibility_status).toBe('APTO');
+  });
+  it('the repeated group keeps its original spelling and is flagged, not merged', () => {
+    const repeated = R.almacenadas[125];
+    expect(repeated._origen.artistic_name).toBe('EL ARTE ES LA SOLUCIÓN');
+    expect(repeated.group_display_name).toBe('EL ARTE ES LA SOLUCIÓN');
+    expect(repeated.group_match_status).toBe('POSIBLE_REPETIDA');
+    expect(repeated.group_match_key).toBe(R.almacenadas[124].group_match_key);
+  });
+  it('issues group codes GRP-001.. in order and never reuses a number', () => {
+    const codes = R.almacenadas.filter(r => r.group_code).map(r => r.group_code);
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(codes[0]).toBe('GRP-001');
   });
   it('cada fila tiene exactamente un estado conocido', () => {
     const conocidos = ['APTO', 'INCOMPLETO', 'NO_CUMPLE', 'REVISION', 'DUPLICADO'];
@@ -173,7 +199,7 @@ describe('Dataset de prueba: jornada completa y Top 7', () => {
 
   const seleccion = C.seleccionarTop(artistas, { top: 7, minimo_jurados: 2 });
 
-  it('selecciona exactamente 7 artistas', () => {
+  it('selects exactly 7 projects', () => {
     expect(seleccion.top).toHaveLength(7);
   });
   it('los 7 salen SOLO de audiciones REALIZADA', () => {
@@ -215,6 +241,43 @@ describe('Cierre de jornada sobre el dataset', () => {
       const final = aplicados[r.code] || r.attendance_status;
       expect(final === 'REALIZADA' || final === 'NO AUDICIONADO').toBe(true);
     });
+  });
+});
+
+describe('Groups: one group is one seat, members never consume seats', () => {
+  const asignacion = C.asignarCodigos(R.almacenadas, { cupo: 100 });
+  const coded = new Set(asignacion.asignados.map(a => a.submission_id));
+  const groupProjects = R.almacenadas.filter(r => r.group_code);
+  const members = C.buildTestMembers(groupProjects.map(g => ({ group_code: g.group_code, members_declared: g.members_declared })));
+
+  it('still issues exactly 100 codes although the dataset contains groups with several members', () => {
+    expect(asignacion.asignados).toHaveLength(100);
+    const people = R.almacenadas.length + members.length;
+    expect(people > 130).toBe(true);
+  });
+  it('each coded group project holds exactly one code', () => {
+    const perProject = {};
+    asignacion.asignados.forEach(a => { perProject[a.submission_id] = (perProject[a.submission_id] || 0) + 1; });
+    groupProjects.filter(g => coded.has(g.submission_id)).forEach(g => expect(perProject[g.submission_id]).toBe(1));
+  });
+  it('the repeated group waiting for review does not take a seat', () => {
+    expect(coded.has(R.almacenadas[125].submission_id)).toBe(false);
+  });
+  it('the seeded member anomalies are caught by the member validation', () => {
+    const opts = { fecha_evento: '2026-10-23', edad_minima: 18, firma_obligatoria: true };
+    const statuses = members.map(m => C.validateMember(m, opts).status);
+    expect(statuses.filter(s => s === 'NO CUMPLE')).toHaveLength(1);    // the 16-year-old
+    expect(statuses.filter(s => s === 'INCOMPLETO')).toHaveLength(1);   // the missing signature
+  });
+});
+
+describe('Test data never looks like real data', () => {
+  it('every seed project carries a test-data marker that production refuses', () => {
+    const raw = C.construirDatasetPrueba(130);
+    expect(raw.filter(f => !C.isTestData(f))).toHaveLength(0);
+  });
+  it('a normal web submission is not mistaken for test data', () => {
+    expect(C.isTestData({ source: 'web', email: 'ana@gmail.com', client_submission_id: 'Cabc123' })).toBe(false);
   });
 });
 

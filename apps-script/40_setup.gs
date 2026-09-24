@@ -1,87 +1,51 @@
 /**
- * EL BUNKER - One-time setup.
- *
- * Run setupInicial() once from the Apps Script editor. It is idempotent: it
- * creates what is missing and leaves existing data alone.
+ * EL BUNKER - Installation, migration of an existing base, accounts and the
+ * health check. Everything here is idempotent: it creates what is missing and
+ * leaves existing data alone.
  */
 
 function setupInicial() {
   var props = PropertiesService.getScriptProperties();
+  var env = environmentName();
   var id = props.getProperty(PROP.SPREADSHEET_ID);
-  var libroNuevo;
+  var book = null;
 
   if (id) {
-    try { libroNuevo = SpreadsheetApp.openById(id); }
-    catch (e) { id = null; }
+    try { book = SpreadsheetApp.openById(id); } catch (e) { book = null; }
   }
-  if (!id) {
-    libroNuevo = SpreadsheetApp.create('EL BUNKER - BASE MAESTRA');
-    props.setProperty(PROP.SPREADSHEET_ID, libroNuevo.getId());
-    libroNuevo.setSpreadsheetTimeZone('America/Bogota');
+  if (!book) {
+    book = SpreadsheetApp.create(env === 'test' ? '[PRUEBAS] EL BUNKER - BASE MAESTRA' : 'EL BUNKER - BASE MAESTRA');
+    props.setProperty(PROP.SPREADSHEET_ID, book.getId());
+    book.setSpreadsheetTimeZone('America/Bogota');
   }
 
-  var definiciones = [
-    [HOJA.REGISTRO, COLUMNAS_REGISTRO],
-    [HOJA.AGENDA, COLUMNAS_AGENDA],
-    [HOJA.CHECK_IN, COLUMNAS_CHECK_IN],
-    [HOJA.JURADO_1, COLUMNAS_JURADO],
-    [HOJA.JURADO_2, COLUMNAS_JURADO],
-    [HOJA.JURADO_3, COLUMNAS_JURADO],
-    [HOJA.RESULTADOS, COLUMNAS_RESULTADOS],
-    [HOJA.DASHBOARD, ['INDICADOR', 'VALOR']],
-    [HOJA.INCIDENTES, COLUMNAS_INCIDENTES],
-    [HOJA.CONFIG, ['clave', 'valor', 'descripcion']],
-    [HOJA.CAMBIOS, COLUMNAS_CAMBIOS],
-    [HOJA.USUARIOS, COLUMNAS_USUARIOS],
-    [HOJA.LOG, COLUMNAS_LOG],
-    [HOJA.IDEMPOTENCIA, COLUMNAS_IDEMPOTENCIA]
-  ];
+  markSpreadsheetEnvironment(book, env);          // refuses to mix environments
+  var schema = ensureSchema(book);
 
-  definiciones.forEach(function (d) {
-    var h = libroNuevo.getSheetByName(d[0]);
-    if (!h) h = libroNuevo.insertSheet(d[0]);
-    if (h.getLastRow() === 0 || String(h.getRange(1, 1).getValue()).trim() === '') {
-      h.getRange(1, 1, 1, d[1].length).setValues([d[1]]);
-    }
-    h.getRange(1, 1, 1, Math.max(1, h.getLastColumn())).setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff');
-    h.setFrozenRows(1);
-  });
-
-  // Drop the default "Hoja 1" only once every real sheet exists.
+  // Drop the default first sheet only once every real sheet exists.
   ['Sheet1', 'Hoja 1', 'Hoja1'].forEach(function (n) {
-    var s = libroNuevo.getSheetByName(n);
-    if (s && libroNuevo.getSheets().length > 1) libroNuevo.deleteSheet(s);
+    var s = book.getSheetByName(n);
+    if (s && book.getSheets().length > 1) book.deleteSheet(s);
   });
 
-  // CONFIG defaults, only for keys that do not exist yet.
-  var hojaConfig = libroNuevo.getSheetByName(HOJA.CONFIG);
-  var existentes = {};
-  if (hojaConfig.getLastRow() > 1) {
-    hojaConfig.getRange(2, 1, hojaConfig.getLastRow() - 1, 1).getValues()
-      .forEach(function (f) { existentes[String(f[0]).trim()] = true; });
-  }
-  var porDefecto = configuracionPorDefecto().slice(1);
-  var faltantes = porDefecto.filter(function (f) { return !existentes[f[0]]; });
-  if (faltantes.length) {
-    hojaConfig.getRange(hojaConfig.getLastRow() + 1, 1, faltantes.length, 3).setValues(faltantes);
-  }
-  hojaConfig.setColumnWidth(1, 220).setColumnWidth(2, 320).setColumnWidth(3, 460);
-
+  var config = ensureConfig(book, false);
   invalidarCacheConfig();
   secretoHmac();                                   // generate the signing key now
   instalarDisparadores();
   refrescarVistas();
 
   var admin = provisionarUsuario('admin', ROL.ADMIN, 'Cuenta principal de administracion');
-
-  registrar('sistema', 'admin', 'SETUP_INICIAL', libroNuevo.getId(), VERSION_SISTEMA);
+  registrar('sistema', 'admin', 'SETUP_INICIAL', book.getId(), VERSION_SISTEMA + ' ' + env);
 
   var resumen = {
-    spreadsheet_id: libroNuevo.getId(),
-    spreadsheet_url: libroNuevo.getUrl(),
+    entorno: env,
+    spreadsheet_id: book.getId(),
+    spreadsheet_url: book.getUrl(),
     web_app_url: urlSegura(),
     enlace_admin: admin.url,
-    version: VERSION_SISTEMA
+    version: VERSION_SISTEMA,
+    esquema: schema,
+    config: config
   };
   console.log(JSON.stringify(resumen, null, 2));
   return resumen;
@@ -92,6 +56,73 @@ function urlSegura() {
   catch (e) { return '(despliega la app como Web App para obtener la URL)'; }
 }
 
+/** "1899-12-30T16:00:00"/Date -> "16:00"; "2026-10-02T00:00:00" -> "2026-10-02". */
+function configValueAsText(value) {
+  if (value instanceof Date) {
+    var tz = zonaHoraria();
+    if (value.getFullYear() < 1901) return Utilities.formatDate(value, tz, 'HH:mm');
+    var time = Utilities.formatDate(value, tz, 'HH:mm');
+    return Utilities.formatDate(value, tz, 'yyyy-MM-dd') + (time !== '00:00' ? ' ' + time : '');
+  }
+  var s = String(value === null || value === undefined ? '' : value);
+  var t = s.match(/^1899-12-3\d[T ](\d{2}:\d{2})/);
+  if (t) return t[1];
+  var d = s.match(/^(\d{4}-\d{2}-\d{2})T00:00:00$/);
+  if (d) return d[1];
+  return s;
+}
+
+/**
+ * Makes CONFIG plain text (Sheets otherwise turns "15:00" into a date), adds
+ * missing keys and, when migrating, updates values that still hold an
+ * iteration-1 default. Anything an operator typed on purpose is kept and
+ * reported as a conflict.
+ */
+function ensureConfig(book, migrate) {
+  var sheet = book.getSheetByName(HOJA.CONFIG);
+  var defaults = configuracionPorDefecto().slice(1);
+  var defaultByKey = {};
+  defaults.forEach(function (d) { defaultByKey[d[0]] = d; });
+
+  var last = sheet.getLastRow();
+  var rows = last > 1 ? sheet.getRange(2, 1, last - 1, 3).getValues() : [];
+  sheet.getRange(2, 2, Math.max(1, sheet.getMaxRows() - 1), 1).setNumberFormat('@');
+
+  var report = { agregadas: [], actualizadas: [], conflictos: [], convertidas: 0 };
+  var present = {};
+  rows.forEach(function (row, i) {
+    var key = String(row[0]).trim();
+    if (!key) return;
+    present[key] = true;
+    var text = configValueAsText(row[1]);
+    var rowNumber = i + 2;
+    if (text !== row[1]) { sheet.getRange(rowNumber, 2).setValue(text); report.convertidas++; }
+
+    var def = defaultByKey[key];
+    if (!def) return;
+    if (migrate && text !== def[1]) {
+      var olds = (CONFIG_ITERATION1_VALUES[key] || []).map(configValueAsText);
+      var replaceable = text === '' || text.indexOf('PENDIENTE') === 0 || olds.indexOf(text) !== -1;
+      if (replaceable) {
+        sheet.getRange(rowNumber, 2).setValue(def[1]);
+        report.actualizadas.push(key + ': "' + text + '" -> "' + def[1] + '"');
+      } else {
+        report.conflictos.push(key + ': se conserva "' + text + '" (valor nuevo sugerido: "' + def[1] + '")');
+      }
+    }
+    if (migrate && String(row[2]) !== def[2]) sheet.getRange(rowNumber, 3).setValue(def[2]);
+  });
+
+  var missing = defaults.filter(function (d) { return !present[d[0]]; });
+  if (missing.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, missing.length, 3).setValues(missing);
+    report.agregadas = missing.map(function (d) { return d[0]; });
+  }
+  sheet.setColumnWidth(1, 240).setColumnWidth(2, 360).setColumnWidth(3, 520);
+  invalidarCacheConfig();
+  return report;
+}
+
 function instalarDisparadores() {
   var existentes = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   if (existentes.indexOf('respaldoAutomatico') === -1) {
@@ -100,26 +131,38 @@ function instalarDisparadores() {
   if (existentes.indexOf('refrescarVistas') === -1) {
     ScriptApp.newTrigger('refrescarVistas').timeBased().everyHours(6).create();
   }
+  if (existentes.indexOf('verificarVideosPendientes') === -1) {
+    ScriptApp.newTrigger('verificarVideosPendientes').timeBased().everyHours(1).create();
+  }
 }
 
-/**
- * Creates the five operating accounts and prints their access links.
- * Run once, hand each link to its person, never share links between roles.
- */
+/** Operating accounts: one link per person, never shared between roles. */
+var OPERATIONAL_ACCOUNTS = [
+  ['admin', ROL.ADMIN, 'Cuenta principal de administracion'],
+  ['coordinacion', ROL.LOGISTICA, 'Coordinador logistico'],
+  ['direccion', ROL.DIRECCION, 'Direccion / gerencia'],
+  ['checkin-1', ROL.CHECKIN, 'Mesa de check-in 1'],
+  ['checkin-2', ROL.CHECKIN, 'Mesa de check-in 2'],
+  ['stage-manager', ROL.CHECKIN, 'Stage manager y cronometro (precola / audicion / salida)'],
+  ['tecnico-audio', ROL.CHECKIN, 'Tecnico de audio (pistas)'],
+  ['jurado-1', ROL.JURADO, 'jurado 1'],
+  ['jurado-2', ROL.JURADO, 'jurado 2'],
+  ['jurado-3', ROL.JURADO, 'jurado 3']
+];
+
+/** Creates (or refreshes) every operating account and prints its link. */
 function crearAccesosOperativos() {
-  var cuentas = [
-    ['admin', ROL.ADMIN, 'Cuenta principal de administracion'],
-    ['coordinacion', ROL.LOGISTICA, 'Coordinador logistico'],
-    ['direccion', ROL.DIRECCION, 'Direccion / gerencia'],
-    ['checkin-1', ROL.CHECKIN, 'Mesa de check-in 1'],
-    ['checkin-2', ROL.CHECKIN, 'Mesa de check-in 2'],
-    ['jurado-1', ROL.JURADO, 'jurado 1'],
-    ['jurado-2', ROL.JURADO, 'jurado 2'],
-    ['jurado-3', ROL.JURADO, 'jurado 3']
-  ];
-  var salida = cuentas.map(function (c) { return provisionarUsuario(c[0], c[1], c[2]); });
+  var salida = OPERATIONAL_ACCOUNTS.map(function (c) { return provisionarUsuario(c[0], c[1], c[2]); });
   console.log(salida.map(function (s) { return s.alias + ' (' + s.rol + '):\n  ' + s.url; }).join('\n\n'));
   return salida;
+}
+
+/** Only the accounts that do not exist yet; existing links keep working untouched. */
+function ensureOperationalAccounts() {
+  var existing = {};
+  leerHoja(HOJA.USUARIOS).forEach(function (u) { existing[normalizarComparable(u.email_o_alias)] = true; });
+  return OPERATIONAL_ACCOUNTS.filter(function (c) { return !existing[normalizarComparable(c[0])]; })
+    .map(function (c) { return provisionarUsuario(c[0], c[1], c[2]); });
 }
 
 /** Prints the live access links again without re-issuing tokens. */
@@ -128,22 +171,183 @@ function verAccesos() {
     return normalizarComparable(u.activo) !== 'NO';
   });
   var salida = usuarios.map(function (u) {
-    return { alias: u.email_o_alias, rol: u.rol, url: urlPanel(u.rol, u.token) };
+    return { alias: u.email_o_alias, rol: u.rol, url: urlPanel(u.rol, u.token), expira: tokenExpiry(u.token) };
   });
-  console.log(salida.map(function (s) { return s.alias + ' (' + s.rol + '):\n  ' + s.url; }).join('\n\n'));
+  console.log(salida.map(function (s) { return s.alias + ' (' + s.rol + ', vence ' + s.expira + '):\n  ' + s.url; }).join('\n\n'));
   return salida;
 }
 
-/** Full reset of operational data. Keeps CONFIG and users. Asks for confirmation. */
+function tokenExpiry(token) {
+  try {
+    var payload = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(String(token).split('.')[0])).getDataAsString());
+    return Utilities.formatDate(new Date(payload.e), zonaHoraria(), 'yyyy-MM-dd');
+  } catch (e) { return '?'; }
+}
+
+/**
+ * Upgrades an EXISTING base (production) to this version. Only adds: sheets,
+ * columns at the end, CONFIG keys; updates CONFIG values that still hold an
+ * iteration-1 default. A raw backup is taken first and row counts are compared
+ * before and after.
+ */
+function migrarBase() {
+  var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty(PROP.SPREADSHEET_ID)) throw new Error('No hay base maestra: usa INSTALAR.');
+  var book = libro();
+  var env = environmentName();
+
+  var countRows = function () {
+    var out = {};
+    ['REGISTRO', '_CAMBIOS', '_USUARIOS', 'INCIDENTES', 'JURADO_1', 'JURADO_2', 'JURADO_3'].forEach(function (n) {
+      out[n] = leerHoja(n).length;
+    });
+    return out;
+  };
+  var before = countRows();
+  var safety = rawBackup('PRE-MIGRACION');
+
+  var marker = markSpreadsheetEnvironment(book, env);
+  var schema = ensureSchema(book);
+  var config = ensureConfig(book, true);
+  invalidarCacheConfig();
+  instalarDisparadores();
+  var accounts = ensureOperationalAccounts();
+  refrescarVistas();
+
+  var after = countRows();
+  var intact = Object.keys(before).every(function (k) { return before[k] === after[k]; });
+  var report = {
+    entorno: env, marca_hoja: marker, version: VERSION_SISTEMA, filas_antes: before, filas_despues: after,
+    datos_intactos: intact, respaldo_previo: safety, esquema: schema, config: config,
+    cuentas_nuevas: accounts.map(function (a) { return a.alias; })
+  };
+  registrar('sistema', 'admin', 'MIGRAR_V2', book.getId(), JSON.stringify({ intactos: intact, conflictos: config.conflictos.length }));
+  if (!intact) throw new Error('ATENCION: cambio el numero de filas durante la migracion. Revisa el respaldo ' + safety.json);
+  return report;
+}
+
+/** Backup of the sheets exactly as they are, without rebuilding views first (used before a migration). */
+function rawBackup(label) {
+  var marca = Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd-HHmmss');
+  var xlsx = exportarXlsx('RESPALDO-' + label + '-' + marca);
+  var dump = {};
+  libro().getSheets().forEach(function (s) { dump[s.getName()] = leerHoja(s.getName()); });
+  var json = carpetaBackups().createFile(Utilities.newBlob(
+    JSON.stringify({ generado_at: ahoraISO(), version: 'previa', entorno: environmentName(), etiqueta: label, datos: dump }, null, 1),
+    'application/json', 'RESPALDO-' + label + '-' + marca + '.json'));
+  return { xlsx: xlsx.nombre, json: json.getName(), json_id: json.getId() };
+}
+
+/**
+ * Health check for the release report: environment keys, schema, forms,
+ * triggers, legal flags and - in production - that no test data is present.
+ */
+function systemHealth() {
+  var book = libro();
+  var missingColumns = {};
+  sheetDefinitions().forEach(function (d) {
+    var sheet = book.getSheetByName(d[0]);
+    if (!sheet) { missingColumns[d[0]] = 'FALTA LA HOJA'; return; }
+    var header = encabezados(d[0]);
+    var miss = d[1].filter(function (c) { return header.indexOf(c) === -1; });
+    if (miss.length) missingColumns[d[0]] = miss;
+  });
+  var triggers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
+  var audit = auditTestData();
+  var legalPending = ['legal_name', 'nit', 'legal_address', 'data_protection_email', 'institutional_phone', 'terms_version']
+    .filter(function (k) { return String(cfg(k, 'PENDIENTE')).indexOf('PENDIENTE') === 0; });
+  return {
+    version: VERSION_SISTEMA,
+    entorno: environmentName(),
+    marca_hoja: spreadsheetEnvironment(book),
+    llaves_coinciden: environmentName() === spreadsheetEnvironment(book),
+    base: book.getName(),
+    web_app: urlSegura(),
+    esquema_completo: Object.keys(missingColumns).length === 0,
+    columnas_faltantes: missingColumns,
+    disparadores: triggers,
+    formularios: {
+      inscripcion: cfgBool('inscripciones_abiertas', true), cambios: cfgBool('cambios_abiertos', true),
+      integrantes: cfgBool('integrantes_abierto', true), pistas: cfgBool('pistas_abiertas', true)
+    },
+    evento: { fecha: cfgFecha('evento_fecha', ''), inicio: cfgHora('evento_hora_inicio', ''), sede: cfg('evento_sede', ''),
+              edades: cfgNumero('edad_minima', 18) + '-' + cfgNumero('edad_maxima', 30), top: cfgNumero('top_seleccionados', 7) },
+    legal: { datos_verificados: cfgBool('datos_legales_verificados', false), pendientes: legalPending,
+             terms_version: cfg('terms_version', ''), policy_version: cfg('policy_version', '') },
+    datos_de_prueba: audit,
+    produccion_limpia: environmentName() !== 'production' || audit.limpio
+  };
+}
+
+function accionEstadoSistema() {
+  return { salud: systemHealth() };
+}
+
+/** Full reset of operational data in the TEST environment. Keeps CONFIG and users. */
 function borrarDatosDePrueba(confirmacion) {
+  exigirEntornoPruebas('LIMPIAR');
   if (confirmacion !== 'SI-BORRAR') {
     throw new Error('Para evitar un borrado accidental, llama borrarDatosDePrueba("SI-BORRAR").');
   }
   return conBloqueo(function () {
-    [HOJA.REGISTRO, HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3,
+    [HOJA.REGISTRO, HOJA.INTEGRANTES, HOJA.DELIBERACIONES, HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3,
      HOJA.INCIDENTES, HOJA.CAMBIOS, HOJA.LOG, HOJA.IDEMPOTENCIA].forEach(limpiarDatos);
+    var trashed = trashTestFiles();
+    resetRehearsalState();
     refrescarVistas();
-    registrar('sistema', 'admin', 'BORRAR_DATOS_PRUEBA', '', 'confirmado');
-    return { ok: true, mensaje: 'Datos operativos borrados. CONFIG y usuarios intactos.' };
+    registrar('sistema', 'admin', 'BORRAR_DATOS_PRUEBA', '', 'confirmado; archivos a la papelera=' + trashed);
+    return { ok: true, archivos_a_papelera: trashed, mensaje: 'Datos operativos de PRUEBAS borrados. CONFIG y usuarios intactos.' };
+  });
+}
+
+/** Sends the test environment's audio and signature files to the Drive trash. Test only. */
+function trashTestFiles() {
+  exigirEntornoPruebas('LIMPIAR ARCHIVOS');
+  var count = 0;
+  [PROP.AUDIO_FOLDER, PROP.SIGNATURES_FOLDER].forEach(function (key) {
+    var id = PropertiesService.getScriptProperties().getProperty(key);
+    if (!id) return;
+    try {
+      var folders = DriveApp.getFolderById(id).getFolders();
+      while (folders.hasNext()) { folders.next().setTrashed(true); count++; }
+    } catch (e) { /* folder already gone */ }
+  });
+  return count;
+}
+
+/**
+ * Deletes specific registrations by submission_id (with their group members and
+ * change requests). Meant for test rows that reached a live base; a raw backup
+ * is taken first and every removed ID is logged.
+ */
+function quitarInscripciones(ids, confirmacion) {
+  if (confirmacion !== 'SI-QUITAR') throw new Error('BLOQUEADO: confirma con SI-QUITAR.');
+  var wanted = {};
+  (ids || []).forEach(function (id) { wanted[normalizarComparable(id)] = true; });
+  return conBloqueo(function () {
+    var rows = leerHoja(HOJA.REGISTRO).filter(function (r) { return wanted[normalizarComparable(r.submission_id)]; });
+    if (!rows.length) return { quitadas: [], mensaje: 'No hay filas con esos IDs: nada que quitar.' };
+    var backup = rawBackup('ANTES-DE-QUITAR');
+    var groups = {}, codes = {};
+    rows.forEach(function (r) {
+      if (r.group_code) groups[normalizarComparable(r.group_code)] = true;
+      if (r.code) codes[normalizarComparable(r.code)] = true;
+    });
+    var removeWhere = function (sheetName, test) {
+      var sheet = libro().getSheetByName(sheetName);
+      if (!sheet) return 0;
+      var doomed = leerHoja(sheetName).filter(test).map(function (r) { return r._fila; }).sort(function (a, b) { return b - a; });
+      doomed.forEach(function (n) { sheet.deleteRow(n); });
+      return doomed.length;
+    };
+    var removed = {
+      registro: removeWhere(HOJA.REGISTRO, function (r) { return wanted[normalizarComparable(r.submission_id)]; }),
+      integrantes: removeWhere(HOJA.INTEGRANTES, function (m) { return groups[normalizarComparable(m.group_code)]; }),
+      cambios: removeWhere(HOJA.CAMBIOS, function (c) { return codes[normalizarComparable(c.code)]; })
+    };
+    registrar('sistema', 'admin', 'QUITAR_INSCRIPCIONES', rows.map(function (r) { return r.submission_id; }).join(','),
+              JSON.stringify(removed) + ' respaldo=' + backup.json);
+    refrescarVistas();
+    return { quitadas: rows.map(function (r) { return r.submission_id; }), filas: removed, respaldo: backup };
   });
 }

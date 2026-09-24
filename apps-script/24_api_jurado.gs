@@ -39,7 +39,11 @@ function accionListaEvaluacion(datos, sesion) {
       return {
         code: r.code,
         artistic_name: r.artistic_name || '(sin nombre artistico)',
-        discipline: r.discipline,
+        discipline: projectGenre(r),
+        participation_mode: r.participation_mode || 'SOLISTA',
+        members_declared: Number(r.members_declared) || 1,
+        presentation_format: r.presentation_format || '',
+        song_name: r.song_name || '',
         attendance_status: r.attendance_status,
         audition_status: r.audition_status || '',
         evaluado: !!previo,
@@ -86,7 +90,7 @@ function accionGuardarEvaluacion(datos, sesion) {
     var fila = {
       code: registro.code,
       artistic_name: registro.artistic_name,
-      discipline: registro.discipline,
+      discipline: projectGenre(registro),
       total: calculo.total,
       valido: 'TRUE',
       observaciones: String(datos.observaciones || '').slice(0, 900),
