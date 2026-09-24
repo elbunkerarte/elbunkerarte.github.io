@@ -230,3 +230,16 @@ function api(carga) {
   carga = carga || {};
   return ejecutarAccion(carga.accion, carga, carga.t || carga.token);
 }
+
+/**
+ * Source of the pure helpers the browser also needs (e-mail typo hint), so
+ * the page runs the exact code the tests cover instead of a copy.
+ */
+function sharedClientCode() {
+  return [editDistance, suggestEmailDomain].map(function (f) { return f.toString(); }).join('\n');
+}
+
+/** JSON safe to embed inside a <script> element. */
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}

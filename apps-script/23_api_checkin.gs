@@ -42,8 +42,9 @@ function deskView(r, members) {
     members: list,
     members_authorized: list.filter(function (m) { return normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length,
     final_block: r.final_block || r.original_block,
-    arrival_time: r.arrival_time,
-    final_time: r.final_time || r.original_time,
+    arrival_time: clockText(r.arrival_time),
+    final_time: clockText(r.final_time || r.original_time),
+    final_time_texto: humanTime(r.final_time || r.original_time),
     attendance_status: r.attendance_status || ESTADO.CONFIRMADO,
     audition_status: r.audition_status || '',
     check_in_time: r.check_in_time || '',
@@ -83,7 +84,7 @@ function findForDesk(datos) {
     return normalizarTexto(r.code) && normalizarCedula(r.normalized_id_number || r.id_number) === doc;
   })[0];
   if (byLeader) return { row: byLeader, via: 'DOCUMENTO' };
-  var member = leerHoja(HOJA.INTEGRANTES).filter(function (m) { return m.normalized_id_number === doc; })[0];
+  var member = leerHoja(HOJA.INTEGRANTES).filter(function (m) { return normalizarCedula(m.normalized_id_number) === doc; })[0];
   if (member) {
     var project = rows.filter(function (r) {
       return normalizarComparable(r.group_code) === normalizarComparable(member.group_code);

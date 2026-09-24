@@ -346,16 +346,18 @@ function detectarDuplicado(candidato, existentes) {
     // A row already marked DUPLICATE must not itself absorb a seat, but it still
     // counts as evidence of a prior collision, so it is compared normally.
 
-    if (cedula && fila.normalized_id_number === cedula) {
+    // Stored values are normalized again: Sheets may hand back a numeric ID
+    // (1036448960) where the candidate carries the text "1036448960".
+    if (cedula && normalizarCedula(fila.normalized_id_number) === cedula) {
       duplicado = true;
       if (!principal) principal = fila.submission_id || '';
       if (razones.indexOf(MOTIVO_DUPLICADO.CEDULA) === -1) razones.push(MOTIVO_DUPLICADO.CEDULA);
     }
-    if (email && fila.normalized_email === email && razones.indexOf(MOTIVO_DUPLICADO.EMAIL) === -1) {
+    if (email && normalizarEmail(fila.normalized_email) === email && razones.indexOf(MOTIVO_DUPLICADO.EMAIL) === -1) {
       razones.push(MOTIVO_DUPLICADO.EMAIL);
       if (!principal) principal = fila.submission_id || '';
     }
-    if (telefono && fila.normalized_phone === telefono && razones.indexOf(MOTIVO_DUPLICADO.TELEFONO) === -1) {
+    if (telefono && normalizarTelefono(fila.normalized_phone) === telefono && razones.indexOf(MOTIVO_DUPLICADO.TELEFONO) === -1) {
       razones.push(MOTIVO_DUPLICADO.TELEFONO);
       if (!principal) principal = fila.submission_id || '';
     }

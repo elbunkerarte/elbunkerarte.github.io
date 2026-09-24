@@ -209,7 +209,8 @@ function verifyPendingVideos(options) {
     });
   }
 
-  actualizarFilasEnLote(HOJA.REGISTRO, updates);
+  // The probes run outside the lock (they are slow); only the write takes it.
+  conBloqueo(function () { actualizarFilasEnLote(HOJA.REGISTRO, updates); });
   return { revisados: updates.length, por_estado: counts };
 }
 

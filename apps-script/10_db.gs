@@ -5,10 +5,17 @@
  * submissions can never interleave an append and corrupt the code sequence.
  */
 
+/**
+ * The master spreadsheet, opened once per execution. Opening it on every read
+ * cost one service call per cell of a date column (see zonaHoraria), which a
+ * full rehearsal multiplied into ~100k calls.
+ */
+var _bookCache = { id: '', book: null };
 function libro() {
   var id = PropertiesService.getScriptProperties().getProperty(PROP.SPREADSHEET_ID);
   if (!id) throw new Error('SPREADSHEET_ID no configurado. Corre setupInicial() una vez.');
-  return SpreadsheetApp.openById(id);
+  if (_bookCache.id !== id || !_bookCache.book) _bookCache = { id: id, book: SpreadsheetApp.openById(id) };
+  return _bookCache.book;
 }
 
 function hoja(nombre) {
@@ -56,8 +63,13 @@ function invalidateHeaderCache() { _headerCache = {}; }
  * Sheets turns "0012345" into 12345, "15:00" into a date and so on.
  */
 var PLAIN_TEXT_COLUMNS = {
-  'REGISTRO': ['id_number', 'whatsapp', 'birth_date', 'group_code', 'code'],
-  '_INTEGRANTES': ['id_number', 'birth_date', 'group_code'],
+  'REGISTRO': ['id_number', 'normalized_id_number', 'whatsapp', 'normalized_phone', 'birth_date', 'group_code', 'code',
+               'original_time', 'arrival_time', 'final_time'],
+  '_INTEGRANTES': ['id_number', 'normalized_id_number', 'birth_date', 'group_code'],
+  '_CAMBIOS': ['original_time', 'nueva_hora'],
+  'AGENDA': ['arrival_time', 'audition_time', 'limite_tolerancia'],
+  'CHECK-IN': ['arrival_time', 'final_time', 'check_in_time'],
+  'PISTAS': ['final_time'],
   'CONFIG': ['valor']
 };
 
@@ -139,21 +151,31 @@ function leerHoja(nombreHoja) {
   return filas;
 }
 
+var _timeZoneCache = '';
 function zonaHoraria() {
-  try { return libro().getSpreadsheetTimeZone() || 'America/Bogota'; }
+  if (_timeZoneCache) return _timeZoneCache;
+  try { _timeZoneCache = libro().getSpreadsheetTimeZone() || 'America/Bogota'; }
   catch (e) { return 'America/Bogota'; }
+  return _timeZoneCache;
+}
+
+/**
+ * Value as it must be written to a cell. Text that starts with = + - @ is
+ * forced to plain text with a leading apostrophe: otherwise a name typed as
+ * "=HYPERLINK(...)" becomes a live formula and "+57 300..." becomes #ERROR!.
+ */
+function cellValue(v) {
+  if (v === undefined || v === null) return '';
+  if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+  if (typeof v === 'string' && /^[=+\-@]/.test(v)) return "'" + v;
+  return v;
 }
 
 /** Appends one object as a row, respecting the sheet's header order. */
 function agregarFila(nombreHoja, objeto) {
   var h = hoja(nombreHoja);
   var cols = encabezados(nombreHoja);
-  var fila = cols.map(function (c) {
-    var v = objeto[c];
-    if (v === undefined || v === null) return '';
-    if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
-    return v;
-  });
+  var fila = cols.map(function (c) { return cellValue(objeto[c]); });
   h.appendRow(fila);
   return h.getLastRow();
 }
@@ -164,12 +186,7 @@ function agregarFilas(nombreHoja, objetos) {
   var h = hoja(nombreHoja);
   var cols = encabezados(nombreHoja);
   var matriz = objetos.map(function (o) {
-    return cols.map(function (c) {
-      var v = o[c];
-      if (v === undefined || v === null) return '';
-      if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
-      return v;
-    });
+    return cols.map(function (c) { return cellValue(o[c]); });
   });
   h.getRange(h.getLastRow() + 1, 1, matriz.length, cols.length).setValues(matriz);
   return matriz.length;
@@ -183,14 +200,18 @@ function actualizarFila(nombreHoja, numeroFila, cambios) {
     if (!cambios.hasOwnProperty(clave)) continue;
     var idx = cols.indexOf(clave);
     if (idx === -1) continue;
-    var v = cambios[clave];
-    if (typeof v === 'boolean') v = v ? 'TRUE' : 'FALSE';
-    h.getRange(numeroFila, idx + 1).setValue(v === undefined || v === null ? '' : v);
+    h.getRange(numeroFila, idx + 1).setValue(cellValue(cambios[clave]));
   }
   return numeroFila;
 }
 
-/** Batched version: one setValues call per contiguous column, for 100 rows. */
+/**
+ * Batched version for many rows (issuing 100 codes, re-validating, closing the
+ * day). Per touched column it reads the span between the first and the last
+ * row once, patches it in memory and writes it back once: 2 calls per column
+ * instead of one call per cell. Callers hold the script lock, so nothing else
+ * writes these cells in between.
+ */
 function actualizarFilasEnLote(nombreHoja, actualizaciones) {
   if (!actualizaciones.length) return 0;
   var h = hoja(nombreHoja);
@@ -202,21 +223,23 @@ function actualizarFilasEnLote(nombreHoja, actualizaciones) {
       if (!u.cambios.hasOwnProperty(clave)) continue;
       var idx = cols.indexOf(clave);
       if (idx === -1) continue;
-      if (!porColumna[idx]) porColumna[idx] = [];
-      var v = u.cambios[clave];
-      if (typeof v === 'boolean') v = v ? 'TRUE' : 'FALSE';
-      porColumna[idx].push({ fila: u.fila, valor: v === undefined || v === null ? '' : v });
+      (porColumna[idx] = porColumna[idx] || {})[u.fila] = u.cambios[clave];
     }
   });
 
   var escrituras = 0;
-  for (var idx in porColumna) {
-    if (!porColumna.hasOwnProperty(idx)) continue;
-    porColumna[idx].forEach(function (e) {
-      h.getRange(e.fila, Number(idx) + 1).setValue(e.valor);
-      escrituras++;
+  Object.keys(porColumna).forEach(function (idx) {
+    var cambios = porColumna[idx];
+    var filas = Object.keys(cambios).map(Number);
+    var desde = Math.min.apply(null, filas), hasta = Math.max.apply(null, filas);
+    var rango = h.getRange(desde, Number(idx) + 1, hasta - desde + 1, 1);
+    var valores = rango.getValues().map(function (fila, i) {
+      var n = desde + i;
+      return [cellValue(cambios.hasOwnProperty(n) ? cambios[n] : fila[0])];
     });
-  }
+    rango.setValues(valores);
+    escrituras += filas.length;
+  });
   return escrituras;
 }
 

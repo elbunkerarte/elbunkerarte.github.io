@@ -240,6 +240,17 @@ function humanDate(value) {
   return DAY_NAMES_ES[day] + ' ' + p.d + ' de ' + MONTH_NAMES_ES[p.m - 1] + ' de ' + p.y;
 }
 
+/**
+ * "HH:mm" for any stored time: "15:45", "15:45:00" or the
+ * "1899-12-30T15:45:00" Sheets hands back when a cell was typed as a time.
+ */
+function clockText(value) {
+  var m = horaAMinutos(value);
+  if (m === null) return '';
+  var h = Math.floor(m / 60), min = m % 60;
+  return (h < 10 ? '0' : '') + h + ':' + (min < 10 ? '0' : '') + min;
+}
+
 /** "15:00" -> "3:00 p. m."; "09:30" -> "9:30 a. m.". Never shown as a raw 24 h string to participants. */
 function humanTime(value) {
   var m = horaAMinutos(value);
@@ -248,4 +259,10 @@ function humanTime(value) {
   var suffix = h >= 12 ? 'p. m.' : 'a. m.';
   var h12 = h % 12 === 0 ? 12 : h % 12;
   return h12 + ':' + (min < 10 ? '0' : '') + min + ' ' + suffix;
+}
+
+/** "2026-10-22T18:00:00-05:00" -> "jueves 22 de octubre de 2026, 6:00 p. m." (the wall time as written). */
+function deadlineText(value) {
+  var m = String(value || '').match(/^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}:\d{2})/);
+  return m ? humanDate(m[1]) + ', ' + humanTime(m[2]) : '';
 }
