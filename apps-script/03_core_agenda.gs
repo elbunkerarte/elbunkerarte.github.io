@@ -223,3 +223,29 @@ function currentBlock(nowMinutes, cfg) {
   if (nowMinutes < c.contingencia_fin) return { phase: 'CONTINGENCIA', block_id: null };
   return { phase: 'CERRADO', block_id: null };
 }
+
+// ---------------------------------------------------------------------------
+// Human-readable dates and times for messages and screens (Spanish, Colombia)
+// ---------------------------------------------------------------------------
+
+var DAY_NAMES_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+var MONTH_NAMES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+  'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+/** "2026-10-23" -> "viernes 23 de octubre de 2026". */
+function humanDate(value) {
+  var p = parsearFecha(value);
+  if (!p) return String(value || '');
+  var day = new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();
+  return DAY_NAMES_ES[day] + ' ' + p.d + ' de ' + MONTH_NAMES_ES[p.m - 1] + ' de ' + p.y;
+}
+
+/** "15:00" -> "3:00 p. m."; "09:30" -> "9:30 a. m.". Never shown as a raw 24 h string to participants. */
+function humanTime(value) {
+  var m = horaAMinutos(value);
+  if (m === null) return String(value || '');
+  var h = Math.floor(m / 60), min = m % 60;
+  var suffix = h >= 12 ? 'p. m.' : 'a. m.';
+  var h12 = h % 12 === 0 ? 12 : h % 12;
+  return h12 + ':' + (min < 10 ? '0' : '') + min + ' ' + suffix;
+}

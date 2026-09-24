@@ -154,7 +154,8 @@ var COLUMNAS_REGISTRO = [
   'track_file_id', 'track_file_name', 'track_updated_at', 'track_notes',
   'video_check_status', 'video_checked_at', 'video_check_detail',
   'consent_at', 'terms_version', 'policy_version', 'data_controller', 'capture_source',
-  'precola_at', 'stage_at', 'done_at'
+  'precola_at', 'stage_at', 'done_at',
+  'eligibility_override', 'override_by', 'override_at'
 ];
 
 /** Group members. One row per person; the project row lives in REGISTRO. */
@@ -272,7 +273,7 @@ var PERMISOS = {
   admin:     ['*'],
   direccion: ['dashboard', 'resultados', 'registro_enmascarado', 'exportar', 'incidentes', 'deliberar'],
   logistica: ['dashboard', 'registro_lectura', 'registro_escritura', 'codigos', 'agenda',
-              'cambios', 'incidentes', 'exportar', 'comunicacion', 'agrupaciones', 'pistas', 'videos'],
+              'cambios', 'incidentes', 'exportar', 'comunicacion', 'agrupaciones', 'pistas', 'pistas_lectura', 'videos'],
   checkin:   ['checkin', 'registro_lectura_minimo', 'incidentes', 'pistas_lectura'],
   jurado:    ['evaluar', 'lista_audicion_minima']
 };
@@ -338,6 +339,9 @@ function configuracionPorDefecto() {
     ['sitio_url', 'https://miguelgamer77721-ui.github.io/el-bunker/', 'Direccion publica del sitio informativo.'],
     ['privacy_policy_url', 'https://miguelgamer77721-ui.github.io/el-bunker/politica-datos.html', 'URL de la politica de tratamiento de datos.'],
     ['terms_url', 'https://miguelgamer77721-ui.github.io/el-bunker/terminos.html', 'URL de los terminos y condiciones.'],
+    ['whatsapp_grupo_enlace', 'PENDIENTE DE COMPLETAR', 'Enlace de invitacion al grupo de WhatsApp de personas aptas (lo crea la organizacion).'],
+    ['restaurar_desde', '', 'Solo para recuperacion: ID del archivo JSON de respaldo (ver MANUAL-RECUPERACION).'],
+    ['restaurar_confirmacion', '', 'Solo para recuperacion: escribir SI-RESTAURAR y ejecutar RESTAURAR.'],
     ['whatsapp_oficial', '3239836182', 'Numero oficial desde el que se envian codigos y horarios.'],
     ['whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución', 'Nombre con el que el participante debe guardar el numero.'],
     ['contacto_whatsapp', '3239836182', 'WhatsApp de dudas operativas.'],

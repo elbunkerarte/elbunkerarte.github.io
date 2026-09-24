@@ -4,8 +4,8 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-17T14:39:13.055Z
- * Modulos: 20 .gs + 10 .html
+ * Generado: 2026-09-24T22:56:16.330Z
+ * Modulos: 22 .gs + 10 .html
  */
 
 /** Pantallas HTML. Las lee hayRegistroPlantillas() en 20_web.gs. */
@@ -28,13 +28,19 @@ var PLANTILLAS = {
 // ========================================================================
 
 /**
- * EL BUNKER - punto de entrada de instalacion.
+ * EL BUNKER - editor entry points.
  *
- * Deliberadamente es la PRIMERA funcion del archivo: el editor de Apps Script
- * preselecciona la primera funcion del proyecto, asi que quien instala solo
- * tiene que pulsar "Ejecutar" sin buscar nada en el desplegable.
+ * INSTALAR is deliberately the FIRST function of the project: the Apps Script
+ * editor preselects the first function, so whoever installs only has to press
+ * "Ejecutar". The others are picked from the function dropdown:
  *
- * Es idempotente: se puede correr las veces que haga falta.
+ *   INSTALAR          new production installation (idempotent)
+ *   INSTALAR_PRUEBAS  turns THIS project into the test environment and installs it
+ *   MIGRAR            upgrades an existing base to this version (only adds; backs up first)
+ *   VERIFICAR         health report: environment keys, schema, legal flags, test data
+ *   ENSAYO            full rehearsal with fictitious data (test environment only)
+ *   LIMPIAR           wipes operational data (test environment only)
+ *   RESTAURAR         restores a JSON backup (see docs/MANUAL-RECUPERACION.md)
  */
 function INSTALAR() {
   var resumen = setupInicial();
@@ -43,7 +49,7 @@ function INSTALAR() {
   var lineas = [
     '',
     '========================================================',
-    '  EL BUNKER - INSTALACION COMPLETA',
+    '  EL BUNKER - INSTALACION COMPLETA (' + (resumen.entorno === 'test' ? 'PRUEBAS' : 'PRODUCCION') + ')',
     '========================================================',
     '',
     'BASE MAESTRA (tu "Excel"):',
@@ -51,12 +57,10 @@ function INSTALAR() {
     '',
     'ENLACES DE ACCESO (entrega a cada persona SOLO el suyo):'
   ];
-
   accesos.forEach(function (a) {
     lineas.push('  ' + a.alias + ' [' + a.rol + ']');
     lineas.push('    ' + a.url);
   });
-
   lineas.push('');
   lineas.push('SIGUIENTE PASO OBLIGATORIO:');
   lineas.push('  Implementar > Nueva implementacion > Aplicacion web');
@@ -64,19 +68,60 @@ function INSTALAR() {
   lineas.push('    Quien tiene acceso: Cualquier usuario');
   lineas.push('  Sin esto los enlaces de arriba no abren.');
   lineas.push('');
-  lineas.push('DESPUES: abre la hoja CONFIG y reemplaza cada');
-  lineas.push('PENDIENTE DE COMPLETAR con el dato real aprobado.');
+  lineas.push('DESPUES: revisa la hoja CONFIG. Los datos legales vienen marcados');
+  lineas.push('datos_legales_verificados = NO hasta que alguien los verifique.');
   lineas.push('========================================================');
-
   console.log(lineas.join('\n'));
   return { base: resumen.spreadsheet_url, accesos: accesos };
 }
 
 /**
- * Ensayo completo con datos ficticios: carga 130 inscripciones, emite los 100
- * codigos, simula la jornada, califica con tres jurados y produce el Top 7.
- * Para el "ensayo integral" del cronograma. Limpiar despues con
- * borrarDatosDePrueba("SI-BORRAR").
+ * Makes THIS project the test environment and installs it.
+ * Run it once, in a NEW and empty Apps Script project: it creates its own
+ * spreadsheet (named [PRUEBAS] ...), separate from production. From then on
+ * ENSAYO and LIMPIAR work here and stay blocked in production.
+ */
+function INSTALAR_PRUEBAS() {
+  PropertiesService.getScriptProperties().setProperty(PROP.ENVIRONMENT, 'test');
+  var r = INSTALAR();
+  console.log('\n*** ESTE PROYECTO ES EL ENTORNO DE PRUEBAS ***');
+  console.log('Sus datos son ficticios y desechables. Produccion no se ve afectada.');
+  return r;
+}
+
+/** Upgrades an existing base (production) to this version. Only adds; backs up first. */
+function MIGRAR() {
+  var r = migrarBase();
+  var lineas = [
+    '', '==================== MIGRACION ====================',
+    'Entorno: ' + r.entorno + ' · marca de la hoja: ' + r.marca_hoja + ' · version ' + r.version,
+    'Datos intactos (filas antes = despues): ' + (r.datos_intactos ? 'SI' : 'NO'),
+    'Filas: ' + JSON.stringify(r.filas_despues),
+    'Respaldo previo: ' + r.respaldo_previo.xlsx + ' + ' + r.respaldo_previo.json,
+    'Hojas creadas: ' + (r.esquema.hojas_creadas.join(', ') || 'ninguna'),
+    'Columnas agregadas: ' + JSON.stringify(r.esquema.columnas_agregadas),
+    'CONFIG actualizada: ' + (r.config.actualizadas.join(' | ') || 'nada'),
+    'CONFIG agregada: ' + (r.config.agregadas.join(', ') || 'nada'),
+    'CONFIG en conflicto (se conserva lo que habia): ' + (r.config.conflictos.join(' | ') || 'ninguno'),
+    'Cuentas nuevas: ' + (r.cuentas_nuevas.join(', ') || 'ninguna'),
+    'SIGUIENTE PASO: Gestionar implementaciones > lapiz > Version nueva > Implementar.',
+    '===================================================='
+  ];
+  console.log(lineas.join('\n'));
+  return r;
+}
+
+/** Health report used before every release. */
+function VERIFICAR() {
+  var h = systemHealth();
+  console.log(JSON.stringify(h, null, 2));
+  return h;
+}
+
+/**
+ * Full rehearsal with fictitious data: 130 registrations, group members,
+ * codes, audio folders, schedule changes, the event day, three jurors, results
+ * and a backup. Resumable (runs again by itself if it hits the time limit).
  */
 function ENSAYO() {
   exigirEntornoPruebas('ENSAYO');
@@ -84,32 +129,14 @@ function ENSAYO() {
 }
 
 /**
- * Convierte ESTE proyecto en el entorno de PRUEBAS y lo instala.
- *
- * Se ejecuta una sola vez, en un proyecto de Apps Script NUEVO y vacio: crea su
- * propia hoja de calculo, separada de la de produccion. A partir de ahi ENSAYO y
- * LIMPIAR funcionan aqui y siguen bloqueados en produccion.
- */
-function INSTALAR_PRUEBAS() {
-  PropertiesService.getScriptProperties().setProperty(PROP.ENTORNO, 'PRUEBAS');
-  var r = INSTALAR();
-  console.log('\n*** ESTE PROYECTO ES EL ENTORNO DE PRUEBAS ***');
-  console.log('Sus datos son ficticios y desechables. Produccion no se ve afectada.');
-  return r;
-}
-
-/**
- * Borra los datos operativos (inscripciones, evaluaciones, incidentes, cambios,
- * bitacora) y deja CONFIG y los usuarios intactos.
- *
- * Existe como funcion sin argumentos porque el boton "Ejecutar" del editor no
- * permite pasar parametros, y es justo lo que hace falta despues del ensayo
- * integral y antes de abrir inscripciones reales.
+ * Wipes operational data (registrations, members, evaluations, incidents,
+ * changes, log) and the test audio/signature files; keeps CONFIG and users.
+ * No arguments because the editor's Run button can not pass any.
  */
 function LIMPIAR() {
   exigirEntornoPruebas('LIMPIAR');
   var r = borrarDatosDePrueba('SI-BORRAR');
-  console.log('Datos operativos borrados. CONFIG y usuarios intactos.');
+  console.log(r.mensaje);
   return r;
 }
 
@@ -124,7 +151,7 @@ function LIMPIAR() {
  * CONFIG sheet so a non-technical operator can change it without touching code.
  */
 
-var VERSION_SISTEMA = '1.0.0';
+var VERSION_SISTEMA = '2.0.0';
 
 /** Script Properties keys (the Apps Script equivalent of environment vars). */
 var PROP = {
@@ -132,39 +159,87 @@ var PROP = {
   SECRETO_HMAC: 'SECRETO_HMAC',
   CARPETA_BACKUPS: 'CARPETA_BACKUPS',
   SITIO_PUBLICO: 'SITIO_PUBLICO',
+  ENVIRONMENT: 'ENVIRONMENT',
+  AUDIO_FOLDER: 'AUDIO_FOLDER',
+  SIGNATURES_FOLDER: 'SIGNATURES_FOLDER',
+  // Iteration-1 key, still honoured so an already-installed test project stays a test project.
   ENTORNO: 'ENTORNO'
 };
 
+// ---------------------------------------------------------------------------
+// Environments
+// ---------------------------------------------------------------------------
+
 /**
- * PRUEBAS o PRODUCCION. Cada entorno es un proyecto de Apps Script distinto,
- * con su propia hoja de calculo: no comparten ni una fila.
+ * "production" or "test", read from the ENVIRONMENT Script Property.
  *
- * Por defecto PRODUCCION. Un entorno solo es de pruebas si alguien lo declaro
- * explicitamente, de modo que olvidarse nunca convierte produccion en un
- * sitio donde se pueden borrar datos.
+ * Each environment is a separate Apps Script project with its own spreadsheet,
+ * so they never share a row. Anything that is not an explicit "test" is
+ * production: forgetting to set the property can never turn production into a
+ * place where data may be wiped.
  */
+function environmentName() {
+  var props = PropertiesService.getScriptProperties();
+  var declared = String(props.getProperty(PROP.ENVIRONMENT) || '').trim().toLowerCase();
+  if (declared === 'test') return 'test';
+  if (declared) return 'production';
+  if (normalizarComparable(props.getProperty(PROP.ENTORNO)) === 'PRUEBAS') return 'test';
+  return 'production';
+}
+
+/** Spanish label used by the screens: PRUEBAS / PRODUCCION. */
 function entorno() {
-  var v = PropertiesService.getScriptProperties().getProperty(PROP.ENTORNO);
-  return normalizarComparable(v) === 'PRUEBAS' ? 'PRUEBAS' : 'PRODUCCION';
+  return environmentName() === 'test' ? 'PRUEBAS' : 'PRODUCCION';
 }
 
 function esPruebas() {
-  return entorno() === 'PRUEBAS';
+  return environmentName() === 'test';
 }
 
 /**
- * Corta cualquier operacion destructiva fuera del entorno de pruebas.
- * Es un gate ejecutable, no una advertencia en la documentacion: cargar datos
- * ficticios o vaciar las hojas en produccion arruinaria la convocatoria, y una
- * nota en un manual no lo impide.
+ * Second key of the environment lock: a marker stored inside the spreadsheet
+ * itself (developer metadata, invisible to operators). A project property can
+ * be edited by mistake; the marker travels with the data it protects.
+ */
+var ENV_METADATA_KEY = 'bunker_environment';
+
+function spreadsheetEnvironment(ss) {
+  var book = ss || libro();
+  var found = book.createDeveloperMetadataFinder().withKey(ENV_METADATA_KEY).find();
+  return found.length ? String(found[0].getValue()) : '';
+}
+
+/**
+ * Stamps the spreadsheet with its environment once. A marked spreadsheet is
+ * never re-labelled: a production base can not become a test base by running
+ * the wrong installer, and vice versa.
+ */
+function markSpreadsheetEnvironment(ss, env) {
+  var current = spreadsheetEnvironment(ss);
+  if (current === env) return env;
+  if (current) {
+    throw new Error('BLOQUEADO: esta hoja de calculo esta marcada como "' + current +
+      '" y este proyecto se declara "' + env + '". No se mezclan entornos: revisa ENVIRONMENT ' +
+      'en Configuracion del proyecto > Propiedades del script.');
+  }
+  ss.addDeveloperMetadata(ENV_METADATA_KEY, env);
+  return env;
+}
+
+/**
+ * Stops any destructive or fake-data operation outside the test environment.
+ * BOTH keys must say "test": the project property and the spreadsheet marker.
+ * It is an executable gate, not a warning in a manual.
  */
 function exigirEntornoPruebas(operacion) {
-  if (esPruebas()) return true;
+  var declared = environmentName();
+  var marker = '';
+  try { marker = spreadsheetEnvironment(); } catch (e) { marker = ''; }
+  if (declared === 'test' && marker === 'test') return true;
   throw new Error(
     'BLOQUEADO: "' + operacion + '" solo puede correr en el entorno de PRUEBAS.\n' +
-    'Este proyecto es PRODUCCION y contiene (o contendra) inscripciones reales.\n\n' +
-    'Si de verdad quieres hacerlo aqui, cambia ENTORNO a PRUEBAS en\n' +
-    'Configuracion del proyecto > Propiedades del script. Piensalo dos veces.');
+    'Proyecto: ENVIRONMENT=' + declared + ' · hoja de calculo: ' + (marker || 'sin marca (se trata como produccion)') + '.\n' +
+    'Produccion contiene (o contendra) inscripciones reales y nunca recibe datos de prueba.');
 }
 
 var HOJA = {
@@ -177,8 +252,12 @@ var HOJA = {
   RESULTADOS: 'RESULTADOS',
   DASHBOARD: 'DASHBOARD',
   INCIDENTES: 'INCIDENTES',
+  AGRUPACIONES: 'AGRUPACIONES',
+  PISTAS: 'PISTAS',
   CONFIG: 'CONFIG',
   // Internal sheets (prefixed so the operator knows not to edit them by hand)
+  INTEGRANTES: '_INTEGRANTES',
+  DELIBERACIONES: '_DELIBERACIONES',
   CAMBIOS: '_CAMBIOS',
   USUARIOS: '_USUARIOS',
   LOG: '_LOG',
@@ -186,9 +265,13 @@ var HOJA = {
 };
 
 /**
- * REGISTRO is the single source of truth. AGENDA, CHECK-IN, RESULTADOS and
+ * REGISTRO is the single source of truth: one row per project (a soloist, a duo
+ * or a whole group). AGENDA, CHECK-IN, AGRUPACIONES, PISTAS, RESULTADOS and
  * DASHBOARD are rebuilt from it, which is why a participant can never appear
  * with two different schedules in two different tabs.
+ *
+ * Columns are addressed by header name, so new columns are appended at the end
+ * and existing data never moves (see ensureSchema).
  */
 var COLUMNAS_REGISTRO = [
   'submission_id', 'code', 'created_at', 'source',
@@ -207,7 +290,48 @@ var COLUMNAS_REGISTRO = [
   'issued_at', 'issued_by',
   'check_in_time', 'attendance_status', 'audition_status',
   'contingencia_desde', 'operador_check_in',
-  'notes'
+  'notes',
+  // ---- iteration 2 ----
+  'participation_mode', 'group_code', 'group_display_name', 'group_match_key',
+  'group_match_status', 'group_match_ref', 'members_declared', 'adult_confirmation',
+  'genre_primary', 'genre_secondary', 'presentation_format', 'presentation_other',
+  'needs', 'needs_other', 'own_equipment', 'own_equipment_detail', 'song_name',
+  'track_uses', 'track_method', 'track_method_other', 'track_status',
+  'track_file_id', 'track_file_name', 'track_updated_at', 'track_notes',
+  'video_check_status', 'video_checked_at', 'video_check_detail',
+  'consent_at', 'terms_version', 'policy_version', 'data_controller', 'capture_source',
+  'precola_at', 'stage_at', 'done_at',
+  'eligibility_override', 'override_by', 'override_at'
+];
+
+/** Group members. One row per person; the project row lives in REGISTRO. */
+var COLUMNAS_INTEGRANTES = [
+  'member_id', 'group_code', 'project_submission_id', 'created_at', 'updated_at', 'source',
+  'is_leader', 'full_name', 'id_number', 'normalized_id_number', 'birth_date', 'age',
+  'adult_confirmation', 'artistic_role',
+  'consent_terms', 'consent_data', 'consent_image', 'consent_at',
+  'terms_version', 'policy_version', 'data_controller', 'capture_source',
+  'signature_file_id', 'signature_sha256', 'signature_at',
+  'member_status', 'member_alert', 'notes'
+];
+
+/** Operator view: one master row per group, its members nested (collapsible) below. */
+var COLUMNAS_AGRUPACIONES = [
+  'row_type', 'group_code', 'project_code', 'submission_id', 'group_display_name',
+  'group_match_key', 'match_status', 'leader_name', 'leader_id_number', 'leader_whatsapp',
+  'leader_email', 'members_declared', 'members_registered', 'members_authorized',
+  'genre', 'eligibility_status', 'member_id', 'member_name', 'member_id_number',
+  'member_age', 'member_role', 'member_consents', 'member_signature', 'member_status', 'member_alert'
+];
+
+var COLUMNAS_PISTAS = [
+  'code', 'artistic_name', 'participation_mode', 'song_name', 'track_uses', 'track_method',
+  'track_status', 'track_file_name', 'track_file_url', 'track_updated_at', 'track_notes',
+  'final_block', 'final_time'
+];
+
+var COLUMNAS_DELIBERACIONES = [
+  'deliberation_id', 'at', 'by', 'codes_in_order', 'cut_position', 'minutes', 'status'
 ];
 
 var COLUMNAS_AGENDA = [
@@ -218,7 +342,9 @@ var COLUMNAS_AGENDA = [
 var COLUMNAS_CHECK_IN = [
   'code', 'full_name', 'artistic_name', 'discipline',
   'final_block', 'arrival_time', 'final_time',
-  'check_in_time', 'attendance_status', 'audition_status', 'operador_check_in', 'notes'
+  'check_in_time', 'attendance_status', 'audition_status', 'operador_check_in', 'notes',
+  'participation_mode', 'members_declared', 'members_authorized', 'track_status',
+  'precola_at', 'stage_at', 'done_at'
 ];
 
 var COLUMNAS_JURADO = [
@@ -250,6 +376,30 @@ var COLUMNAS_LOG = ['at', 'actor', 'rol', 'accion', 'entidad', 'detalle', 'orige
 
 var COLUMNAS_IDEMPOTENCIA = ['clave', 'at', 'resultado'];
 
+/** Every sheet the system owns, in tab order, with its header. */
+function sheetDefinitions() {
+  return [
+    [HOJA.REGISTRO, COLUMNAS_REGISTRO],
+    [HOJA.AGRUPACIONES, COLUMNAS_AGRUPACIONES],
+    [HOJA.AGENDA, COLUMNAS_AGENDA],
+    [HOJA.CHECK_IN, COLUMNAS_CHECK_IN],
+    [HOJA.PISTAS, COLUMNAS_PISTAS],
+    [HOJA.JURADO_1, COLUMNAS_JURADO],
+    [HOJA.JURADO_2, COLUMNAS_JURADO],
+    [HOJA.JURADO_3, COLUMNAS_JURADO],
+    [HOJA.RESULTADOS, COLUMNAS_RESULTADOS],
+    [HOJA.DASHBOARD, ['INDICADOR', 'VALOR']],
+    [HOJA.INCIDENTES, COLUMNAS_INCIDENTES],
+    [HOJA.CONFIG, ['clave', 'valor', 'descripcion']],
+    [HOJA.INTEGRANTES, COLUMNAS_INTEGRANTES],
+    [HOJA.DELIBERACIONES, COLUMNAS_DELIBERACIONES],
+    [HOJA.CAMBIOS, COLUMNAS_CAMBIOS],
+    [HOJA.USUARIOS, COLUMNAS_USUARIOS],
+    [HOJA.LOG, COLUMNAS_LOG],
+    [HOJA.IDEMPOTENCIA, COLUMNAS_IDEMPOTENCIA]
+  ];
+}
+
 /** Roles, from most to least privileged. */
 var ROL = {
   ADMIN: 'admin',
@@ -259,59 +409,110 @@ var ROL = {
   JURADO: 'jurado'
 };
 
-/** What each role may call. The web router enforces this, not the UI. */
+/**
+ * What each role may call. The web router enforces this, not the UI.
+ * Direction sees indicators and results, and the registry only MASKED: the
+ * brief forbids exposing ID numbers, phones or e-mails to roles that do not
+ * operate with them.
+ */
 var PERMISOS = {
   admin:     ['*'],
-  direccion: ['dashboard', 'resultados', 'registro_lectura', 'exportar', 'incidentes'],
+  direccion: ['dashboard', 'resultados', 'registro_enmascarado', 'exportar', 'incidentes', 'deliberar'],
   logistica: ['dashboard', 'registro_lectura', 'registro_escritura', 'codigos', 'agenda',
-              'cambios', 'incidentes', 'exportar', 'comunicacion'],
-  checkin:   ['checkin', 'registro_lectura_minimo', 'incidentes'],
+              'cambios', 'incidentes', 'exportar', 'comunicacion', 'agrupaciones', 'pistas', 'pistas_lectura', 'videos'],
+  checkin:   ['checkin', 'registro_lectura_minimo', 'incidentes', 'pistas_lectura'],
   jurado:    ['evaluar', 'lista_audicion_minima']
 };
 
 /**
  * Default CONFIG rows. Written on setup, then owned by the operator.
- * PENDIENTE DE COMPLETAR marks every value the organisation must supply -
- * no legal name, NIT or address is invented anywhere in this codebase.
+ * Legal values are the ones INFORMED by the organization in the iteration-2
+ * brief; `datos_legales_verificados` stays NO until someone checks them against
+ * the current legal documents. Nothing here is invented.
  */
 function configuracionPorDefecto() {
   return [
     ['clave', 'valor', 'descripcion'],
-    ['evento_nombre', 'EL BUNKER by Arte es la Solucion', 'Nombre publico de la convocatoria.'],
-    ['evento_fecha', '2026-10-02', 'Fecha de audiciones (YYYY-MM-DD). Base del calculo de edad.'],
-    ['evento_hora_inicio', '16:00', 'Inicio de la jornada.'],
-    ['evento_hora_fin', '22:00', 'Fin de la jornada.'],
-    ['evento_sede', 'PENDIENTE DE COMPLETAR', 'No publicar hasta confirmar con el venue.'],
-    ['evento_direccion', 'PENDIENTE DE COMPLETAR', 'Direccion exacta de la sede.'],
-    ['cupo_total', '100', 'Numero de codigos definitivos B-001..B-100.'],
+    ['evento_nombre', 'EL BÚNKER by Arte es la Solución', 'Nombre publico de la convocatoria.'],
+    ['evento_fecha', '2026-10-23', 'Fecha de audiciones (AAAA-MM-DD). Base del calculo de edad.'],
+    ['evento_hora_inicio', '15:00', 'Inicio de la jornada (HH:MM, 24 h). El primer bloque empieza a esta hora.'],
+    ['evento_hora_fin', '21:00', 'Fin de la jornada (HH:MM, 24 h).'],
+    ['evento_sede', 'Centro Comercial Mayorca', 'Lugar de las audiciones.'],
+    ['evento_municipio_sede', 'Sabaneta, Antioquia', 'Municipio del lugar.'],
+    ['evento_direccion', 'PENDIENTE DE COMPLETAR', 'Punto exacto dentro del lugar (plazoleta, piso, entrada).'],
+    ['cupo_total', '100', 'Numero de codigos definitivos B-001..B-100. Una agrupacion = un cupo.'],
     ['edad_minima', '18', 'Edad minima cumplida el dia del evento.'],
-    ['edad_maxima', '28', 'Edad maxima cumplida el dia del evento.'],
+    ['edad_maxima', '30', 'Edad maxima cumplida el dia del evento.'],
     ['municipio', 'Sabaneta', 'Municipio de residencia exigido.'],
     ['duracion_audicion_min', '3', 'Duracion maxima de cada audicion en minutos.'],
     ['tolerancia_min', '5', 'Minutos de tolerancia antes de perder el turno.'],
     ['antelacion_llegada_min', '15', 'Minutos de antelacion para el check-in.'],
-    ['cierre_cambios', '2026-10-01T18:00:00-05:00', 'Fecha/hora limite del Formulario 2.'],
-    ['cierre_audiciones', '21:30', 'Cierre definitivo de nuevas audiciones.'],
-    ['contingencia_inicio', '21:00', 'Inicio de la ventana de contingencia.'],
-    ['top_seleccionados', '7', 'Numero de artistas a seleccionar.'],
+    ['margen_inicio', '20:00', 'Inicio del margen operativo (HH:MM). Va despues del ultimo bloque.'],
+    ['contingencia_inicio', '20:30', 'Inicio de la ventana de contingencia (HH:MM).'],
+    ['cierre_audiciones', '21:00', 'Cierre definitivo de audiciones (HH:MM).'],
+    ['cierre_cambios', '2026-10-22T18:00:00-05:00', 'Fecha y hora limite del Formulario 2 (cambio de horario).'],
+    ['top_seleccionados', '8', 'Numero de artistas/proyectos seleccionados. El brief dice 7 y la nota confirmada dice 8: confirmar.'],
+    ['jurados', '3', 'Numero de jurados.'],
     ['minimo_jurados', '2', 'Tarjetas validas minimas para entrar al ranking.'],
     ['inscripciones_abiertas', 'SI', 'SI / NO. Cierra el Formulario 1 sin tocar codigo.'],
     ['cambios_abiertos', 'SI', 'SI / NO. Cierra el Formulario 2 sin tocar codigo.'],
-    ['exigir_video', 'NO', 'SI obliga enlace de video valido para quedar APTO.'],
-    // ---- Legal block: NOTHING here is invented by the system ----
-    ['legal_name', 'PENDIENTE DE COMPLETAR', 'Razon social del responsable del tratamiento.'],
-    ['nit', 'PENDIENTE DE COMPLETAR', 'NIT del responsable.'],
-    ['legal_address', 'PENDIENTE DE COMPLETAR', 'Domicilio del responsable.'],
-    ['data_protection_email', 'PENDIENTE DE COMPLETAR', 'Correo para ejercer derechos del titular.'],
-    ['institutional_phone', 'PENDIENTE DE COMPLETAR', 'Telefono institucional.'],
-    ['domain', 'PENDIENTE DE COMPLETAR', 'Dominio publico del sitio.'],
-    ['privacy_policy_url', 'PENDIENTE DE COMPLETAR', 'URL de la politica de tratamiento de datos.'],
-    ['terms_url', 'PENDIENTE DE COMPLETAR', 'URL de los terminos y condiciones.'],
-    ['consent_version', 'v1-PENDIENTE', 'Identificador del texto legal aceptado. Cambiar al publicar textos definitivos.'],
-    ['contacto_whatsapp', 'PENDIENTE DE COMPLETAR', 'WhatsApp de contacto para participantes.'],
-    ['instagram', 'PENDIENTE DE COMPLETAR', 'Instagram de la convocatoria.']
+    ['integrantes_abierto', 'SI', 'SI / NO. Cierra el formulario de integrantes.'],
+    ['pistas_abiertas', 'SI', 'SI / NO. Cierra la subida de pistas.'],
+    ['exigir_video', 'NO', 'SI obliga enlace de video para quedar APTO.'],
+    ['verificar_videos', 'SI', 'SI comprueba que el enlace de video se pueda abrir sin iniciar sesion.'],
+    ['integrantes_max', '15', 'Maximo de integrantes en escena de una agrupacion.'],
+    ['integrantes_edad_minima', '18', 'Edad minima de cada integrante (el documento legal exige mayoria de edad).'],
+    ['firma_integrantes', 'SI', 'SI pide firma dibujada a cada integrante (evidencia, no firma electronica calificada).'],
+    ['pista_max_mb', '15', 'Tamano maximo de una pista en MB.'],
+    ['pista_formatos', 'mp3,wav,m4a,aac,ogg,flac', 'Extensiones de audio aceptadas.'],
+    ['correo_confirmacion_automatico', 'SI', 'SI envia un correo al recibir cada inscripcion (cuota Gmail ~100/dia).'],
+    ['limite_envios_minuto', '30', 'Maximo de envios de formularios por minuto en todo el sistema.'],
+    ['limite_envios_documento_hora', '5', 'Maximo de envios por documento en una hora.'],
+    ['tiempo_minimo_formulario_seg', '10', 'Un envio mas rapido que esto se trata como automatizado.'],
+    // ---- Legal block: values INFORMED by the organization, pending verification ----
+    ['legal_name', 'Corporación Socio cultural El Arte es la Solución', 'Razon social del responsable del tratamiento.'],
+    ['nit', '901292696', 'NIT informado (sin digito de verificacion: no se infiere).'],
+    ['legal_representative', 'Jeison Duval Mazo Castañeda', 'Representante legal informado.'],
+    ['legal_address', 'Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia', 'Direccion informada para contacto.'],
+    ['data_protection_email', 'El.arterslasolucion@gmail.com', 'Canal para datos y reclamos (tal como fue informado).'],
+    ['institutional_phone', '3042328502', 'Telefono informado.'],
+    ['canal_fisico_reclamos', 'PENDIENTE DE COMPLETAR', 'Canal fisico para derechos y reclamos, si se configura.'],
+    ['datos_legales_verificados', 'NO', 'Cambiar a SI solo tras verificar contra el documento legal vigente.'],
+    ['terms_version', 'PENDIENTE-DOCUMENTO-FUENTE', 'Version de los Terminos. Cambiar al publicar el documento fuente.'],
+    ['policy_version', 'v2-2026-09-24', 'Version de la politica de tratamiento de datos.'],
+    ['consent_version', 'v2', 'Version del formulario de autorizaciones.'],
+    ['domain', 'PENDIENTE DE COMPLETAR', 'Dominio propio del sitio, cuando exista.'],
+    ['sitio_url', 'https://miguelgamer77721-ui.github.io/el-bunker/', 'Direccion publica del sitio informativo.'],
+    ['privacy_policy_url', 'https://miguelgamer77721-ui.github.io/el-bunker/politica-datos.html', 'URL de la politica de tratamiento de datos.'],
+    ['terms_url', 'https://miguelgamer77721-ui.github.io/el-bunker/terminos.html', 'URL de los terminos y condiciones.'],
+    ['whatsapp_grupo_enlace', 'PENDIENTE DE COMPLETAR', 'Enlace de invitacion al grupo de WhatsApp de personas aptas (lo crea la organizacion).'],
+    ['restaurar_desde', '', 'Solo para recuperacion: ID del archivo JSON de respaldo (ver MANUAL-RECUPERACION).'],
+    ['restaurar_confirmacion', '', 'Solo para recuperacion: escribir SI-RESTAURAR y ejecutar RESTAURAR.'],
+    ['whatsapp_oficial', '3239836182', 'Numero oficial desde el que se envian codigos y horarios.'],
+    ['whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución', 'Nombre con el que el participante debe guardar el numero.'],
+    ['contacto_whatsapp', '3239836182', 'WhatsApp de dudas operativas.'],
+    ['instagram', 'aesproducciones_', 'Instagram de la convocatoria.']
   ];
 }
+
+/**
+ * Values that iteration 1 wrote as defaults (including the Date forms Sheets
+ * turned them into). The migration only overwrites a key when its current value
+ * is one of these, empty or PENDIENTE - anything an operator typed on purpose is
+ * reported, never silently replaced.
+ */
+var CONFIG_ITERATION1_VALUES = {
+  evento_nombre: ['EL BUNKER by Arte es la Solucion'],
+  evento_fecha: ['2026-10-02', '2026-10-02T00:00:00'],
+  evento_hora_inicio: ['16:00', '1899-12-30T16:00:00'],
+  evento_hora_fin: ['22:00', '1899-12-30T22:00:00'],
+  edad_maxima: ['28'],
+  cierre_cambios: ['2026-10-01T18:00:00-05:00'],
+  cierre_audiciones: ['21:30', '1899-12-30T21:30:00'],
+  contingencia_inicio: ['21:00', '1899-12-30T21:00:00'],
+  top_seleccionados: ['7'],
+  consent_version: ['v1-PENDIENTE']
+};
 
 /** Reads CONFIG into a plain object, cached per execution. */
 var _cacheConfig = null;
@@ -324,7 +525,7 @@ function cfg(clave, porDefecto) {
     }
   }
   var v = _cacheConfig[clave];
-  if (v === undefined || v === '') return porDefecto;
+  if (v === undefined || v === '' || v === null) return porDefecto;
   return v;
 }
 
@@ -338,30 +539,56 @@ function cfgBool(clave, porDefecto) {
   return normalizarComparable(v) === 'SI' || normalizarComparable(v) === 'TRUE';
 }
 
+/**
+ * Time of day as HH:MM. Sheets turns a typed "15:00" into a 1899-12-30 date
+ * unless the cell is plain text, so both forms must read the same.
+ */
+function cfgHora(clave, porDefecto) {
+  var m = horaAMinutos(cfg(clave, porDefecto));
+  return m === null ? porDefecto : minutosAHora(m);
+}
+
+/** Calendar date as YYYY-MM-DD, whether the cell holds text or a Sheets date. */
+function cfgFecha(clave, porDefecto) {
+  var p = parsearFecha(cfg(clave, porDefecto));
+  if (!p) return porDefecto;
+  return p.y + '-' + (p.m < 10 ? '0' : '') + p.m + '-' + (p.d < 10 ? '0' : '') + p.d;
+}
+
 function invalidarCacheConfig() { _cacheConfig = null; }
 
 /** Builds the agenda config object from CONFIG, so times are operator-owned. */
 function agendaConfigurada() {
-  var inicio = horaAMinutos(cfg('evento_hora_inicio', '16:00'));
+  var inicio = horaAMinutos(cfg('evento_hora_inicio', '15:00'));
+  var contingencia = horaAMinutos(cfg('contingencia_inicio', '20:30'));
+  var cierre = horaAMinutos(cfg('cierre_audiciones', '21:00'));
+  var margen = horaAMinutos(cfg('margen_inicio', '20:00'));
   return {
-    inicio_minutos: inicio === null ? 16 * 60 : inicio,
+    inicio_minutos: inicio === null ? 15 * 60 : inicio,
     duracion_bloque: 30,
     bloques: 10,
     cupo_por_bloque: 10,
     antelacion_llegada: cfgNumero('antelacion_llegada_min', 15),
-    contingencia_inicio: horaAMinutos(cfg('contingencia_inicio', '21:00')) || 21 * 60,
-    contingencia_fin: horaAMinutos(cfg('cierre_audiciones', '21:30')) || 21 * 60 + 30,
+    margen_inicio: margen === null ? 20 * 60 : margen,
+    contingencia_inicio: contingencia === null ? 20 * 60 + 30 : contingencia,
+    contingencia_fin: cierre === null ? 21 * 60 : cierre,
     tolerancia_minutos: cfgNumero('tolerancia_min', 5)
   };
 }
 
 function opcionesValidacion() {
   return {
-    fecha_evento: cfg('evento_fecha', '2026-10-02'),
+    fecha_evento: cfgFecha('evento_fecha', '2026-10-23'),
     edad_minima: cfgNumero('edad_minima', 18),
-    edad_maxima: cfgNumero('edad_maxima', 28),
-    exigir_video: cfgBool('exigir_video', false)
+    edad_maxima: cfgNumero('edad_maxima', 30),
+    exigir_video: cfgBool('exigir_video', false),
+    integrantes_max: cfgNumero('integrantes_max', 15)
   };
+}
+
+/** The legal identity stamped on every consent, frozen at the moment it is given. */
+function dataControllerStamp() {
+  return cfg('legal_name', 'PENDIENTE DE COMPLETAR') + ' · NIT ' + cfg('nit', 'PENDIENTE');
 }
 
 // ========================================================================
@@ -392,16 +619,50 @@ var MOTIVO_DUPLICADO = {
   TELEFONO: 'TELEFONO_REPETIDO'
 };
 
-/** Fields that must be present and non-empty for a submission to be complete. */
+/**
+ * Fields that must be present and non-empty for a submission to be complete.
+ * Iteration 2 replaced the generic "discipline" with participation mode and
+ * main genre, and added the performance, equipment and backing-track answers.
+ * Yes/No answers count as present when answered either way.
+ */
 var CAMPOS_OBLIGATORIOS = [
   'full_name', 'id_number', 'birth_date', 'neighborhood_sector',
-  'resides_in_sabaneta', 'email', 'whatsapp', 'discipline',
-  'audition_description', 'availability_statement',
+  'resides_in_sabaneta', 'email', 'whatsapp',
+  'participation_mode', 'genre_primary', 'audition_description',
+  'presentation_format', 'own_equipment', 'track_uses',
+  'adult_confirmation', 'availability_statement',
   'accept_terms', 'accept_data_processing'
 ];
 
-/** Consents that must be explicitly true. image/voice + whatsapp are optional. */
-var CONSENTIMIENTOS_OBLIGATORIOS = ['accept_terms', 'accept_data_processing'];
+/**
+ * Statements that must be explicitly true. Silence is never an authorization:
+ * an unticked box and a missing field are the same thing here.
+ * WhatsApp and image/voice are independent, optional authorizations.
+ */
+var CONSENTIMIENTOS_OBLIGATORIOS = ['accept_terms', 'accept_data_processing', 'adult_confirmation', 'availability_statement'];
+
+/** Participation modes. A duo or a group is ONE project and takes ONE seat. */
+var PARTICIPATION_MODE = { SOLISTA: 'SOLISTA', DUO: 'DUO', AGRUPACION: 'AGRUPACION' };
+
+var PRESENTATION_FORMATS = ['VOZ_PISTA', 'VOZ_INSTRUMENTO', 'INSTRUMENTAL', 'DJ_SET', 'FREESTYLE_PERFORMANCE', 'OTRA'];
+
+var TRACK_METHODS = ['ARCHIVO', 'USB', 'WHATSAPP', 'OTRO'];
+
+var TRACK_STATUS = {
+  NO_APLICA: 'NO APLICA',
+  PENDIENTE: 'PISTA PENDIENTE',
+  RECIBIDA: 'PISTA RECIBIDA',
+  VALIDADA: 'PISTA VALIDADA',
+  PROBLEMA: 'PISTA CON PROBLEMA'
+};
+
+var VIDEO_STATUS = {
+  SIN_VIDEO: 'SIN VIDEO',
+  PENDIENTE: 'PENDIENTE',
+  ACCESIBLE: 'ACCESIBLE',
+  NO_ACCESIBLE: 'NO ACCESIBLE',
+  NO_VERIFICABLE: 'NO VERIFICABLE'
+};
 
 // ---------------------------------------------------------------------------
 // Normalization
@@ -543,10 +804,11 @@ function esVerdadero(valor) {
  */
 function validarInscripcion(datos, opciones) {
   opciones = opciones || {};
-  var fechaEvento = opciones.fecha_evento || '2026-10-02';
+  var fechaEvento = opciones.fecha_evento || '2026-10-23';
   var edadMinima = opciones.edad_minima === undefined ? 18 : opciones.edad_minima;
-  var edadMaxima = opciones.edad_maxima === undefined ? 28 : opciones.edad_maxima;
+  var edadMaxima = opciones.edad_maxima === undefined ? 30 : opciones.edad_maxima;
   var exigirVideo = !!opciones.exigir_video;
+  var maxMembers = opciones.integrantes_max || 15;
 
   var errores = [];
   var avisos = [];
@@ -559,13 +821,17 @@ function validarInscripcion(datos, opciones) {
     if (vacio) errores.push({ campo: campo, codigo: 'FALTANTE', mensaje: 'Campo obligatorio sin diligenciar.' });
   }
 
-  // 2. Mandatory consents ---------------------------------------------------
+  // 2. Mandatory consents and statements -------------------------------------
   for (var c = 0; c < CONSENTIMIENTOS_OBLIGATORIOS.length; c++) {
     var consent = CONSENTIMIENTOS_OBLIGATORIOS[c];
-    if (!esVerdadero(datos[consent])) {
-      errores.push({ campo: consent, codigo: 'CONSENTIMIENTO', mensaje: 'Autorizacion obligatoria no otorgada.' });
+    var yaFalta = errores.some(function (e) { return e.campo === consent; });
+    if (!yaFalta && !esVerdadero(datos[consent])) {
+      errores.push({ campo: consent, codigo: 'CONSENTIMIENTO', mensaje: 'Declaracion o autorizacion obligatoria no otorgada.' });
     }
   }
+
+  // 2b. Project shape (iteration 2) ------------------------------------------
+  projectShapeErrors(datos, maxMembers).forEach(function (e) { errores.push(e); });
 
   var incompleto = errores.length > 0;
 
@@ -700,6 +966,248 @@ function detectarDuplicado(candidato, existentes) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Iteration 2: project shape, groups, members, test-data markers
+// ---------------------------------------------------------------------------
+
+/** "Solista", "Dúo", "duo", "Agrupación" ... -> SOLISTA / DUO / AGRUPACION, or ''. */
+function normalizeParticipationMode(value) {
+  var v = normalizarComparable(value).replace(/[^A-Z]/g, '');
+  if (v === 'SOLISTA' || v === 'SOLO') return PARTICIPATION_MODE.SOLISTA;
+  if (v === 'DUO') return PARTICIPATION_MODE.DUO;
+  if (v === 'AGRUPACION' || v === 'GRUPO' || v === 'BANDA') return PARTICIPATION_MODE.AGRUPACION;
+  return '';
+}
+
+function isGroupMode(mode) {
+  var m = normalizeParticipationMode(mode);
+  return m === PARTICIPATION_MODE.DUO || m === PARTICIPATION_MODE.AGRUPACION;
+}
+
+/** Answers that only exist for some shapes of project (groups, backing track, equipment). */
+function projectShapeErrors(datos, maxMembers) {
+  var errors = [];
+  var modeRaw = normalizarTexto(datos.participation_mode);
+  var mode = normalizeParticipationMode(modeRaw);
+
+  if (modeRaw && !mode) {
+    errors.push({ campo: 'participation_mode', codigo: 'FORMATO', mensaje: 'Modalidad invalida: elige Solista, Duo o Agrupacion.' });
+  }
+  if (isGroupMode(mode)) {
+    if (!normalizarTexto(datos.artistic_name)) {
+      errors.push({ campo: 'artistic_name', codigo: 'FALTANTE', mensaje: 'Escribe el nombre artistico de la agrupacion.' });
+    }
+    var declared = parseInt(datos.members_declared, 10);
+    if (!normalizarTexto(datos.members_declared)) {
+      errors.push({ campo: 'members_declared', codigo: 'FALTANTE', mensaje: 'Indica cuantos integrantes estaran en escena.' });
+    } else if (mode === PARTICIPATION_MODE.DUO && declared !== 2) {
+      errors.push({ campo: 'members_declared', codigo: 'FORMATO', mensaje: 'Un duo tiene exactamente 2 integrantes.' });
+    } else if (mode === PARTICIPATION_MODE.AGRUPACION && !(declared >= 3 && declared <= maxMembers)) {
+      errors.push({ campo: 'members_declared', codigo: 'FORMATO', mensaje: 'Una agrupacion tiene entre 3 y ' + maxMembers + ' integrantes en escena.' });
+    }
+  }
+
+  var format = normalizarComparable(datos.presentation_format).replace(/[\s-]+/g, '_');
+  if (format && PRESENTATION_FORMATS.indexOf(format) === -1) {
+    errors.push({ campo: 'presentation_format', codigo: 'FORMATO', mensaje: 'Forma de presentacion invalida.' });
+  }
+  if (format === 'OTRA' && !normalizarTexto(datos.presentation_other)) {
+    errors.push({ campo: 'presentation_other', codigo: 'FALTANTE', mensaje: 'Describe brevemente como sera tu presentacion.' });
+  }
+
+  if (esVerdadero(datos.own_equipment) && !normalizarTexto(datos.own_equipment_detail)) {
+    errors.push({ campo: 'own_equipment_detail', codigo: 'FALTANTE', mensaje: 'Cuentanos que instrumento o equipo llevaras.' });
+  }
+
+  if (esVerdadero(datos.track_uses)) {
+    var method = normalizarComparable(datos.track_method);
+    if (!method) {
+      errors.push({ campo: 'track_method', codigo: 'FALTANTE', mensaje: 'Indica como entregaras la pista.' });
+    } else if (TRACK_METHODS.indexOf(method) === -1) {
+      errors.push({ campo: 'track_method', codigo: 'FORMATO', mensaje: 'Metodo de entrega de pista invalido.' });
+    } else if (method === 'OTRO' && !normalizarTexto(datos.track_method_other)) {
+      errors.push({ campo: 'track_method_other', codigo: 'FALTANTE', mensaje: 'Describe el metodo de entrega de la pista.' });
+    }
+  }
+  return errors;
+}
+
+/**
+ * Comparison key for group names. It only feeds duplicate DETECTION: the name
+ * the group typed is stored untouched, spelling is never "fixed" and nothing is
+ * merged automatically - the operator decides.
+ *   "El Arte es La Solución", "el arte es la solucion", "EL-ARTE, ES LA SOLUCIÓN!"
+ *   all produce "el arte es la solucion".
+ */
+function groupMatchKey(name) {
+  return normalizarTexto(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9ñ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Looks for an earlier group project with the same match key.
+ * Returns { match: bool, ref: submission_id, name: display name } - never merges.
+ */
+function detectGroupMatch(candidate, existing) {
+  var key = candidate.group_match_key || groupMatchKey(candidate.group_display_name || candidate.artistic_name);
+  if (!key) return { match: false, ref: '', name: '' };
+  for (var i = 0; i < existing.length; i++) {
+    var row = existing[i];
+    if (row.submission_id && row.submission_id === candidate.submission_id) continue;
+    if (!isGroupMode(row.participation_mode)) continue;
+    var rowKey = row.group_match_key || groupMatchKey(row.group_display_name || row.artistic_name);
+    if (rowKey && rowKey === key) {
+      return { match: true, ref: row.submission_id || '', name: row.group_display_name || row.artistic_name || '' };
+    }
+  }
+  return { match: false, ref: '', name: '' };
+}
+
+/** GRP-001 style internal group code. */
+function formatGroupCode(n) {
+  var s = String(n);
+  while (s.length < 3) s = '0' + s;
+  return 'GRP-' + s;
+}
+
+/** Next group number: one above the highest ever issued, so numbers are never reused. */
+function nextGroupNumber(rows) {
+  var max = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var m = String(rows[i].group_code || '').match(/^GRP-(\d+)$/i);
+    if (m && parseInt(m[1], 10) > max) max = parseInt(m[1], 10);
+  }
+  return max + 1;
+}
+
+var MEMBER_STATUS = {
+  AUTORIZADO: 'AUTORIZADO',
+  INCOMPLETO: 'INCOMPLETO',
+  NO_CUMPLE: 'NO CUMPLE'
+};
+
+/**
+ * Validates one group member's individual authorization. The leader can not
+ * authorize on behalf of the others, so each member answers for themself.
+ */
+function validateMember(datos, options) {
+  options = options || {};
+  var minAge = options.edad_minima === undefined ? 18 : options.edad_minima;
+  var eventDate = options.fecha_evento || '2026-10-23';
+  var requireSignature = options.firma_obligatoria !== false;
+  var errors = [];
+
+  ['full_name', 'id_number', 'birth_date', 'artistic_role'].forEach(function (field) {
+    if (!normalizarTexto(datos[field])) errors.push({ campo: field, codigo: 'FALTANTE', mensaje: 'Campo obligatorio.' });
+  });
+  ['adult_confirmation', 'accept_terms', 'accept_data_processing'].forEach(function (field) {
+    if (!esVerdadero(datos[field])) errors.push({ campo: field, codigo: 'CONSENTIMIENTO', mensaje: 'Declaracion o autorizacion obligatoria.' });
+  });
+  if (requireSignature && !normalizarTexto(datos.signature_png)) {
+    errors.push({ campo: 'signature_png', codigo: 'FALTANTE', mensaje: 'Falta la firma.' });
+  }
+  if (normalizarTexto(datos.id_number) && !esCedulaValida(datos.id_number)) {
+    errors.push({ campo: 'id_number', codigo: 'FORMATO', mensaje: 'El documento debe tener entre 6 y 10 digitos.' });
+  }
+
+  var age = null;
+  if (normalizarTexto(datos.birth_date)) {
+    if (!parsearFecha(datos.birth_date)) {
+      errors.push({ campo: 'birth_date', codigo: 'FORMATO', mensaje: 'Fecha de nacimiento invalida.' });
+    } else {
+      age = calcularEdad(datos.birth_date, eventDate);
+      if (age < minAge) {
+        errors.push({ campo: 'birth_date', codigo: 'EDAD', mensaje: 'Cada integrante debe ser mayor de ' + minAge + ' anos el dia del evento.' });
+      }
+    }
+  }
+
+  var status = MEMBER_STATUS.AUTORIZADO;
+  if (errors.some(function (e) { return e.codigo === 'EDAD'; })) status = MEMBER_STATUS.NO_CUMPLE;
+  else if (errors.length) status = MEMBER_STATUS.INCOMPLETO;
+  return { status: status, age: age, errors: errors };
+}
+
+/**
+ * Rows created by the seed generator. Production refuses them: the brief
+ * requires that production never receives test data.
+ */
+function isTestData(datos) {
+  if (!datos) return false;
+  if (normalizarComparable(datos.source) === 'SEED') return true;
+  if (/^SEED-/i.test(String(datos.client_submission_id || ''))) return true;
+  return /@ejemplo-bunker\.test$/i.test(normalizarEmail(datos.email));
+}
+
+// ---------------------------------------------------------------------------
+// E-mail typo hint (shared verbatim with the browser via Function#toString)
+// ---------------------------------------------------------------------------
+
+/** Plain Levenshtein distance, small inputs only. */
+function editDistance(a, b) {
+  a = String(a || ''); b = String(b || '');
+  var prev = [], cur = [], i, j;
+  for (j = 0; j <= b.length; j++) prev[j] = j;
+  for (i = 1; i <= a.length; i++) {
+    cur = [i];
+    for (j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * Suggests the likely intended domain for a mistyped common provider
+ * ("gmaik.com" -> "gmail.com"). It is only a hint shown to the person: the
+ * address is never corrected automatically.
+ */
+function suggestEmailDomain(email) {
+  var m = String(email || '').trim().toLowerCase().match(/^([^@\s]+)@([^@\s]+)$/);
+  if (!m) return '';
+  var domain = m[2];
+  var known = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'live.com', 'hotmail.es', 'outlook.es', 'yahoo.es'];
+  if (known.indexOf(domain) !== -1) return '';
+  var best = '', bestDistance = 3;
+  for (var k = 0; k < known.length; k++) {
+    var d = editDistance(domain, known[k]);
+    if (d > 0 && d < bestDistance) { bestDistance = d; best = known[k]; }
+  }
+  return best ? m[1] + '@' + best : '';
+}
+
+// ---------------------------------------------------------------------------
+// Masking for roles that must not see personal data (direction)
+// ---------------------------------------------------------------------------
+
+/** "1036448960" -> "******8960". */
+function maskIdNumber(value) {
+  var digits = normalizarCedula(value);
+  if (!digits) return '';
+  return new Array(Math.max(0, digits.length - 4) + 1).join('*') + digits.slice(-4);
+}
+
+/** "maria.restrepo@gmail.com" -> "m***@gmail.com". */
+function maskEmail(value) {
+  var email = normalizarEmail(value);
+  var at = email.indexOf('@');
+  if (at < 1) return email ? '***' : '';
+  return email.charAt(0) + '***' + email.slice(at);
+}
+
+/** "3012345678" -> "*** *** 5678". */
+function maskPhone(value) {
+  var phone = normalizarTelefono(value);
+  if (!phone) return '';
+  return '*** *** ' + phone.slice(-4);
+}
+
 // ========================================================================
 // 02_core_codigos.gs
 // ========================================================================
@@ -827,15 +1335,20 @@ function asignarCodigos(registros, opciones) {
  * PURE FUNCTIONS ONLY.
  */
 
-/** Auditions run 16:00-21:00 in ten 30-minute blocks of ten codes. */
+/**
+ * Auditions run 15:00-20:00 in ten 30-minute blocks of ten codes, then an
+ * operational margin (20:00-20:30), then contingency (20:30-21:00), and the
+ * day closes at 21:00. 100 x 3 minutes = 5 hours.
+ */
 var AGENDA_DEFECTO = {
-  inicio_minutos: 16 * 60,        // 16:00
+  inicio_minutos: 15 * 60,        // 15:00
   duracion_bloque: 30,            // minutes
   bloques: 10,
   cupo_por_bloque: 10,
   antelacion_llegada: 15,         // minutes before the block starts
-  contingencia_inicio: 21 * 60,   // 21:00
-  contingencia_fin: 21 * 60 + 30, // 21:30 - hard close
+  margen_inicio: 20 * 60,         // 20:00 operational margin
+  contingencia_inicio: 20 * 60 + 30, // 20:30
+  contingencia_fin: 21 * 60,      // 21:00 - hard close
   tolerancia_minutos: 5
 };
 
@@ -845,10 +1358,17 @@ function minutosAHora(minutos) {
   return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
 }
 
+/**
+ * "15:00" -> 900. Also reads the forms a spreadsheet produces when it turns a
+ * typed time into a date: "1899-12-30T15:00:00" or "2026-10-23 15:00".
+ */
 function horaAMinutos(hora) {
-  var m = String(hora || '').match(/^(\d{1,2}):(\d{2})/);
+  var texto = String(hora === null || hora === undefined ? '' : hora).trim();
+  var m = texto.match(/^(\d{1,2}):(\d{2})/) || texto.match(/^\d{4}-\d{2}-\d{2}[T ](\d{1,2}):(\d{2})/);
   if (!m) return null;
-  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  var h = parseInt(m[1], 10), min = parseInt(m[2], 10);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
 }
 
 /** Block number (1..10) for a code number, or null when out of range. */
@@ -883,11 +1403,20 @@ function horarioDeBloque(bloque, cfg) {
   };
 }
 
-/** The ten blocks, ready to render in the AGENDA sheet or the public page. */
+/** The ten blocks plus margin and contingency, ready for the AGENDA sheet. */
 function construirAgenda(cfg) {
   var c = cfg || AGENDA_DEFECTO;
   var filas = [];
   for (var b = 1; b <= c.bloques; b++) filas.push(horarioDeBloque(b, c));
+  if (c.margen_inicio !== undefined && c.margen_inicio < c.contingencia_inicio) {
+    filas.push({
+      block_id: 'MARGEN',
+      inicio: minutosAHora(c.margen_inicio),
+      fin: minutosAHora(c.contingencia_inicio),
+      ventana: minutosAHora(c.margen_inicio) + '-' + minutosAHora(c.contingencia_inicio),
+      arrival_time: '', audition_time: '', limite_tolerancia: '', codigo_desde: '', codigo_hasta: ''
+    });
+  }
   filas.push({
     block_id: 'CONTINGENCIA',
     inicio: minutosAHora(c.contingencia_inicio),
@@ -1007,6 +1536,50 @@ function aplicarCambio(registro, nuevoBloque, opciones) {
     },
     horario: h
   };
+}
+
+/**
+ * Where the day stands at a given minute: the running block number, or one of
+ * ANTES / MARGEN / CONTINGENCIA / CERRADO. Feeds the operational indicator.
+ */
+function currentBlock(nowMinutes, cfg) {
+  var c = cfg || AGENDA_DEFECTO;
+  if (nowMinutes === null || nowMinutes === undefined) return { phase: 'DESCONOCIDO', block_id: null };
+  if (nowMinutes < c.inicio_minutos) return { phase: 'ANTES', block_id: null };
+  var endBlocks = c.inicio_minutos + c.bloques * c.duracion_bloque;
+  if (nowMinutes < endBlocks) {
+    var block = Math.floor((nowMinutes - c.inicio_minutos) / c.duracion_bloque) + 1;
+    return { phase: 'BLOQUE', block_id: block };
+  }
+  if (nowMinutes < c.contingencia_inicio) return { phase: 'MARGEN', block_id: null };
+  if (nowMinutes < c.contingencia_fin) return { phase: 'CONTINGENCIA', block_id: null };
+  return { phase: 'CERRADO', block_id: null };
+}
+
+// ---------------------------------------------------------------------------
+// Human-readable dates and times for messages and screens (Spanish, Colombia)
+// ---------------------------------------------------------------------------
+
+var DAY_NAMES_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+var MONTH_NAMES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+  'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+/** "2026-10-23" -> "viernes 23 de octubre de 2026". */
+function humanDate(value) {
+  var p = parsearFecha(value);
+  if (!p) return String(value || '');
+  var day = new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();
+  return DAY_NAMES_ES[day] + ' ' + p.d + ' de ' + MONTH_NAMES_ES[p.m - 1] + ' de ' + p.y;
+}
+
+/** "15:00" -> "3:00 p. m."; "09:30" -> "9:30 a. m.". Never shown as a raw 24 h string to participants. */
+function humanTime(value) {
+  var m = horaAMinutos(value);
+  if (m === null) return String(value || '');
+  var h = Math.floor(m / 60), min = m % 60;
+  var suffix = h >= 12 ? 'p. m.' : 'a. m.';
+  var h12 = h % 12 === 0 ? 12 : h % 12;
+  return h12 + ':' + (min < 10 ? '0' : '') + min + ' ' + suffix;
 }
 
 // ========================================================================
@@ -1140,7 +1713,7 @@ function consolidarArtista(tarjetas, rubrica) {
  */
 function seleccionarTop(artistas, opciones) {
   opciones = opciones || {};
-  var n = opciones.top || 7;
+  var n = opciones.top || 8;
   var minimoJurados = opciones.minimo_jurados === undefined ? 2 : opciones.minimo_jurados;
   var rubrica = opciones.rubrica || RUBRICA;
 
@@ -1178,13 +1751,59 @@ function seleccionarTop(artistas, opciones) {
   var top = elegibles.slice(0, n);
   var empatesSinResolver = detectarEmpateEnCorte(elegibles, n);
 
-  return {
+  var resultado = {
     top: top,
     ranking: elegibles,
     excluidos: excluidos,
     empates_sin_resolver: empatesSinResolver,
-    requiere_comite: empatesSinResolver.length > 0
+    requiere_comite: empatesSinResolver.length > 0,
+    deliberacion_aplicada: '',
+    deliberacion_descartada: ''
   };
+  if (opciones.deliberacion && resultado.requiere_comite) {
+    return applyDeliberation(resultado, opciones.deliberacion, n);
+  }
+  return resultado;
+}
+
+/**
+ * Applies a minuted committee decision to an unresolved tie at the cut.
+ *
+ * The decision only counts if it covers EXACTLY the artists that are tied now:
+ * if scores changed after the committee met, the tie is different and the old
+ * minutes must not silently decide it. In that case the tie stays open and the
+ * reason is reported.
+ */
+function applyDeliberation(selection, deliberation, n) {
+  var order = (deliberation.codes_in_order || []).map(function (c) { return normalizarComparable(c); });
+  var tied = selection.empates_sin_resolver.map(function (a) { return normalizarComparable(a.code); });
+  var sameSet = order.length === tied.length && tied.every(function (c) { return order.indexOf(c) !== -1; });
+  if (!sameSet) {
+    return Object.assign({}, selection, {
+      deliberacion_descartada: (deliberation.deliberation_id || '') + ' no corresponde al empate actual'
+    });
+  }
+
+  var tiedSet = {};
+  tied.forEach(function (c) { tiedSet[c] = true; });
+  var firstTied = -1;
+  for (var i = 0; i < selection.ranking.length; i++) {
+    if (tiedSet[normalizarComparable(selection.ranking[i].code)]) { firstTied = i; break; }
+  }
+  var byCode = {};
+  selection.ranking.forEach(function (a) { byCode[normalizarComparable(a.code)] = a; });
+  var reordered = selection.ranking.filter(function (a) { return !tiedSet[normalizarComparable(a.code)]; });
+  var decided = order.map(function (c) { return byCode[c]; });
+  Array.prototype.splice.apply(reordered, [firstTied, 0].concat(decided));
+  reordered.forEach(function (a, idx) { a.posicion = idx + 1; });
+
+  return Object.assign({}, selection, {
+    ranking: reordered,
+    top: reordered.slice(0, n),
+    empates_sin_resolver: [],
+    requiere_comite: false,
+    deliberacion_aplicada: deliberation.deliberation_id || 'ACTA'
+  });
 }
 
 /** Descending by final score, then down the documented tie-break ladder. */
@@ -1249,6 +1868,8 @@ function distribucionPuntajes(ranking, rangos) {
 var ESTADO = {
   CONFIRMADO: 'CONFIRMADO',       // has code + slot, not arrived yet
   CHECK_IN: 'CHECK-IN',           // arrived and verified with physical ID
+  PRECOLA: 'PRECOLA',             // waiting next to the stage
+  EN_AUDICION: 'EN AUDICION',     // on stage right now
   NO_SHOW: 'NO SHOW',             // did not arrive / did not audition in slot
   CONTINGENCIA: 'CONTINGENCIA',   // lost the slot, waiting for a free window
   REALIZADA: 'REALIZADA',         // audition actually happened -> can be scored
@@ -1263,12 +1884,14 @@ var ESTADO = {
  */
 var TRANSICIONES = {
   'CONFIRMADO':      ['CHECK-IN', 'NO SHOW', 'CONTINGENCIA', 'INCIDENTE'],
-  'CHECK-IN':        ['REALIZADA', 'CONTINGENCIA', 'NO SHOW', 'INCIDENTE'],
-  'CONTINGENCIA':    ['CHECK-IN', 'REALIZADA', 'NO AUDICIONADO', 'INCIDENTE'],
+  'CHECK-IN':        ['PRECOLA', 'EN AUDICION', 'REALIZADA', 'CONTINGENCIA', 'NO SHOW', 'INCIDENTE'],
+  'PRECOLA':         ['EN AUDICION', 'REALIZADA', 'CONTINGENCIA', 'NO SHOW', 'INCIDENTE'],
+  'EN AUDICION':     ['REALIZADA', 'INCIDENTE'],
+  'CONTINGENCIA':    ['CHECK-IN', 'PRECOLA', 'EN AUDICION', 'REALIZADA', 'NO AUDICIONADO', 'INCIDENTE'],
   'NO SHOW':         ['CONTINGENCIA', 'NO AUDICIONADO', 'INCIDENTE'],
   'REALIZADA':       ['INCIDENTE'],
   'NO AUDICIONADO':  ['INCIDENTE'],
-  'INCIDENTE':       ['CHECK-IN', 'CONTINGENCIA', 'REALIZADA', 'NO AUDICIONADO', 'NO SHOW']
+  'INCIDENTE':       ['CHECK-IN', 'PRECOLA', 'EN AUDICION', 'CONTINGENCIA', 'REALIZADA', 'NO AUDICIONADO', 'NO SHOW']
 };
 
 /** States that mean "this person can still be selected". */
@@ -1284,6 +1907,8 @@ function normalizarEstado(estado) {
   if (e === 'CHECK IN') e = 'CHECK-IN';
   if (e === 'NO-SHOW') e = 'NO SHOW';
   if (e === 'NO-AUDICIONADO') e = 'NO AUDICIONADO';
+  if (e === 'EN-AUDICION' || e === 'AUDICION') e = 'EN AUDICION';
+  if (e === 'PRE-COLA' || e === 'PRE COLA') e = 'PRECOLA';
   return e;
 }
 
@@ -1418,9 +2043,10 @@ function margenSeguro(v) {
 }
 
 /**
- * Hard close at 21:30: nobody starts a new audition after this.
+ * Hard close (21:00 by default): nobody starts a new audition after this.
  * Everyone still pending becomes NO AUDICIONADO, which excludes them from the
- * selection - exactly as the spec requires.
+ * selection - exactly as the spec requires. Someone already ON STAGE is left
+ * alone to finish; the stage manager then marks the audition as done.
  */
 function cerrarJornada(registros, opciones) {
   opciones = opciones || {};
@@ -1432,7 +2058,7 @@ function cerrarJornada(registros, opciones) {
     var r = registros[i];
     if (!normalizarTexto(r.code)) continue;
     var estado = normalizarEstado(r.attendance_status || ESTADO.CONFIRMADO);
-    if (estado === ESTADO.REALIZADA || estado === ESTADO.NO_AUDICIONADO) continue;
+    if (estado === ESTADO.REALIZADA || estado === ESTADO.NO_AUDICIONADO || estado === ESTADO.EN_AUDICION) continue;
 
     cambios.push({
       code: r.code,
@@ -1444,6 +2070,226 @@ function cerrarJornada(registros, opciones) {
     });
   }
   return { cambios: cambios, total: cambios.length };
+}
+
+// ========================================================================
+// 06_core_media.gs
+// ========================================================================
+
+/**
+ * EL BUNKER - Core: video-link checks, backing-track files and signatures.
+ * PURE FUNCTIONS ONLY (loaded by the Node test runner). The network and Drive
+ * calls that use them live in 33_media.gs.
+ */
+
+// ---------------------------------------------------------------------------
+// Video links
+// ---------------------------------------------------------------------------
+
+/**
+ * Which provider a video link belongs to, and the id when it matters.
+ * The brief accepts unlisted YouTube, Drive with access, Vimeo or any URL.
+ */
+function classifyVideoUrl(url) {
+  var u = normalizarTexto(url);
+  if (!esUrlValida(u)) return { provider: 'invalid', id: '' };
+  var m;
+  if ((m = u.match(/^https?:\/\/(?:www\.|m\.)?youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/)([A-Za-z0-9_-]{6,})/i)) ||
+      (m = u.match(/^https?:\/\/youtu\.be\/([A-Za-z0-9_-]{6,})/i))) {
+    return { provider: 'youtube', id: m[1] };
+  }
+  if ((m = u.match(/^https?:\/\/(?:www\.|player\.)?vimeo\.com\/(?:video\/)?(\d+)/i))) return { provider: 'vimeo', id: m[1] };
+  if ((m = u.match(/^https?:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,})/i)) ||
+      (m = u.match(/^https?:\/\/drive\.google\.com\/(?:open|uc)\?(?:.*&)?id=([A-Za-z0-9_-]{10,})/i))) {
+    return { provider: 'drive', id: m[1] };
+  }
+  if ((m = u.match(/^https?:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([A-Za-z0-9_-]{10,})/i))) {
+    return { provider: 'drive_folder', id: m[1] };
+  }
+  if (/^https?:\/\/(?:www\.)?instagram\.com\//i.test(u)) return { provider: 'instagram', id: '' };
+  if (/^https?:\/\/(?:www\.|vm\.|m\.)?tiktok\.com\//i.test(u)) return { provider: 'tiktok', id: '' };
+  if (/^https?:\/\/(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.watch)\//i.test(u)) return { provider: 'facebook', id: '' };
+  return { provider: 'other', id: '' };
+}
+
+/**
+ * The anonymous request that proves (or disproves) that an evaluator without
+ * the owner's login can open the link. null = cannot be checked automatically
+ * (social networks block robots; a person must look).
+ */
+function videoProbeRequest(url) {
+  var c = classifyVideoUrl(url);
+  var base = { muteHttpExceptions: true, followRedirects: false, method: 'get' };
+  if (c.provider === 'youtube') {
+    return Object.assign({ url: 'https://www.youtube.com/oembed?format=json&url=' +
+      encodeURIComponent('https://www.youtube.com/watch?v=' + c.id), provider: c.provider }, base);
+  }
+  if (c.provider === 'vimeo') {
+    return Object.assign({ url: 'https://vimeo.com/api/oembed.json?url=' +
+      encodeURIComponent('https://vimeo.com/' + c.id), provider: c.provider }, base);
+  }
+  if (c.provider === 'drive') {
+    return Object.assign({ url: 'https://drive.google.com/file/d/' + c.id + '/view', provider: c.provider }, base);
+  }
+  if (c.provider === 'drive_folder') {
+    return Object.assign({ url: 'https://drive.google.com/drive/folders/' + c.id, provider: c.provider }, base);
+  }
+  if (c.provider === 'other') {
+    // HEAD, not GET: a direct link to a video file must not be downloaded just to see if it opens.
+    return Object.assign({ url: normalizarTexto(url), provider: c.provider }, base, { followRedirects: true, method: 'head' });
+  }
+  return null;
+}
+
+/** Turns the probe's HTTP answer into a status the operator understands. */
+function interpretVideoProbe(provider, code, location, body) {
+  var loc = String(location || '');
+  var text = String(body || '').slice(0, 4000);
+  var loginWall = /accounts\.google\.com|ServiceLogin|signin\/v2|v3\/signin/i;
+
+  if (provider === 'youtube') {
+    if (code === 200) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'YouTube: publico o no listado.' };
+    if (code === 401 || code === 403) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'YouTube: video privado o con restricciones.' };
+    if (code === 400 || code === 404) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'YouTube: el video no existe o fue eliminado.' };
+    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'YouTube respondio ' + code + '.' };
+  }
+  if (provider === 'vimeo') {
+    if (code === 200) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'Vimeo: accesible.' };
+    if (code === 404) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Vimeo: el video no existe o es privado.' };
+    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Vimeo respondio ' + code + ' (puede tener restricciones de privacidad).' };
+  }
+  if (provider === 'drive' || provider === 'drive_folder') {
+    if ((code === 301 || code === 302 || code === 303) && loginWall.test(loc)) {
+      return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: pide iniciar sesion. Comparte como "Cualquier persona con el enlace".' };
+    }
+    if (code === 200 && loginWall.test(text) && !/drive-viewer|docs-title|og:title/i.test(text)) {
+      return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: pide iniciar sesion. Comparte como "Cualquier persona con el enlace".' };
+    }
+    if (code === 200) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'Drive: abierto a cualquier persona con el enlace.' };
+    if (code === 404) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: el archivo no existe.' };
+    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Drive respondio ' + code + '.' };
+  }
+  if (provider === 'other') {
+    if (code >= 200 && code < 300) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'El enlace abre (HTTP ' + code + ').' };
+    if (code === 401 || code === 403 || code === 404 || code === 410) {
+      return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'El enlace no abre sin permisos (HTTP ' + code + ').' };
+    }
+    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'El sitio respondio ' + code + '.' };
+  }
+  return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Esta red no permite verificar automaticamente: se revisa a mano.' };
+}
+
+/** Status for a link without making any request (empty, malformed, social network). */
+function videoStatusWithoutProbe(url) {
+  var u = normalizarTexto(url);
+  if (!u) return { status: VIDEO_STATUS.SIN_VIDEO, detail: '' };
+  var c = classifyVideoUrl(u);
+  if (c.provider === 'invalid') return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'No es un enlace valido (debe empezar por https://).' };
+  if (!videoProbeRequest(u)) return interpretVideoProbe(c.provider, 0, '', '');
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Backing tracks
+// ---------------------------------------------------------------------------
+
+/** "Canción de Día!" -> "CANCION_DE_DIA". Used only for file names, never for data. */
+function sanitizeForFileName(text, maxLength) {
+  var s = normalizarTexto(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return s.slice(0, maxLength || 40).replace(/_+$/, '');
+}
+
+function fileExtension(name) {
+  var m = String(name || '').toLowerCase().match(/\.([a-z0-9]{2,5})$/);
+  return m ? m[1] : '';
+}
+
+/** B-XXX_NOMBREARTISTICO_NOMBRECANCION.ext, as the brief prescribes. */
+function trackFileName(code, artisticName, songName, extension) {
+  return [
+    String(code || '').toUpperCase(),
+    sanitizeForFileName(artisticName) || 'SIN_NOMBRE',
+    sanitizeForFileName(songName) || 'SIN_CANCION'
+  ].join('_') + '.' + String(extension || 'mp3').toLowerCase();
+}
+
+/**
+ * Audio type from the first bytes, so a renamed .exe is not stored as a song.
+ * Bytes may be signed (Apps Script) or unsigned.
+ */
+function detectAudioType(bytes) {
+  if (!bytes || bytes.length < 12) return '';
+  var b = [];
+  for (var i = 0; i < 12; i++) b.push(bytes[i] & 0xff);
+  var ascii = function (from, len) {
+    return String.fromCharCode.apply(null, b.slice(from, from + len));
+  };
+  if (ascii(0, 3) === 'ID3') return 'mp3';
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WAVE') return 'wav';
+  if (ascii(4, 4) === 'ftyp') return 'm4a';
+  if (ascii(0, 4) === 'OggS') return 'ogg';
+  if (ascii(0, 4) === 'fLaC') return 'flac';
+  if (b[0] === 0xff && (b[1] & 0xf6) === 0xf0) return 'aac';          // ADTS
+  if (b[0] === 0xff && (b[1] & 0xe0) === 0xe0) return 'mp3';          // MPEG frame sync
+  return '';
+}
+
+/** Extensions that may legitimately contain each detected type. */
+function audioTypeMatchesExtension(type, ext) {
+  var ok = {
+    mp3: ['mp3'], wav: ['wav'], m4a: ['m4a', 'mp4', 'aac'], ogg: ['ogg', 'oga', 'opus'],
+    flac: ['flac'], aac: ['aac', 'm4a']
+  };
+  return !!type && (ok[type] || []).indexOf(ext) !== -1;
+}
+
+/** Validates an upload before anything touches Drive. */
+function validateTrackUpload(fileName, byteLength, headBytes, options) {
+  options = options || {};
+  var maxMb = options.max_mb || 15;
+  var allowed = String(options.formats || 'mp3,wav,m4a,aac,ogg,flac').toLowerCase().split(/[\s,]+/).filter(Boolean);
+  var ext = fileExtension(fileName);
+  if (!ext || allowed.indexOf(ext) === -1) {
+    return { ok: false, error: 'Formato no permitido. Usa: ' + allowed.join(', ') + '.' };
+  }
+  if (!byteLength) return { ok: false, error: 'El archivo esta vacio.' };
+  if (byteLength > maxMb * 1024 * 1024) {
+    return { ok: false, error: 'El archivo supera ' + maxMb + ' MB. Comprimelo (MP3 a 192 kbps) o entregalo en USB.' };
+  }
+  var type = detectAudioType(headBytes);
+  if (!audioTypeMatchesExtension(type, ext)) {
+    return { ok: false, error: 'El archivo no parece un audio ' + ext.toUpperCase() + ' valido.' };
+  }
+  return { ok: true, extension: ext, type: type };
+}
+
+// ---------------------------------------------------------------------------
+// Drawn signatures
+// ---------------------------------------------------------------------------
+
+/** Splits "data:image/png;base64,...." and checks it really is a PNG. */
+function parsePngDataUrl(dataUrl) {
+  var m = String(dataUrl || '').match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return { ok: false, error: 'La firma no llego en formato PNG.' };
+  return { ok: true, base64: m[1] };
+}
+
+function isPngBytes(bytes) {
+  var sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (!bytes || bytes.length < 8) return false;
+  for (var i = 0; i < 8; i++) if ((bytes[i] & 0xff) !== sig[i]) return false;
+  return true;
+}
+
+/** Hex string of a (possibly signed) byte array, e.g. a SHA-256 digest. */
+function bytesToHex(bytes) {
+  var out = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var v = bytes[i] & 0xff;
+    out += (v < 16 ? '0' : '') + v.toString(16);
+  }
+  return out;
 }
 
 // ========================================================================
@@ -1485,12 +2331,80 @@ function conBloqueo(fn, esperaMs) {
   }
 }
 
-/** Header row of a sheet, as an array of column names. */
+/**
+ * Header row of a sheet, as an array of column names.
+ * Cached per execution: headers only change during setup/migration, which
+ * clears the cache, and re-reading them on every write doubled the calls.
+ */
+var _headerCache = {};
 function encabezados(nombreHoja) {
+  if (_headerCache[nombreHoja]) return _headerCache[nombreHoja];
   var h = hoja(nombreHoja);
   var ultima = h.getLastColumn();
   if (ultima === 0) return [];
-  return h.getRange(1, 1, 1, ultima).getValues()[0].map(function (c) { return String(c).trim(); });
+  var cols = h.getRange(1, 1, 1, ultima).getValues()[0].map(function (c) { return String(c).trim(); });
+  _headerCache[nombreHoja] = cols;
+  return cols;
+}
+
+function invalidateHeaderCache() { _headerCache = {}; }
+
+/**
+ * Columns whose content must stay exactly as typed. Without plain-text format
+ * Sheets turns "0012345" into 12345, "15:00" into a date and so on.
+ */
+var PLAIN_TEXT_COLUMNS = {
+  'REGISTRO': ['id_number', 'whatsapp', 'birth_date', 'group_code', 'code'],
+  '_INTEGRANTES': ['id_number', 'birth_date', 'group_code'],
+  'CONFIG': ['valor']
+};
+
+/**
+ * Creates missing sheets and appends missing columns at the END of existing
+ * ones. Existing data never moves, because every read and write addresses
+ * columns by header name. Safe to run on a live base: it only adds.
+ * Returns what it changed, for the migration report.
+ */
+function ensureSchema(book) {
+  var report = { hojas_creadas: [], columnas_agregadas: {} };
+  sheetDefinitions().forEach(function (def) {
+    var name = def[0], columns = def[1];
+    var sheet = book.getSheetByName(name);
+    if (!sheet) {
+      sheet = book.insertSheet(name);
+      report.hojas_creadas.push(name);
+    }
+    var lastCol = sheet.getLastColumn();
+    var current = lastCol ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (c) { return String(c).trim(); }) : [];
+    var hasHeader = current.some(function (c) { return c !== ''; });
+    if (!hasHeader) {
+      sheet.getRange(1, 1, 1, columns.length).setValues([columns]);
+    } else {
+      var missing = columns.filter(function (c) { return current.indexOf(c) === -1; });
+      if (missing.length) {
+        sheet.getRange(1, current.length + 1, 1, missing.length).setValues([missing]);
+        report.columnas_agregadas[name] = missing;
+      }
+    }
+    var width = Math.max(1, sheet.getLastColumn());
+    sheet.getRange(1, 1, 1, width).setFontWeight('bold').setBackground('#1D1D1B').setFontColor('#FFFFFF');
+    sheet.setFrozenRows(1);
+    applyPlainTextColumns(sheet, name);
+  });
+  invalidateHeaderCache();
+  return report;
+}
+
+function applyPlainTextColumns(sheet, name) {
+  var cols = PLAIN_TEXT_COLUMNS[name];
+  if (!cols) return;
+  var header = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0]
+    .map(function (c) { return String(c).trim(); });
+  var rows = Math.max(1, sheet.getMaxRows() - 1);
+  cols.forEach(function (c) {
+    var idx = header.indexOf(c);
+    if (idx !== -1) sheet.getRange(2, idx + 1, rows, 1).setNumberFormat('@');
+  });
 }
 
 /**
@@ -1812,6 +2726,22 @@ function urlPanel(rol, token) {
   return base + '?p=' + pagina + '&t=' + encodeURIComponent(token);
 }
 
+/**
+ * Six-character key that travels with a group code in the members link.
+ * GRP numbers are sequential and easy to guess; the key (an HMAC of the code)
+ * is what stops a stranger from adding people to someone else's group.
+ */
+function groupAccessKey(groupCode) {
+  var code = String(groupCode || '').trim().toUpperCase();
+  if (!code) return '';
+  return firmar('grp:' + code).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
+}
+
+function groupKeyMatches(groupCode, key) {
+  var expected = groupAccessKey(groupCode);
+  return !!expected && expected === String(key || '').trim().toUpperCase();
+}
+
 // ========================================================================
 // 12_log.gs
 // ========================================================================
@@ -1869,7 +2799,7 @@ function registrarIncidente(codigo, tipo, descripcion, accion, responsable) {
  * re-implemented (and forgotten) in each handler.
  */
 
-var PAGINAS_PUBLICAS = ['inscripcion', 'cambio-horario', 'gracias', 'estado'];
+var PAGINAS_PUBLICAS = ['inscripcion', 'cambio-horario', 'gracias', 'integrantes', 'mi-inscripcion'];
 
 /**
  * Which roles may OPEN each internal page.
@@ -1880,10 +2810,11 @@ var PAGINAS_PUBLICAS = ['inscripcion', 'cambio-horario', 'gracias', 'estado'];
  * being a real hole.
  */
 var ROLES_POR_PAGINA = {
-  'admin':     [ROL.ADMIN, ROL.LOGISTICA],
-  'checkin':   [ROL.ADMIN, ROL.LOGISTICA, ROL.CHECKIN],
-  'jurado':    [ROL.ADMIN, ROL.JURADO],
-  'dashboard': [ROL.ADMIN, ROL.DIRECCION, ROL.LOGISTICA]
+  'admin':      [ROL.ADMIN, ROL.LOGISTICA],
+  'checkin':    [ROL.ADMIN, ROL.LOGISTICA, ROL.CHECKIN],
+  'jurado':     [ROL.ADMIN, ROL.JURADO],
+  'dashboard':  [ROL.ADMIN, ROL.DIRECCION, ROL.LOGISTICA],
+  'constancia': [ROL.ADMIN, ROL.LOGISTICA, ROL.CHECKIN]
 };
 
 function doGet(e) {
@@ -1909,10 +2840,13 @@ function doGet(e) {
       'inscripcion':    'ui_inscripcion',
       'cambio-horario': 'ui_cambio',
       'gracias':        'ui_gracias',
+      'integrantes':    'ui_integrantes',
+      'mi-inscripcion': 'ui_mi_inscripcion',
       'admin':          'ui_admin',
       'checkin':        'ui_checkin',
       'jurado':         'ui_jurado',
-      'dashboard':      'ui_dashboard'
+      'dashboard':      'ui_dashboard',
+      'constancia':     'ui_constancia'
     }[pagina];
 
     if (!plantilla) return renderizar('ui_403', { motivo: 'PAGINA_DESCONOCIDA' });
@@ -1921,7 +2855,9 @@ function doGet(e) {
       token: params.t || '',
       rol: sesion.ok ? sesion.rol : '',
       alias: sesion.ok ? sesion.alias : '',
-      codigo: params.code || ''
+      codigo: params.code || '',
+      grupo: String(params.g || '').toUpperCase().replace(/[^A-Z0-9-]/g, ''),
+      clave: String(params.k || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
     });
   } catch (err) {
     console.error(err);
@@ -1943,14 +2879,6 @@ function doPost(e) {
   return responder(ejecutarAccion(datos.accion, datos, datos.t || datos.token));
 }
 
-/** Actions that do not require a token. Everything else does. */
-var ACCIONES_PUBLICAS = {
-  'inscribir': true,
-  'solicitar_cambio': true,
-  'consultar_estado': true,
-  'agenda_publica': true,
-  'config_publica': true
-};
 
 /** accion -> { capacidad, fn }. capacidad null means public. */
 function tablaAcciones() {
@@ -1961,9 +2889,27 @@ function tablaAcciones() {
     'consultar_estado':   { capacidad: null, fn: accionConsultarEstado },
     'agenda_publica':     { capacidad: null, fn: accionAgendaPublica },
     'config_publica':     { capacidad: null, fn: accionConfigPublica },
+    'consultar_agrupacion': { capacidad: null, fn: accionConsultarAgrupacion },
+    'registrar_integrante': { capacidad: null, fn: accionRegistrarIntegrante },
+    'mi_inscripcion':     { capacidad: null, fn: accionMiInscripcion },
+    'subir_pista':        { capacidad: null, fn: accionSubirPista },
+    'verificar_video':    { capacidad: null, fn: accionVerificarVideo },
 
     // ---- logistics / admin ------------------------------------------------
     'listar_registro':    { capacidad: 'registro_lectura',   fn: accionListarRegistro },
+    'listar_registro_enmascarado': { capacidad: 'registro_enmascarado', fn: accionListarRegistroEnmascarado },
+    'listar_agrupaciones': { capacidad: 'agrupaciones',      fn: accionListarAgrupaciones },
+    'resolver_coincidencia_grupo': { capacidad: 'agrupaciones', fn: accionResolverCoincidenciaGrupo },
+    'actualizar_integrantes': { capacidad: 'agrupaciones',   fn: accionActualizarIntegrantesDeclarados },
+    'listar_pistas':      { capacidad: 'pistas',             fn: accionListarPistas },
+    'marcar_pista':       { capacidad: 'pistas',             fn: accionMarcarPista },
+    'subir_pista_admin':  { capacidad: 'pistas',             fn: accionSubirPistaAdmin },
+    'preparar_carpetas_audio': { capacidad: 'pistas',        fn: accionPrepararCarpetasAudio },
+    'respaldar_audios':   { capacidad: 'pistas',             fn: accionRespaldarAudios },
+    'verificar_videos':   { capacidad: 'videos',             fn: accionVerificarVideos },
+    'exportar_contactos': { capacidad: 'comunicacion',       fn: accionExportarContactos },
+    'estado_sistema':     { capacidad: '*',                  fn: accionEstadoSistema },
+    'auditar_datos_prueba': { capacidad: '*',                fn: accionAuditarDatosDePrueba },
     'revalidar_todo':     { capacidad: 'registro_escritura', fn: accionRevalidarTodo },
     'marcar_elegibilidad':{ capacidad: 'registro_escritura', fn: accionMarcarElegibilidad },
     'asignar_codigos':    { capacidad: 'codigos',            fn: accionAsignarCodigos },
@@ -1985,6 +2931,7 @@ function tablaAcciones() {
     'plan_contingencia':  { capacidad: 'checkin',   fn: accionPlanContingencia },
     'cerrar_jornada':     { capacidad: 'registro_escritura', fn: accionCerrarJornada },
     'nuevo_incidente':    { capacidad: 'incidentes', fn: accionNuevoIncidente },
+    'pistas_evento':      { capacidad: 'pistas_lectura', fn: accionPistasEvento },
 
     // ---- jury -------------------------------------------------------------
     'lista_evaluacion':   { capacidad: 'evaluar',   fn: accionListaEvaluacion },
@@ -1992,7 +2939,8 @@ function tablaAcciones() {
 
     // ---- results / dashboard ---------------------------------------------
     'dashboard':          { capacidad: 'dashboard', fn: accionDashboard },
-    'resultados':         { capacidad: 'resultados', fn: accionResultados }
+    'resultados':         { capacidad: 'resultados', fn: accionResultados },
+    'registrar_deliberacion': { capacidad: 'deliberar', fn: accionRegistrarDeliberacion }
   };
 }
 
@@ -2081,107 +3029,284 @@ function api(carga) {
 // ========================================================================
 
 /**
- * EL BUNKER - Public actions: registration, schedule-change request, status.
+ * EL BUNKER - Public actions: registration (Form 1), group members, "Mi
+ * inscripción" (status + backing-track upload), schedule change (Form 2),
+ * live video-link check and the public configuration.
+ *
+ * Every write follows the same order: replay a repeated request -> anti-abuse
+ * guard -> slow work outside the lock (Drive, network) -> lock -> idempotency
+ * ledger -> write. The ledger is checked INSIDE the lock: two identical
+ * requests arriving together (a real double tap) wait for each other and the
+ * second one gets the first one's answer instead of a second row.
  */
 
+// ---------------------------------------------------------------------------
+// Shared guards
+// ---------------------------------------------------------------------------
+
+/** How fast a person could possibly fill each form, as a share of the configured minimum. */
+var MIN_FILL_FACTOR = { inscripcion: 1, integrante: 0.5, pista: 0.3, cambio: 0.5, consulta: 0 };
+
 /**
- * Form 1. Validates server-side, stores ALWAYS (never silently rejects), and
- * returns a verdict the participant can understand.
- *
- * The code is NOT issued here: the spec assigns codes after validation, in a
- * deliberate operator-run batch, so a wave of submissions cannot burn the 100
- * seats on rows that later turn out to be duplicates.
+ * Anti-abuse checks that run before anything is stored. Returns null when the
+ * request may continue, or an error payload. Apps Script does not expose the
+ * visitor's IP, so limits are global per minute and per ID number per hour.
+ */
+function guardSubmission(datos, kind) {
+  if (normalizarTexto(datos.hp_field)) {
+    registrar('anonimo', '', 'BLOQUEO_CAMPO_TRAMPA', kind, '');
+    return { ok: false, motivo: 'TRAMPA',
+             error: 'No pudimos procesar el envio. Si eres una persona, recarga la pagina e intentalo de nuevo.' };
+  }
+  var testData = isTestData(datos);
+  if (testData && !esPruebas()) {
+    registrar('anonimo', '', 'BLOQUEO_DATO_DE_PRUEBA', kind, '');
+    return { ok: false, motivo: 'DATO_DE_PRUEBA', error: 'Produccion no admite datos de prueba.' };
+  }
+  if (testData) return null;                       // the rehearsal loads 130 rows in a burst on purpose
+
+  var minMs = cfgNumero('tiempo_minimo_formulario_seg', 10) * 1000 * (MIN_FILL_FACTOR[kind] || 0);
+  if (minMs > 0 && normalizarComparable(datos.source || 'WEB') === 'WEB') {
+    var elapsed = Number(datos.form_elapsed_ms);
+    if (!isFinite(elapsed) || elapsed < minMs) {
+      registrar('anonimo', '', 'BLOQUEO_VELOCIDAD', kind, String(elapsed));
+      return { ok: false, motivo: 'VELOCIDAD',
+               error: 'El envio fue demasiado rapido. Revisa tus datos y vuelve a enviarlo.' };
+    }
+  }
+
+  var cache = CacheService.getScriptCache();
+  var minuteKey = 'rl:' + kind + ':' + Math.floor(Date.now() / 60000);
+  var perMinute = Number(cache.get(minuteKey) || 0) + 1;
+  cache.put(minuteKey, String(perMinute), 120);
+  if (perMinute > cfgNumero('limite_envios_minuto', 30)) {
+    registrar('anonimo', '', 'BLOQUEO_LIMITE_GLOBAL', kind, String(perMinute));
+    return { ok: false, motivo: 'LIMITE_GLOBAL',
+             error: 'Estamos recibiendo muchos envios en este momento. Espera un minuto y vuelve a intentarlo.' };
+  }
+  var doc = normalizarCedula(datos.id_number);
+  if (doc) {
+    var docKey = 'rl:doc:' + kind + ':' + doc + ':' + Math.floor(Date.now() / 3600000);
+    var perDoc = Number(cache.get(docKey) || 0) + 1;
+    cache.put(docKey, String(perDoc), 3700);
+    var limit = cfgNumero('limite_envios_documento_hora', 5) * (kind === 'consulta' ? 4 : 1);
+    if (perDoc > limit) {
+      registrar('anonimo', '', 'BLOQUEO_LIMITE_DOCUMENTO', kind, '');
+      return { ok: false, motivo: 'LIMITE_DOCUMENTO',
+               error: 'Hubo demasiados envios con este documento en la ultima hora. Si necesitas corregir algo, escribenos.' };
+    }
+  }
+  return null;
+}
+
+/** The stored answer of an already-processed request, or null. Cheap: no lock. */
+function replayIfRepeated(key) {
+  if (!key) return null;
+  var previous = buscarIdempotencia(key);
+  if (!previous) return null;
+  try { return Object.assign({ repetido: true }, JSON.parse(previous)); }
+  catch (e) { return { repetido: true, ok: true }; }
+}
+
+/** Lock first, ledger second: see the header of this file. */
+function exactlyOnce(key, fn) {
+  return conBloqueo(function () { return unaSolaVez(key, fn); });
+}
+
+function webAppUrl() {
+  try { return ScriptApp.getService().getUrl() || ''; } catch (e) { return ''; }
+}
+
+function membersLink(groupCode) {
+  return webAppUrl() + '?p=integrantes&g=' + encodeURIComponent(groupCode) + '&k=' + groupAccessKey(groupCode);
+}
+
+// ---------------------------------------------------------------------------
+// Form 1 - registration of a project (soloist, duo or group)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates server-side, stores ALWAYS (never silently rejects) and returns a
+ * verdict the participant can understand. Codes are NOT issued here: they are
+ * issued in an operator-run batch after review, so a wave of submissions can
+ * not burn the 100 seats on rows that later turn out to be duplicates.
  */
 function accionInscribir(datos) {
+  datos = datos || {};
   if (!cfgBool('inscripciones_abiertas', true)) {
     return { ok: false, error: 'Las inscripciones estan cerradas.', cerrado: true };
   }
+  var key = 'inscripcion:' + (datos.client_submission_id || Utilities.getUuid());
+  var replay = replayIfRepeated(key);
+  if (replay) return replay;
+  var blocked = guardSubmission(datos, 'inscripcion');
+  if (blocked) return blocked;
 
-  // The client sends a UUID it keeps across retries; a double tap is one row.
-  var claveIdem = 'inscripcion:' + (datos.client_submission_id || Utilities.getUuid());
+  var videoUrl = normalizarTexto(datos.video_url);
+  var video = videoUrl ? cachedVideoCheck(videoUrl) : videoStatusWithoutProbe('');
 
-  return unaSolaVez(claveIdem, function () {
-    return conBloqueo(function () {
-      var opciones = opcionesValidacion();
-      var veredicto = validarInscripcion(datos, opciones);
-
-      var candidato = {
-        submission_id: nuevoId('S'),
-        normalized_id_number: normalizarCedula(datos.id_number),
-        normalized_email: normalizarEmail(datos.email),
-        normalized_phone: normalizarTelefono(datos.whatsapp)
-      };
-
-      var existentes = leerHoja(HOJA.REGISTRO);
-      var dup = detectarDuplicado(candidato, existentes);
-
-      var estado = veredicto.eligibility_status;
-      if (dup.duplicate_flag) estado = ESTADO_ELEGIBILIDAD.DUPLICADO;
-      else if (dup.alerta && estado === ESTADO_ELEGIBILIDAD.APTO) estado = ESTADO_ELEGIBILIDAD.REVISION;
-
-      var notas = []
-        .concat(veredicto.errores.map(function (x) { return x.campo + ':' + x.codigo; }))
-        .concat(veredicto.avisos.map(function (x) { return x.campo + ':' + x.codigo; }));
-      if (dup.duplicate_reason) notas.push(dup.duplicate_reason);
-
-      agregarFila(HOJA.REGISTRO, {
-        submission_id: candidato.submission_id,
-        code: '',
-        created_at: ahoraISO(),
-        source: datos.source || 'web',
-        full_name: normalizarTexto(datos.full_name),
-        id_number: normalizarTexto(datos.id_number),
-        birth_date: normalizarTexto(datos.birth_date),
-        age: veredicto.edad === null ? '' : veredicto.edad,
-        neighborhood_sector: normalizarTexto(datos.neighborhood_sector),
-        residence: esVerdadero(datos.resides_in_sabaneta) ? cfg('municipio', 'Sabaneta') : 'FUERA',
-        email: normalizarTexto(datos.email),
-        whatsapp: normalizarTexto(datos.whatsapp),
-        artistic_name: normalizarTexto(datos.artistic_name),
-        discipline: normalizarTexto(datos.discipline),
-        genre_or_proposal: normalizarTexto(datos.genre_or_proposal),
-        artist_description: normalizarTexto(datos.artist_description),
-        audition_description: normalizarTexto(datos.audition_description),
-        video_url: normalizarTexto(datos.video_url),
-        technical_needs: normalizarTexto(datos.technical_needs),
-        normalized_id_number: candidato.normalized_id_number,
-        normalized_email: candidato.normalized_email,
-        normalized_phone: candidato.normalized_phone,
-        eligibility_status: estado,
-        duplicate_flag: dup.duplicate_flag,
-        duplicate_reason: dup.duplicate_reason,
-        registro_principal: dup.registro_principal,
-        validation_notes: notas.join(' | '),
-        consent_terms: esVerdadero(datos.accept_terms),
-        consent_data: esVerdadero(datos.accept_data_processing),
-        consent_whatsapp: esVerdadero(datos.accept_whatsapp_operational),
-        consent_image: esVerdadero(datos.accept_image_voice),
-        consent_version: cfg('consent_version', 'v1-PENDIENTE'),
-        availability_statement: esVerdadero(datos.availability_statement),
-        attendance_status: '',
-        audition_status: '',
-        change_status: ESTADO_CAMBIO.SIN_SOLICITUD,
-        notes: ''
-      });
-
-      registrar('participante', '', 'INSCRIPCION', candidato.submission_id, 'estado=' + estado);
-
-      return {
-        submission_id: candidato.submission_id,
-        eligibility_status: estado,
-        edad: veredicto.edad,
-        errores: veredicto.errores,
-        avisos: veredicto.avisos,
-        duplicado: dup.duplicate_flag,
-        mensaje: mensajeVeredicto(estado, veredicto, dup)
-      };
-    });
-  });
+  var result = exactlyOnce(key, function () { return registerProject(datos, video); });
+  if (result && result.ok !== false && !result.repetido) notifyReception(result.submission_id);
+  return result;
 }
 
-function mensajeVeredicto(estado, veredicto, dup) {
+function registerProject(datos, video) {
+  var options = opcionesValidacion();
+  var verdict = validarInscripcion(datos, options);
+  var mode = normalizeParticipationMode(datos.participation_mode);
+  var group = isGroupMode(mode);
+  var existing = leerHoja(HOJA.REGISTRO);
+  var submissionId = nuevoId('S');
+
+  var candidate = {
+    submission_id: submissionId,
+    normalized_id_number: normalizarCedula(datos.id_number),
+    normalized_email: normalizarEmail(datos.email),
+    normalized_phone: normalizarTelefono(datos.whatsapp)
+  };
+  var dup = detectarDuplicado(candidate, existing);
+
+  var displayName = normalizarTexto(datos.artistic_name);
+  var matchKey = group ? groupMatchKey(displayName) : '';
+  var groupMatch = matchKey
+    ? detectGroupMatch({ submission_id: submissionId, group_match_key: matchKey }, existing)
+    : { match: false, ref: '' };
+
+  var status = verdict.eligibility_status;
+  if (dup.duplicate_flag) status = ESTADO_ELEGIBILIDAD.DUPLICADO;
+  else if ((dup.alerta || groupMatch.match) && status === ESTADO_ELEGIBILIDAD.APTO) status = ESTADO_ELEGIBILIDAD.REVISION;
+
+  var groupCode = group ? formatGroupCode(nextGroupNumber(existing)) : '';
+  var notes = []
+    .concat(verdict.errores.map(function (x) { return x.campo + ':' + x.codigo; }))
+    .concat(verdict.avisos.map(function (x) { return x.campo + ':' + x.codigo; }));
+  if (dup.duplicate_reason) notes.push(dup.duplicate_reason);
+  if (groupMatch.match) notes.push('GRUPO_POSIBLE_REPETIDO:' + groupMatch.ref);
+
+  var now = ahoraISO();
+  var termsVersion = cfg('terms_version', 'PENDIENTE-DOCUMENTO-FUENTE');
+  var policyVersion = cfg('policy_version', 'v2');
+  var controller = dataControllerStamp();
+  var usesTrack = esVerdadero(datos.track_uses);
+  var genre = normalizarTexto(datos.genre_primary);
+  var source = normalizarTexto(datos.source) || 'web';
+
+  agregarFila(HOJA.REGISTRO, {
+    submission_id: submissionId,
+    code: '',
+    created_at: now,
+    source: source,
+    full_name: normalizarTexto(datos.full_name),
+    id_number: normalizarTexto(datos.id_number),
+    birth_date: normalizarTexto(datos.birth_date),
+    age: verdict.edad === null ? '' : verdict.edad,
+    neighborhood_sector: normalizarTexto(datos.neighborhood_sector),
+    residence: esVerdadero(datos.resides_in_sabaneta) ? cfg('municipio', 'Sabaneta') : 'FUERA',
+    email: normalizarTexto(datos.email),
+    whatsapp: normalizarTexto(datos.whatsapp),
+    artistic_name: displayName,
+    discipline: genre,                                   // legacy column, mirrors the main genre
+    genre_or_proposal: genre,
+    artist_description: normalizarTexto(datos.artist_description),
+    audition_description: normalizarTexto(datos.audition_description),
+    video_url: normalizarTexto(datos.video_url),
+    technical_needs: [normalizarTexto(datos.needs), normalizarTexto(datos.needs_other)].filter(Boolean).join(' | '),
+    normalized_id_number: candidate.normalized_id_number,
+    normalized_email: candidate.normalized_email,
+    normalized_phone: candidate.normalized_phone,
+    eligibility_status: status,
+    duplicate_flag: dup.duplicate_flag,
+    duplicate_reason: dup.duplicate_reason,
+    registro_principal: dup.registro_principal,
+    validation_notes: notes.join(' | '),
+    consent_terms: esVerdadero(datos.accept_terms),
+    consent_data: esVerdadero(datos.accept_data_processing),
+    consent_whatsapp: esVerdadero(datos.accept_whatsapp_operational),
+    consent_image: esVerdadero(datos.accept_image_voice),
+    consent_version: cfg('consent_version', 'v2'),
+    availability_statement: esVerdadero(datos.availability_statement),
+    attendance_status: '',
+    audition_status: '',
+    change_status: ESTADO_CAMBIO.SIN_SOLICITUD,
+    notes: '',
+    participation_mode: mode,
+    group_code: groupCode,
+    group_display_name: group ? displayName : '',
+    group_match_key: matchKey,
+    group_match_status: groupMatch.match ? 'POSIBLE_REPETIDA' : '',
+    group_match_ref: groupMatch.ref || '',
+    members_declared: group ? normalizarTexto(datos.members_declared) : '1',
+    adult_confirmation: esVerdadero(datos.adult_confirmation),
+    genre_primary: genre,
+    genre_secondary: normalizarTexto(datos.genre_secondary),
+    presentation_format: normalizarComparable(datos.presentation_format).replace(/[\s-]+/g, '_'),
+    presentation_other: normalizarTexto(datos.presentation_other),
+    needs: normalizarTexto(datos.needs),
+    needs_other: normalizarTexto(datos.needs_other),
+    own_equipment: esVerdadero(datos.own_equipment),
+    own_equipment_detail: normalizarTexto(datos.own_equipment_detail),
+    song_name: normalizarTexto(datos.song_name),
+    track_uses: usesTrack,
+    track_method: usesTrack ? normalizarComparable(datos.track_method) : '',
+    track_method_other: normalizarTexto(datos.track_method_other),
+    track_status: usesTrack ? TRACK_STATUS.PENDIENTE : TRACK_STATUS.NO_APLICA,
+    video_check_status: video ? video.status : VIDEO_STATUS.PENDIENTE,
+    video_check_detail: video ? video.detail : '',
+    video_checked_at: video && video.status !== VIDEO_STATUS.SIN_VIDEO ? now : '',
+    consent_at: now,
+    terms_version: termsVersion,
+    policy_version: policyVersion,
+    data_controller: controller,
+    capture_source: 'web:formulario-1:' + cfg('consent_version', 'v2')
+  });
+
+  if (group) {
+    var leaderStatus = MEMBER_STATUS.AUTORIZADO;
+    if (verdict.errores.some(function (e) { return e.codigo === 'EDAD'; })) leaderStatus = MEMBER_STATUS.NO_CUMPLE;
+    else if (!esVerdadero(datos.accept_terms) || !esVerdadero(datos.accept_data_processing) ||
+             !esVerdadero(datos.adult_confirmation)) leaderStatus = MEMBER_STATUS.INCOMPLETO;
+    agregarFila(HOJA.INTEGRANTES, {
+      member_id: nuevoId('M'), group_code: groupCode, project_submission_id: submissionId,
+      created_at: now, updated_at: now, source: source, is_leader: true,
+      full_name: normalizarTexto(datos.full_name), id_number: normalizarTexto(datos.id_number),
+      normalized_id_number: candidate.normalized_id_number, birth_date: normalizarTexto(datos.birth_date),
+      age: verdict.edad === null ? '' : verdict.edad, adult_confirmation: esVerdadero(datos.adult_confirmation),
+      artistic_role: normalizarTexto(datos.leader_role) || 'Lider / vocero',
+      consent_terms: esVerdadero(datos.accept_terms), consent_data: esVerdadero(datos.accept_data_processing),
+      consent_image: esVerdadero(datos.accept_image_voice), consent_at: now,
+      terms_version: termsVersion, policy_version: policyVersion, data_controller: controller,
+      capture_source: 'web:formulario-1', member_status: leaderStatus, member_alert: '',
+      notes: 'Aceptacion digital en el Formulario 1'
+    });
+  }
+
+  registrar('participante', '', 'INSCRIPCION', submissionId, 'estado=' + status + (groupCode ? ' grupo=' + groupCode : ''));
+
+  return {
+    submission_id: submissionId,
+    eligibility_status: status,
+    edad: verdict.edad,
+    errores: verdict.errores,
+    avisos: verdict.avisos,
+    duplicado: dup.duplicate_flag,
+    participation_mode: mode,
+    group_code: groupCode,
+    group_key: group ? groupAccessKey(groupCode) : '',
+    members_link: group ? membersLink(groupCode) : '',
+    group_repeated: !!groupMatch.match,
+    whatsapp_oficial: cfg('whatsapp_oficial', ''),
+    whatsapp_nombre: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución'),
+    mi_inscripcion_link: webAppUrl() + '?p=mi-inscripcion',
+    mensaje: mensajeVeredicto(status, verdict, dup, groupMatch)
+  };
+}
+
+function mensajeVeredicto(estado, veredicto, dup, groupMatch) {
+  var numero = cfg('whatsapp_oficial', '');
   if (estado === ESTADO_ELEGIBILIDAD.APTO) {
-    return 'Recibimos tu inscripcion. Si quedas dentro de los 100 cupos te enviaremos tu codigo y tu horario.';
+    return 'Recibimos tu inscripcion. La organizacion revisa cada inscripcion y asigna los ' +
+      cfgNumero('cupo_total', 100) + ' cupos en orden de inscripcion entre quienes cumplen los requisitos. ' +
+      'Si quedas dentro, recibiras tu codigo y tu horario por WhatsApp' + (numero ? ' desde el ' + numero : '') + '.';
   }
   if (estado === ESTADO_ELEGIBILIDAD.DUPLICADO) {
     return 'Ya tenemos una inscripcion registrada con este documento. Conservamos la primera; no necesitas volver a inscribirte.';
@@ -2193,86 +3318,401 @@ function mensajeVeredicto(estado, veredicto, dup) {
   if (estado === ESTADO_ELEGIBILIDAD.INCOMPLETO) {
     return 'Faltan datos obligatorios. Revisa los campos marcados y vuelve a enviar.';
   }
+  if (groupMatch && groupMatch.match) {
+    return 'Recibimos tu inscripcion. Ya existe una agrupacion con un nombre muy parecido: la organizacion ' +
+      'verificara si es el mismo proyecto y te contactara.';
+  }
   return 'Recibimos tu inscripcion y quedo en revision. Te contactaremos si necesitamos verificar algo.';
 }
 
 /**
- * Form 2. Records the request only; the new slot is decided by production,
- * never chosen by the participant.
+ * Reception e-mail, sent after the lock is released and never allowed to fail
+ * the registration. Test addresses are never mailed, and a small part of the
+ * daily Gmail quota is kept for the operators.
  */
+function notifyReception(submissionId) {
+  try {
+    if (!cfgBool('correo_confirmacion_automatico', true)) return;
+    var row = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === submissionId; })[0];
+    if (!row) return;
+    var status = normalizarComparable(row.eligibility_status);
+    if (status !== 'APTO' && status !== 'REVISION') return;
+    if (!esEmailValido(row.email) || /\.test$/i.test(normalizarEmail(row.email))) return;
+    if (MailApp.getRemainingDailyQuota() <= 10) {
+      registrar('sistema', '', 'CORREO_OMITIDO_CUOTA', submissionId, '');
+      return;
+    }
+    var extras = messageExtras(row, webAppUrl(), leerHoja(HOJA.INTEGRANTES));
+    var msg = renderizarPlantilla(plantillas().RECEPCION, row, extras);
+    MailApp.sendEmail({ to: row.email, subject: msg.asunto, body: msg.cuerpo, name: cfg('evento_nombre', 'EL BUNKER') });
+    registrar('sistema', '', 'CORREO_RECEPCION', submissionId, '');
+  } catch (e) {
+    registrar('sistema', '', 'CORREO_RECEPCION_FALLO', submissionId, e.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Group members
+// ---------------------------------------------------------------------------
+
+function findGroupProject(groupCode, rows) {
+  var code = normalizarComparable(groupCode);
+  return (rows || leerHoja(HOJA.REGISTRO)).filter(function (r) {
+    return normalizarComparable(r.group_code) === code;
+  })[0] || null;
+}
+
+/** Declared / registered / authorized counts. No personal data. */
+function groupSummary(groupCode, members) {
+  var code = normalizarComparable(groupCode);
+  var list = (members || leerHoja(HOJA.INTEGRANTES)).filter(function (m) {
+    return normalizarComparable(m.group_code) === code;
+  });
+  return {
+    registered: list.length,
+    authorized: list.filter(function (m) { return normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length,
+    list: list
+  };
+}
+
+/** Public lookup behind the members form: confirms the group without revealing anyone's data. */
+function accionConsultarAgrupacion(datos) {
+  var code = normalizarComparable(datos.group_code);
+  if (!code || !groupKeyMatches(code, datos.group_key)) {
+    return { ok: false, motivo: 'CLAVE', error: 'El codigo o la clave de la agrupacion no coinciden. Pidele el enlace completo a tu lider.' };
+  }
+  var project = findGroupProject(code);
+  if (!project) return { ok: false, error: 'No encontramos esa agrupacion.' };
+  var summary = groupSummary(code);
+  return {
+    group_code: code,
+    group_display_name: project.group_display_name || project.artistic_name,
+    members_declared: Number(project.members_declared) || '',
+    members_registered: summary.registered,
+    members_authorized: summary.authorized,
+    abierto: cfgBool('integrantes_abierto', true),
+    firma_obligatoria: cfgBool('firma_integrantes', true)
+  };
+}
+
+/**
+ * One member's own authorization. The same person sending again (same ID
+ * number in the same group) updates their row instead of adding a new one.
+ */
+function accionRegistrarIntegrante(datos) {
+  datos = datos || {};
+  if (!cfgBool('integrantes_abierto', true)) {
+    return { ok: false, cerrado: true, error: 'El registro de integrantes esta cerrado.' };
+  }
+  var code = normalizarComparable(datos.group_code);
+  if (!code || !groupKeyMatches(code, datos.group_key)) {
+    registrar('anonimo', '', 'INTEGRANTE_CLAVE_INVALIDA', code, '');
+    return { ok: false, motivo: 'CLAVE', error: 'El codigo o la clave de la agrupacion no coinciden. Pidele el enlace completo a tu lider.' };
+  }
+  var key = 'integrante:' + (datos.client_submission_id || Utilities.getUuid());
+  var replay = replayIfRepeated(key);
+  if (replay) return replay;
+  var blocked = guardSubmission(datos, 'integrante');
+  if (blocked) return blocked;
+
+  var validation = validateMember(datos, {
+    edad_minima: cfgNumero('integrantes_edad_minima', 18),
+    fecha_evento: cfgFecha('evento_fecha', '2026-10-23'),
+    firma_obligatoria: cfgBool('firma_integrantes', true)
+  });
+
+  var norm = normalizarCedula(datos.id_number);
+  var before = groupSummary(code).list.filter(function (m) { return m.normalized_id_number === norm; })[0];
+  var memberId = before ? before.member_id : nuevoId('M');
+
+  var signature = null;
+  if (normalizarTexto(datos.signature_png)) {
+    signature = storeSignature(code, memberId, datos.signature_png);            // Drive, outside the lock
+    if (!signature.ok) return { ok: false, error: signature.error };
+  }
+
+  return exactlyOnce(key, function () {
+    var projects = leerHoja(HOJA.REGISTRO);
+    var project = findGroupProject(code, projects);
+    if (!project) return { ok: false, error: 'No encontramos esa agrupacion.' };
+    var allMembers = leerHoja(HOJA.INTEGRANTES);
+    var summary = groupSummary(code, allMembers);
+    var existing = summary.list.filter(function (m) { return m.normalized_id_number === norm; })[0];
+
+    var alerts = [];
+    allMembers.forEach(function (m) {
+      if (m.normalized_id_number === norm && normalizarComparable(m.group_code) !== code) {
+        alerts.push('TAMBIEN_EN_' + m.group_code);
+      }
+    });
+    projects.forEach(function (r) {
+      if (r.submission_id !== project.submission_id && normalizarCedula(r.normalized_id_number || r.id_number) === norm) {
+        alerts.push('TAMBIEN_INSCRITO_' + (r.code || r.submission_id));
+      }
+    });
+    var registeredAfter = summary.registered + (existing ? 0 : 1);
+    var declared = Number(project.members_declared) || 0;
+    if (declared && registeredAfter > declared) alerts.push('SUPERA_INTEGRANTES_DECLARADOS');
+
+    var now = ahoraISO();
+    var row = {
+      group_code: code, project_submission_id: project.submission_id, updated_at: now,
+      source: normalizarTexto(datos.source) || 'web', is_leader: existing ? esVerdadero(existing.is_leader) : false,
+      full_name: normalizarTexto(datos.full_name), id_number: normalizarTexto(datos.id_number),
+      normalized_id_number: norm, birth_date: normalizarTexto(datos.birth_date),
+      age: validation.age === null ? '' : validation.age,
+      adult_confirmation: esVerdadero(datos.adult_confirmation), artistic_role: normalizarTexto(datos.artistic_role),
+      consent_terms: esVerdadero(datos.accept_terms), consent_data: esVerdadero(datos.accept_data_processing),
+      consent_image: esVerdadero(datos.accept_image_voice), consent_at: now,
+      terms_version: cfg('terms_version', 'PENDIENTE-DOCUMENTO-FUENTE'), policy_version: cfg('policy_version', 'v2'),
+      data_controller: dataControllerStamp(), capture_source: 'web:formulario-integrantes',
+      member_status: validation.status, member_alert: alerts.join(' | ')
+    };
+    if (signature) {
+      row.signature_file_id = signature.file_id;
+      row.signature_sha256 = signature.sha256;
+      row.signature_at = now;
+    }
+
+    if (existing) {
+      actualizarFila(HOJA.INTEGRANTES, existing._fila, row);
+      registrar('integrante', '', 'INTEGRANTE_ACTUALIZADO', code, existing.member_id + ' estado=' + validation.status);
+    } else {
+      row.member_id = memberId;
+      row.created_at = now;
+      agregarFila(HOJA.INTEGRANTES, row);
+      registrar('integrante', '', 'INTEGRANTE', code, memberId + ' estado=' + validation.status);
+    }
+
+    var after = groupSummary(code);
+    return {
+      member_id: existing ? existing.member_id : memberId,
+      member_status: validation.status,
+      actualizado: !!existing,
+      errores: validation.errors,
+      group: {
+        code: code,
+        name: project.group_display_name || project.artistic_name,
+        declared: declared,
+        registered: after.registered,
+        authorized: after.authorized
+      },
+      mensaje: validation.status === MEMBER_STATUS.AUTORIZADO
+        ? 'Tu autorizacion quedo registrada. Ya van ' + after.authorized + ' de ' + (declared || after.registered) + ' integrantes autorizados.'
+        : (validation.status === MEMBER_STATUS.NO_CUMPLE
+            ? 'Cada integrante debe ser mayor de edad el dia del evento. Tu registro quedo guardado y la organizacion lo revisara.'
+            : 'Faltan datos o autorizaciones. Corrige lo marcado y envia de nuevo.')
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// "Mi inscripción": status, group link recovery and backing-track upload
+// ---------------------------------------------------------------------------
+
+/** Finds a project by code or receipt and proves identity with the ID number. */
+function findOwnProject(datos) {
+  var doc = normalizarCedula(datos.id_number);
+  if (!doc) return null;
+  var code = normalizarComparable(datos.code);
+  var receipt = normalizarComparable(datos.submission_id);
+  var rows = leerHoja(HOJA.REGISTRO);
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var byCode = code && normalizarComparable(r.code) === code;
+    var byReceipt = receipt && normalizarComparable(r.submission_id) === receipt;
+    if ((byCode || byReceipt) && normalizarCedula(r.normalized_id_number || r.id_number) === doc) return r;
+  }
+  return null;
+}
+
+function friendlyStatus(r) {
+  var e = normalizarComparable(r.eligibility_status);
+  if (normalizarTexto(r.code)) return 'Tienes cupo. Este es tu codigo y tu horario.';
+  if (e === 'APTO') return 'Tu inscripcion cumple los requisitos y esta en espera de la asignacion de cupos.';
+  if (e === 'REVISION') return 'Tu inscripcion esta en revision por la organizacion.';
+  if (e === 'INCOMPLETO') return 'A tu inscripcion le faltan datos obligatorios: inscribete de nuevo con los datos completos.';
+  if (e === 'NO_CUMPLE') return 'Tu inscripcion no cumple los requisitos de la convocatoria.';
+  if (e === 'DUPLICADO') return 'Esta inscripcion esta duplicada: vale la primera que enviaste.';
+  return 'Inscripcion recibida.';
+}
+
+function accionMiInscripcion(datos) {
+  var blocked = guardSubmission(datos, 'consulta');
+  if (blocked) return blocked;
+  var r = findOwnProject(datos);
+  if (!r) return { ok: false, error: 'No encontramos una inscripcion con esos datos. Revisa tu documento y tu codigo o comprobante.' };
+
+  var group = null;
+  if (r.group_code) {
+    var summary = groupSummary(r.group_code);
+    group = {
+      code: r.group_code,
+      key: groupAccessKey(r.group_code),
+      link: membersLink(r.group_code),
+      declared: Number(r.members_declared) || '',
+      registered: summary.registered,
+      authorized: summary.authorized,
+      members: summary.list.map(function (m) {
+        var parts = normalizarTexto(m.full_name).split(' ');
+        return {
+          name: parts[0] + (parts.length > 1 ? ' ' + parts[parts.length - 1].charAt(0) + '.' : ''),
+          role: m.artistic_role, status: m.member_status, leader: esVerdadero(m.is_leader)
+        };
+      })
+    };
+  }
+
+  return {
+    submission_id: r.submission_id,
+    eligibility_status: r.eligibility_status,
+    estado_texto: friendlyStatus(r),
+    artistic_name: r.artistic_name,
+    participation_mode: r.participation_mode || 'SOLISTA',
+    code: r.code || '',
+    bloque: r.final_block || r.original_block || '',
+    hora_llegada: r.arrival_time ? humanTime(r.arrival_time) : '',
+    hora_audicion: (r.final_time || r.original_time) ? humanTime(r.final_time || r.original_time) : '',
+    fecha_texto: humanDate(cfgFecha('evento_fecha', '2026-10-23')),
+    lugar: cfg('evento_sede', ''),
+    change_status: r.change_status || ESTADO_CAMBIO.SIN_SOLICITUD,
+    song_name: r.song_name || '',
+    track: {
+      uses: esVerdadero(r.track_uses),
+      method: r.track_method || '',
+      status: r.track_status || (esVerdadero(r.track_uses) ? TRACK_STATUS.PENDIENTE : TRACK_STATUS.NO_APLICA),
+      file_name: r.track_file_name || '',
+      updated_at: r.track_updated_at || '',
+      can_upload: !!normalizarTexto(r.code) && cfgBool('pistas_abiertas', true),
+      max_mb: cfgNumero('pista_max_mb', 15),
+      formats: cfg('pista_formatos', 'mp3,wav,m4a,aac,ogg,flac')
+    },
+    video: { status: r.video_check_status || '', detail: r.video_check_detail || '' },
+    group: group,
+    whatsapp_oficial: cfg('whatsapp_oficial', ''),
+    whatsapp_nombre: cfg('whatsapp_oficial_nombre', '')
+  };
+}
+
+/**
+ * Backing-track upload (method 1 of the brief: file received before the day).
+ * Only after a B-XXX code exists, and only by whoever holds the code AND the
+ * ID number of the registration.
+ */
+function accionSubirPista(datos) {
+  datos = datos || {};
+  if (!cfgBool('pistas_abiertas', true)) return { ok: false, cerrado: true, error: 'La recepcion de pistas esta cerrada.' };
+  var key = 'pista:' + (datos.client_submission_id || Utilities.getUuid());
+  var replay = replayIfRepeated(key);
+  if (replay) return replay;
+  var blocked = guardSubmission(datos, 'pista');
+  if (blocked) return blocked;
+
+  var row = findOwnProject({ id_number: datos.id_number, code: datos.code });
+  if (!row) return { ok: false, error: 'El codigo y el documento no coinciden con una inscripcion.' };
+  if (!normalizarTexto(row.code)) {
+    return { ok: false, error: 'La pista se envia despues de recibir tu codigo B-XXX.' };
+  }
+  var stored = storeTrack(row, datos.file_name, datos.file_base64, datos.song_name);   // Drive, outside the lock
+  if (!stored.ok) {
+    registrar('participante', '', 'PISTA_RECHAZADA', row.code, stored.error);
+    return stored;
+  }
+  return exactlyOnce(key, function () { return recordTrack(row.code, stored, datos.song_name, 'ARCHIVO', 'participante'); });
+}
+
+/** Writes the stored file into REGISTRO. Shared by the participant and the admin upload. */
+function recordTrack(code, stored, songName, method, actor) {
+  var fresh = buscarPorCodigo(code);
+  var now = ahoraISO();
+  actualizarFila(HOJA.REGISTRO, fresh._fila, {
+    track_uses: true,
+    track_method: normalizarTexto(fresh.track_method) || method,
+    track_status: TRACK_STATUS.RECIBIDA,
+    track_file_id: stored.file_id,
+    track_file_name: stored.file_name,
+    track_updated_at: now,
+    song_name: normalizarTexto(songName) || fresh.song_name || ''
+  });
+  registrar(actor, '', 'PISTA_RECIBIDA', code, stored.file_name + ' (' + stored.bytes + ' bytes)');
+  return { code: code, track_status: TRACK_STATUS.RECIBIDA, track_file_name: stored.file_name, bytes: stored.bytes,
+           mensaje: 'Recibimos tu pista como ' + stored.file_name + '. El dia del evento lleva tambien una copia en USB.' };
+}
+
+// ---------------------------------------------------------------------------
+// Live video-link check (called while the person fills Form 1)
+// ---------------------------------------------------------------------------
+
+function accionVerificarVideo(datos) {
+  var url = normalizarTexto(datos.video_url);
+  if (!url) return { status: VIDEO_STATUS.SIN_VIDEO, detail: '' };
+  if (!cfgBool('verificar_videos', true)) return { status: VIDEO_STATUS.PENDIENTE, detail: 'Se revisara despues.' };
+  var cache = CacheService.getScriptCache();
+  var minuteKey = 'rl:video:' + Math.floor(Date.now() / 60000);
+  var n = Number(cache.get(minuteKey) || 0) + 1;
+  cache.put(minuteKey, String(n), 120);
+  if (n > 60) return { status: VIDEO_STATUS.PENDIENTE, detail: 'Lo revisaremos despues de tu envio.' };
+  return checkVideoUrl(url);
+}
+
+// ---------------------------------------------------------------------------
+// Form 2 - schedule change
+// ---------------------------------------------------------------------------
+
+/** Records the request only; the new slot is decided by production, never chosen by the participant. */
 function accionSolicitarCambio(datos) {
   if (!cfgBool('cambios_abiertos', true)) {
     return { ok: false, error: 'El plazo para solicitar cambios de horario ya cerro.', cerrado: true };
   }
+  var key = 'cambio:' + normalizarComparable(datos.participant_code) + ':' + (datos.client_submission_id || '');
+  var replay = replayIfRepeated(key);
+  if (replay) return replay;
+  var blocked = guardSubmission(datos, 'cambio');
+  if (blocked) return blocked;
 
-  var claveIdem = 'cambio:' + normalizarComparable(datos.participant_code) + ':' + (datos.client_submission_id || '');
-
-  return unaSolaVez(claveIdem, function () {
-    return conBloqueo(function () {
-      var registro = buscarPorCodigo(datos.participant_code);
-      var permiso = puedeSolicitarCambio(registro, datos, {
-        ahora: ahoraISO(),
-        cierre_cambios: cfg('cierre_cambios', '')
-      });
-
-      if (!permiso.permitido) {
-        return { ok: false, error: permiso.mensaje, motivo: permiso.motivo };
-      }
-
-      // Guard against someone else guessing a code: the name must match.
-      if (normalizarComparable(datos.full_name) !== normalizarComparable(registro.full_name)) {
-        registrar('participante', '', 'CAMBIO_NOMBRE_NO_COINCIDE', datos.participant_code, '');
-        return { ok: false, error: 'El nombre no coincide con el registrado para ese codigo.', motivo: 'NOMBRE_NO_COINCIDE' };
-      }
-
-      var solicitudId = nuevoId('CB');
-      var horario = horarioDeCodigo(registro.code, agendaConfigurada());
-
-      agregarFila(HOJA.CAMBIOS, {
-        solicitud_id: solicitudId,
-        at: ahoraISO(),
-        code: registro.code,
-        full_name: registro.full_name,
-        original_block: registro.original_block || (horario ? horario.block_id : ''),
-        original_time: registro.original_time || (horario ? horario.audition_time : ''),
-        can_attend_original: 'FALSE',
-        reason_short: String(datos.reason_short || '').slice(0, 400),
-        contact: normalizarTexto(datos.contact),
-        acceptance: esVerdadero(datos.acceptance) ? 'TRUE' : 'FALSE',
-        estado: ESTADO_CAMBIO.PENDIENTE,
-        nuevo_bloque: '', nueva_hora: '', resuelto_at: '', resuelto_by: '', observacion: ''
-      });
-
-      actualizarFila(HOJA.REGISTRO, registro._fila, {
-        change_requested: 'TRUE',
-        change_status: ESTADO_CAMBIO.PENDIENTE
-      });
-
-      registrar('participante', '', 'SOLICITUD_CAMBIO', registro.code, solicitudId);
-
-      return {
-        solicitud_id: solicitudId,
-        estado: ESTADO_CAMBIO.PENDIENTE,
-        mensaje: 'Registramos tu solicitud. Produccion te confirmara por WhatsApp o correo si es APROBADA o NO APROBADA. ' +
-                 'Mientras tanto tu horario original sigue vigente.'
-      };
+  return exactlyOnce(key, function () {
+    var registro = buscarPorCodigo(datos.participant_code);
+    var permiso = puedeSolicitarCambio(registro, datos, {
+      ahora: new Date().toISOString(),
+      cierre_cambios: cfg('cierre_cambios', '')
     });
+    if (!permiso.permitido) return { ok: false, error: permiso.mensaje, motivo: permiso.motivo };
+
+    // Guard against someone else guessing a code: the name must match.
+    if (normalizarComparable(datos.full_name) !== normalizarComparable(registro.full_name)) {
+      registrar('participante', '', 'CAMBIO_NOMBRE_NO_COINCIDE', datos.participant_code, '');
+      return { ok: false, error: 'El nombre no coincide con el registrado para ese codigo.', motivo: 'NOMBRE_NO_COINCIDE' };
+    }
+
+    var solicitudId = nuevoId('CB');
+    var horario = horarioDeCodigo(registro.code, agendaConfigurada());
+    agregarFila(HOJA.CAMBIOS, {
+      solicitud_id: solicitudId, at: ahoraISO(), code: registro.code, full_name: registro.full_name,
+      original_block: registro.original_block || (horario ? horario.block_id : ''),
+      original_time: registro.original_time || (horario ? horario.audition_time : ''),
+      can_attend_original: 'FALSE', reason_short: String(datos.reason_short || '').slice(0, 400),
+      contact: normalizarTexto(datos.contact), acceptance: esVerdadero(datos.acceptance) ? 'TRUE' : 'FALSE',
+      estado: ESTADO_CAMBIO.PENDIENTE, nuevo_bloque: '', nueva_hora: '', resuelto_at: '', resuelto_by: '', observacion: ''
+    });
+    actualizarFila(HOJA.REGISTRO, registro._fila, { change_requested: 'TRUE', change_status: ESTADO_CAMBIO.PENDIENTE });
+    registrar('participante', '', 'SOLICITUD_CAMBIO', registro.code, solicitudId);
+    return {
+      solicitud_id: solicitudId, estado: ESTADO_CAMBIO.PENDIENTE,
+      mensaje: 'Registramos tu solicitud. Produccion te confirmara por WhatsApp o correo si es APROBADA o NO APROBADA. ' +
+               'Mientras tanto tu horario original sigue vigente.'
+    };
   });
 }
 
-/** Lets a participant check their own code/slot without exposing anybody else. */
+/** Kept for compatibility with iteration-1 links: status by code or ID number. */
 function accionConsultarEstado(datos) {
   var registro = null;
   if (datos.code) registro = buscarPorCodigo(datos.code);
   else if (datos.id_number) registro = buscarPorCedula(datos.id_number);
-
   if (!registro) return { ok: false, error: 'No encontramos un registro con esos datos.' };
-
-  // Identity check: knowing a code is not enough to read someone's data.
   if (normalizarCedula(datos.id_number) !== normalizarCedula(registro.id_number)) {
     return { ok: false, error: 'Los datos no coinciden. Verifica tu documento y tu codigo.' };
   }
-
   return {
     code: registro.code || '',
     eligibility_status: registro.eligibility_status,
@@ -2290,31 +3730,58 @@ function accionAgendaPublica() {
 
 /** Only the values meant to be public; the CONFIG sheet also holds internals. */
 function accionConfigPublica() {
+  var fecha = cfgFecha('evento_fecha', '2026-10-23');
+  var inicio = cfgHora('evento_hora_inicio', '15:00');
+  var fin = cfgHora('evento_hora_fin', '21:00');
   return {
     evento: {
-      nombre: cfg('evento_nombre', 'EL BUNKER'),
-      fecha: cfg('evento_fecha', ''),
-      hora_inicio: cfg('evento_hora_inicio', ''),
-      hora_fin: cfg('evento_hora_fin', ''),
+      nombre: cfg('evento_nombre', 'EL BÚNKER'),
+      fecha: fecha,
+      fecha_texto: humanDate(fecha),
+      hora_inicio: inicio,
+      hora_fin: fin,
+      hora_inicio_texto: humanTime(inicio),
+      hora_fin_texto: humanTime(fin),
       sede: cfg('evento_sede', 'PENDIENTE DE COMPLETAR'),
+      municipio_sede: cfg('evento_municipio_sede', 'Sabaneta, Antioquia'),
       municipio: cfg('municipio', 'Sabaneta'),
       edad_minima: cfgNumero('edad_minima', 18),
-      edad_maxima: cfgNumero('edad_maxima', 28),
+      edad_maxima: cfgNumero('edad_maxima', 30),
       duracion_audicion: cfgNumero('duracion_audicion_min', 3),
       cupo: cfgNumero('cupo_total', 100),
-      top: cfgNumero('top_seleccionados', 7)
+      top: cfgNumero('top_seleccionados', 8),
+      jurados: cfgNumero('jurados', 3),
+      integrantes_max: cfgNumero('integrantes_max', 15)
     },
     legal: {
       legal_name: cfg('legal_name', 'PENDIENTE DE COMPLETAR'),
+      nit: cfg('nit', 'PENDIENTE DE COMPLETAR'),
+      legal_address: cfg('legal_address', 'PENDIENTE DE COMPLETAR'),
       data_protection_email: cfg('data_protection_email', 'PENDIENTE DE COMPLETAR'),
       institutional_phone: cfg('institutional_phone', 'PENDIENTE DE COMPLETAR'),
       terms_url: cfg('terms_url', ''),
       privacy_policy_url: cfg('privacy_policy_url', ''),
-      consent_version: cfg('consent_version', 'v1-PENDIENTE')
+      terms_version: cfg('terms_version', 'PENDIENTE-DOCUMENTO-FUENTE'),
+      policy_version: cfg('policy_version', 'v2'),
+      consent_version: cfg('consent_version', 'v2')
+    },
+    contacto: {
+      whatsapp_oficial: cfg('whatsapp_oficial', ''),
+      whatsapp_nombre: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución'),
+      sitio_url: cfg('sitio_url', '')
+    },
+    formularios: {
+      pista_max_mb: cfgNumero('pista_max_mb', 15),
+      pista_formatos: cfg('pista_formatos', 'mp3,wav,m4a,aac,ogg,flac'),
+      verificar_videos: cfgBool('verificar_videos', true),
+      firma_integrantes: cfgBool('firma_integrantes', true),
+      exigir_video: cfgBool('exigir_video', false)
     },
     entorno: entorno(),
     abierto: cfgBool('inscripciones_abiertas', true),
-    cambios_abiertos: cfgBool('cambios_abiertos', true)
+    cambios_abiertos: cfgBool('cambios_abiertos', true),
+    integrantes_abierto: cfgBool('integrantes_abierto', true),
+    pistas_abiertas: cfgBool('pistas_abiertas', true)
   };
 }
 
@@ -2327,44 +3794,86 @@ function accionConfigPublica() {
  * Everything a non-technical coordinator needs, with no SQL and no code edits.
  */
 
-function accionListarRegistro(datos, sesion) {
-  var filas = leerHoja(HOJA.REGISTRO);
+/** Fields the logistics table shows. Personal data stays out of the direction view. */
+function registryRowView(r) {
+  return {
+    fila: r._fila, submission_id: r.submission_id, code: r.code,
+    created_at: r.created_at, full_name: r.full_name, id_number: r.id_number,
+    age: r.age, neighborhood_sector: r.neighborhood_sector, email: r.email,
+    whatsapp: r.whatsapp, artistic_name: r.artistic_name,
+    participation_mode: r.participation_mode || (r.discipline ? 'SOLISTA' : ''),
+    genre_primary: projectGenre(r), members_declared: r.members_declared,
+    group_code: r.group_code, group_match_status: r.group_match_status, group_match_ref: r.group_match_ref,
+    video_url: r.video_url, video_check_status: r.video_check_status, video_check_detail: r.video_check_detail,
+    track_status: r.track_status, eligibility_status: r.eligibility_status,
+    eligibility_override: r.eligibility_override,
+    duplicate_flag: r.duplicate_flag, duplicate_reason: r.duplicate_reason,
+    validation_notes: r.validation_notes,
+    original_block: r.original_block, original_time: r.original_time,
+    final_block: r.final_block, final_time: r.final_time,
+    change_status: r.change_status, attendance_status: r.attendance_status,
+    consent_whatsapp: r.consent_whatsapp, consent_image: r.consent_image,
+    terms_version: r.terms_version, legacy: !r.participation_mode
+  };
+}
+
+/** Main genre, falling back to the iteration-1 "discipline" for older rows. */
+function projectGenre(r) {
+  return normalizarTexto(r.genre_primary) || normalizarTexto(r.discipline);
+}
+
+function filterRegistry(filas, datos) {
   var filtro = normalizarComparable(datos.filtro || '');
   var busqueda = normalizarComparable(datos.q || '');
-
-  var vista = filas.filter(function (r) {
-    if (filtro && filtro !== 'TODOS' && normalizarComparable(r.eligibility_status) !== filtro) return false;
+  return filas.filter(function (r) {
+    if (filtro && filtro !== 'TODOS') {
+      if (filtro === 'AGRUPACIONES') { if (!r.group_code) return false; }
+      else if (filtro === 'CON_CODIGO') { if (!normalizarTexto(r.code)) return false; }
+      else if (normalizarComparable(r.eligibility_status) !== filtro) return false;
+    }
     if (!busqueda) return true;
     return normalizarComparable(r.full_name).indexOf(busqueda) !== -1 ||
            normalizarComparable(r.code).indexOf(busqueda) !== -1 ||
-           normalizarCedula(r.id_number).indexOf(normalizarCedula(datos.q)) !== -1 ||
+           normalizarComparable(r.group_code).indexOf(busqueda) !== -1 ||
+           (normalizarCedula(datos.q) && normalizarCedula(r.id_number).indexOf(normalizarCedula(datos.q)) !== -1) ||
            normalizarComparable(r.artistic_name).indexOf(busqueda) !== -1;
   });
+}
 
+function accionListarRegistro(datos) {
+  var filas = leerHoja(HOJA.REGISTRO);
+  var vista = filterRegistry(filas, datos);
+  return {
+    total: filas.length,
+    mostrados: vista.length,
+    resumen: resumenElegibilidad(filas),
+    filas: vista.map(registryRowView)
+  };
+}
+
+/** Same list for the direction role, with ID numbers, e-mails and phones masked. */
+function accionListarRegistroEnmascarado(datos) {
+  var filas = leerHoja(HOJA.REGISTRO);
+  var vista = filterRegistry(filas, { filtro: datos.filtro, q: normalizarCedula(datos.q) ? '' : datos.q });
   return {
     total: filas.length,
     mostrados: vista.length,
     resumen: resumenElegibilidad(filas),
     filas: vista.map(function (r) {
-      return {
-        fila: r._fila, submission_id: r.submission_id, code: r.code,
-        created_at: r.created_at, full_name: r.full_name, id_number: r.id_number,
-        age: r.age, neighborhood_sector: r.neighborhood_sector, email: r.email,
-        whatsapp: r.whatsapp, artistic_name: r.artistic_name, discipline: r.discipline,
-        video_url: r.video_url, eligibility_status: r.eligibility_status,
-        duplicate_flag: r.duplicate_flag, duplicate_reason: r.duplicate_reason,
-        validation_notes: r.validation_notes,
-        original_block: r.original_block, original_time: r.original_time,
-        final_block: r.final_block, final_time: r.final_time,
-        change_status: r.change_status, attendance_status: r.attendance_status
-      };
+      var v = registryRowView(r);
+      v.id_number = maskIdNumber(r.id_number);
+      v.email = maskEmail(r.email);
+      v.whatsapp = maskPhone(r.whatsapp);
+      delete v.validation_notes;
+      delete v.video_url;
+      return v;
     })
   };
 }
 
 function resumenElegibilidad(filas) {
   var r = { total: filas.length, apto: 0, incompleto: 0, no_cumple: 0, revision: 0,
-            duplicado: 0, con_codigo: 0, unicos: 0 };
+            duplicado: 0, con_codigo: 0, unicos: 0, agrupaciones: 0, duos: 0, solistas: 0 };
   var cedulas = {};
   filas.forEach(function (f) {
     var e = normalizarComparable(f.eligibility_status);
@@ -2374,99 +3883,132 @@ function resumenElegibilidad(filas) {
     else if (e === 'REVISION') r.revision++;
     else if (e === 'DUPLICADO') r.duplicado++;
     if (normalizarTexto(f.code)) r.con_codigo++;
+    var mode = normalizeParticipationMode(f.participation_mode) || 'SOLISTA';
+    if (mode === 'AGRUPACION') r.agrupaciones++; else if (mode === 'DUO') r.duos++; else r.solistas++;
     var c = normalizarCedula(f.id_number);
     if (c) cedulas[c] = true;
   });
   r.unicos = Object.keys(cedulas).length;
+  r.validos = r.apto + r.revision;
   return r;
 }
 
-/** Re-runs validation over every row, e.g. after changing the age range in CONFIG. */
+/** A stored REGISTRO row, shaped back into what validarInscripcion reads. */
+function rowAsSubmission(r) {
+  return {
+    full_name: r.full_name, id_number: r.id_number, birth_date: r.birth_date,
+    neighborhood_sector: r.neighborhood_sector,
+    resides_in_sabaneta: normalizarTexto(r.residence) === '' ? '' : (normalizarComparable(r.residence) === 'FUERA' ? 'NO' : 'SI'),
+    email: r.email, whatsapp: r.whatsapp, participation_mode: r.participation_mode,
+    artistic_name: r.artistic_name, members_declared: r.members_declared,
+    genre_primary: r.genre_primary, audition_description: r.audition_description,
+    presentation_format: r.presentation_format, presentation_other: r.presentation_other,
+    own_equipment: r.own_equipment, own_equipment_detail: r.own_equipment_detail,
+    track_uses: r.track_uses, track_method: r.track_method, track_method_other: r.track_method_other,
+    video_url: r.video_url, adult_confirmation: r.adult_confirmation,
+    availability_statement: r.availability_statement,
+    accept_terms: r.consent_terms, accept_data_processing: r.consent_data
+  };
+}
+
+/**
+ * Re-runs validation, duplicate and group detection over every row, e.g. after
+ * changing the age range in CONFIG. A decision the operator took by hand
+ * (eligibility_override) is kept; an issued code is never stripped.
+ */
 function accionRevalidarTodo(datos, sesion) {
   return conBloqueo(function () {
     invalidarCacheConfig();
     var opciones = opcionesValidacion();
     var filas = leerHoja(HOJA.REGISTRO);
-    var vistos = [];
-    var actualizaciones = [];
+    var seen = [];
+    var updates = [];
 
     filas.forEach(function (r) {
-      var veredicto = validarInscripcion({
-        full_name: r.full_name, id_number: r.id_number, birth_date: r.birth_date,
-        neighborhood_sector: r.neighborhood_sector,
-        resides_in_sabaneta: normalizarComparable(r.residence) !== 'FUERA' && normalizarTexto(r.residence) !== '',
-        email: r.email, whatsapp: r.whatsapp, discipline: r.discipline,
-        audition_description: r.audition_description, video_url: r.video_url,
-        availability_statement: r.availability_statement,
-        accept_terms: r.consent_terms, accept_data_processing: r.consent_data
-      }, opciones);
-
-      var candidato = {
+      var verdict = validarInscripcion(rowAsSubmission(r), opciones);
+      var candidate = {
         submission_id: r.submission_id,
         normalized_id_number: normalizarCedula(r.id_number),
         normalized_email: normalizarEmail(r.email),
-        normalized_phone: normalizarTelefono(r.whatsapp)
+        normalized_phone: normalizarTelefono(r.whatsapp),
+        participation_mode: r.participation_mode,
+        group_match_key: r.group_match_key || (isGroupMode(r.participation_mode) ? groupMatchKey(r.artistic_name) : ''),
+        group_display_name: r.group_display_name
       };
-      var dup = detectarDuplicado(candidato, vistos);
-      vistos.push(candidato);
+      var dup = detectarDuplicado(candidate, seen);
+      var matchStatus = normalizarComparable(r.group_match_status);
+      var gm = (candidate.group_match_key && matchStatus !== 'CONFIRMADA_DISTINTA')
+        ? detectGroupMatch(candidate, seen) : { match: false };
+      seen.push(candidate);
 
-      var estado = veredicto.eligibility_status;
-      if (dup.duplicate_flag) estado = ESTADO_ELEGIBILIDAD.DUPLICADO;
-      else if (dup.alerta && estado === ESTADO_ELEGIBILIDAD.APTO) estado = ESTADO_ELEGIBILIDAD.REVISION;
+      var status = verdict.eligibility_status;
+      if (matchStatus === 'CONFIRMADA_MISMA' || dup.duplicate_flag) status = ESTADO_ELEGIBILIDAD.DUPLICADO;
+      else if ((dup.alerta || gm.match) && status === ESTADO_ELEGIBILIDAD.APTO) status = ESTADO_ELEGIBILIDAD.REVISION;
 
-      // A row that already holds a code keeps its seat: re-validation informs,
-      // it does not retroactively strip an issued code.
-      if (normalizarTexto(r.code) && estado === ESTADO_ELEGIBILIDAD.DUPLICADO) {
-        estado = ESTADO_ELEGIBILIDAD.REVISION;
+      var notes = verdict.errores.map(function (x) { return x.campo + ':' + x.codigo; });
+      var override = normalizarComparable(r.eligibility_override);
+      if (override && ESTADO_ELEGIBILIDAD[override]) {
+        if (override !== status) notes.push('DECISION_MANUAL(' + override + ') sobre regla(' + status + ')');
+        status = override;
       }
+      // A row that already holds a code keeps its seat: re-validation informs, it does not strip.
+      if (normalizarTexto(r.code) && status === ESTADO_ELEGIBILIDAD.DUPLICADO) status = ESTADO_ELEGIBILIDAD.REVISION;
 
-      actualizaciones.push({
+      updates.push({
         fila: r._fila,
         cambios: {
-          age: veredicto.edad === null ? '' : veredicto.edad,
-          eligibility_status: estado,
-          duplicate_flag: dup.duplicate_flag,
-          duplicate_reason: dup.duplicate_reason,
-          registro_principal: dup.registro_principal,
-          normalized_id_number: candidato.normalized_id_number,
-          normalized_email: candidato.normalized_email,
-          normalized_phone: candidato.normalized_phone,
-          validation_notes: veredicto.errores.map(function (x) { return x.campo + ':' + x.codigo; }).join(' | ')
+          age: verdict.edad === null ? '' : verdict.edad,
+          eligibility_status: status,
+          duplicate_flag: dup.duplicate_flag || matchStatus === 'CONFIRMADA_MISMA',
+          duplicate_reason: matchStatus === 'CONFIRMADA_MISMA' ? 'GRUPO_REPETIDO' : dup.duplicate_reason,
+          registro_principal: matchStatus === 'CONFIRMADA_MISMA' ? r.group_match_ref : dup.registro_principal,
+          normalized_id_number: candidate.normalized_id_number,
+          normalized_email: candidate.normalized_email,
+          normalized_phone: candidate.normalized_phone,
+          group_match_key: candidate.group_match_key,
+          group_match_status: matchStatus || (gm.match ? 'POSIBLE_REPETIDA' : ''),
+          group_match_ref: r.group_match_ref || (gm.match ? gm.ref : ''),
+          validation_notes: notes.join(' | ')
         }
       });
     });
 
-    actualizarFilasEnLote(HOJA.REGISTRO, actualizaciones);
+    actualizarFilasEnLote(HOJA.REGISTRO, updates);
     registrar(sesion.alias, sesion.rol, 'REVALIDAR_TODO', '', filas.length + ' filas');
     return { revalidados: filas.length, resumen: resumenElegibilidad(leerHoja(HOJA.REGISTRO)) };
   });
 }
 
-/** Manual override by logistics, always logged with who and why. */
+/** Manual decision by logistics, always logged with who and why, and kept by later re-validations. */
 function accionMarcarElegibilidad(datos, sesion) {
   return conBloqueo(function () {
     var registro = datos.submission_id
       ? leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === datos.submission_id; })[0]
       : buscarPorCodigo(datos.code);
     if (!registro) return { ok: false, error: 'Registro no encontrado.' };
+    if (!normalizarTexto(datos.motivo)) return { ok: false, error: 'Escribe el motivo: queda en la bitacora.' };
 
     var nuevo = normalizarComparable(datos.eligibility_status);
     if (!ESTADO_ELEGIBILIDAD[nuevo]) return { ok: false, error: 'Estado de elegibilidad invalido: ' + datos.eligibility_status };
 
     actualizarFila(HOJA.REGISTRO, registro._fila, {
       eligibility_status: nuevo,
-      notes: [registro.notes, datos.motivo ? '[' + ahoraISO() + ' ' + sesion.alias + '] ' + datos.motivo : '']
+      eligibility_override: nuevo,
+      override_by: sesion.alias,
+      override_at: ahoraISO(),
+      notes: [registro.notes, '[' + ahoraISO() + ' ' + sesion.alias + '] ' + nuevo + ': ' + datos.motivo]
         .filter(Boolean).join(' || ')
     });
     registrar(sesion.alias, sesion.rol, 'MARCAR_ELEGIBILIDAD', registro.submission_id,
-              registro.eligibility_status + '->' + nuevo + ' motivo=' + (datos.motivo || ''));
+              registro.eligibility_status + '->' + nuevo + ' motivo=' + datos.motivo);
     return { submission_id: registro.submission_id, eligibility_status: nuevo };
   });
 }
 
 /**
- * "Cerrar los 100": issues B-001..B-100 and writes each participant's block,
- * arrival time and audition time in one pass.
+ * "Cerrar los 100": issues B-001..B-100 and writes each project's block,
+ * arrival time and audition time in one pass. A group is one project, so it
+ * takes exactly one code however many members it has.
  */
 function accionAsignarCodigos(datos, sesion) {
   return conBloqueo(function () {
@@ -2612,6 +4154,261 @@ function accionRefrescarVistas(datos, sesion) {
   return r;
 }
 
+// ---------------------------------------------------------------------------
+// Groups
+// ---------------------------------------------------------------------------
+
+/** Every group project with its members (logistics sees full data: it operates with it). */
+function accionListarAgrupaciones(datos) {
+  var projects = leerHoja(HOJA.REGISTRO).filter(function (r) { return normalizarTexto(r.group_code); });
+  var members = leerHoja(HOJA.INTEGRANTES);
+  return {
+    total: projects.length,
+    agrupaciones: projects.map(function (p) {
+      var summary = groupSummary(p.group_code, members);
+      return {
+        submission_id: p.submission_id, code: p.code, group_code: p.group_code,
+        group_display_name: p.group_display_name || p.artistic_name,
+        group_match_status: p.group_match_status, group_match_ref: p.group_match_ref,
+        participation_mode: p.participation_mode, eligibility_status: p.eligibility_status,
+        leader_name: p.full_name, leader_whatsapp: p.whatsapp,
+        members_declared: Number(p.members_declared) || '', members_registered: summary.registered,
+        members_authorized: summary.authorized,
+        members_link: membersLink(p.group_code),
+        members: summary.list.map(function (m) {
+          return {
+            member_id: m.member_id, full_name: m.full_name, id_number: m.id_number, age: m.age,
+            artistic_role: m.artistic_role, is_leader: esVerdadero(m.is_leader),
+            consent_terms: esVerdadero(m.consent_terms), consent_data: esVerdadero(m.consent_data),
+            consent_image: esVerdadero(m.consent_image), signature: !!normalizarTexto(m.signature_file_id),
+            member_status: m.member_status, member_alert: m.member_alert
+          };
+        })
+      };
+    })
+  };
+}
+
+/**
+ * The operator decides whether two groups with the same match key are the
+ * same project. MISMO keeps one seat (the later one becomes DUPLICADO);
+ * DISTINTO keeps both and records the decision. Nothing is merged or renamed.
+ */
+function accionResolverCoincidenciaGrupo(datos, sesion) {
+  return conBloqueo(function () {
+    var rows = leerHoja(HOJA.REGISTRO);
+    var row = rows.filter(function (r) { return r.submission_id === datos.submission_id; })[0];
+    if (!row) return { ok: false, error: 'Registro no encontrado.' };
+    if (normalizarComparable(row.group_match_status) !== 'POSIBLE_REPETIDA') {
+      return { ok: false, error: 'Esta inscripcion no tiene una coincidencia pendiente.' };
+    }
+    var decision = normalizarComparable(datos.decision);
+    if (decision !== 'MISMO' && decision !== 'DISTINTO') return { ok: false, error: 'Decision invalida (MISMO o DISTINTO).' };
+    var stamp = '[' + ahoraISO() + ' ' + sesion.alias + '] coincidencia de agrupacion: ' + decision +
+                (datos.motivo ? ' - ' + datos.motivo : '');
+    var changes = { notes: [row.notes, stamp].filter(Boolean).join(' || ') };
+
+    if (decision === 'MISMO') {
+      changes.group_match_status = 'CONFIRMADA_MISMA';
+      changes.duplicate_flag = true;
+      changes.duplicate_reason = 'GRUPO_REPETIDO';
+      changes.registro_principal = row.group_match_ref;
+      changes.eligibility_status = normalizarTexto(row.code) ? ESTADO_ELEGIBILIDAD.REVISION : ESTADO_ELEGIBILIDAD.DUPLICADO;
+    } else {
+      changes.group_match_status = 'CONFIRMADA_DISTINTA';
+      var others = rows.filter(function (r) { return r.submission_id !== row.submission_id; });
+      var verdict = validarInscripcion(rowAsSubmission(row), opcionesValidacion());
+      var dup = detectarDuplicado({
+        submission_id: row.submission_id, normalized_id_number: normalizarCedula(row.id_number),
+        normalized_email: normalizarEmail(row.email), normalized_phone: normalizarTelefono(row.whatsapp)
+      }, others);
+      var status = verdict.eligibility_status;
+      if (dup.duplicate_flag) status = ESTADO_ELEGIBILIDAD.DUPLICADO;
+      else if (dup.alerta && status === ESTADO_ELEGIBILIDAD.APTO) status = ESTADO_ELEGIBILIDAD.REVISION;
+      changes.eligibility_status = status;
+    }
+    actualizarFila(HOJA.REGISTRO, row._fila, changes);
+    registrar(sesion.alias, sesion.rol, 'GRUPO_COINCIDENCIA_' + decision, row.submission_id, row.group_match_ref);
+    return { submission_id: row.submission_id, decision: decision, eligibility_status: changes.eligibility_status };
+  });
+}
+
+/** Clause 8 of the source terms: members may be updated. Only the declared size is editable here. */
+function accionActualizarIntegrantesDeclarados(datos, sesion) {
+  return conBloqueo(function () {
+    var row = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === datos.submission_id; })[0];
+    if (!row || !row.group_code) return { ok: false, error: 'Agrupacion no encontrada.' };
+    var n = parseInt(datos.members_declared, 10);
+    var mode = normalizeParticipationMode(row.participation_mode);
+    var max = cfgNumero('integrantes_max', 15);
+    if (mode === 'DUO' && n !== 2) return { ok: false, error: 'Un duo tiene exactamente 2 integrantes.' };
+    if (mode === 'AGRUPACION' && !(n >= 3 && n <= max)) return { ok: false, error: 'Una agrupacion tiene entre 3 y ' + max + ' integrantes.' };
+    actualizarFila(HOJA.REGISTRO, row._fila, {
+      members_declared: n,
+      notes: [row.notes, '[' + ahoraISO() + ' ' + sesion.alias + '] integrantes declarados ' + row.members_declared + ' -> ' + n +
+              (datos.motivo ? ' - ' + datos.motivo : '')].filter(Boolean).join(' || ')
+    });
+    registrar(sesion.alias, sesion.rol, 'INTEGRANTES_DECLARADOS', row.group_code, row.members_declared + '->' + n);
+    return { group_code: row.group_code, members_declared: n };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Backing tracks and videos
+// ---------------------------------------------------------------------------
+
+function driveFileUrl(id) {
+  return id ? 'https://drive.google.com/file/d/' + id + '/view' : '';
+}
+
+/** Tracks in agenda order: what the audio technician works from. */
+function accionListarPistas(datos) {
+  var rows = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    return normalizarTexto(r.code) || esVerdadero(r.track_uses);
+  });
+  rows.sort(function (a, b) {
+    var ba = Number(a.final_block || a.original_block || 99), bb = Number(b.final_block || b.original_block || 99);
+    if (ba !== bb) return ba - bb;
+    return String(a.code) < String(b.code) ? -1 : 1;
+  });
+  var counts = {};
+  var list = rows.map(function (r) {
+    var status = r.track_status || (esVerdadero(r.track_uses) ? TRACK_STATUS.PENDIENTE : TRACK_STATUS.NO_APLICA);
+    counts[status] = (counts[status] || 0) + 1;
+    return {
+      code: r.code, artistic_name: r.artistic_name || r.full_name, participation_mode: r.participation_mode,
+      song_name: r.song_name, presentation_format: r.presentation_format, needs: r.technical_needs,
+      own_equipment_detail: r.own_equipment_detail, track_uses: esVerdadero(r.track_uses),
+      track_method: r.track_method, track_status: status, track_file_name: r.track_file_name,
+      track_file_url: driveFileUrl(r.track_file_id), track_updated_at: r.track_updated_at,
+      track_notes: r.track_notes, final_block: r.final_block || r.original_block,
+      final_time: r.final_time || r.original_time, attendance_status: r.attendance_status
+    };
+  });
+  var folderId = PropertiesService.getScriptProperties().getProperty(PROP.AUDIO_FOLDER);
+  return { total: list.length, por_estado: counts, pistas: list,
+           carpeta_audio: folderId ? 'https://drive.google.com/drive/folders/' + folderId : '' };
+}
+
+/** The technician validates or flags a track. */
+function accionMarcarPista(datos, sesion) {
+  var valid = [TRACK_STATUS.PENDIENTE, TRACK_STATUS.RECIBIDA, TRACK_STATUS.VALIDADA, TRACK_STATUS.PROBLEMA, TRACK_STATUS.NO_APLICA];
+  var status = normalizarTexto(datos.track_status).toUpperCase();
+  if (valid.indexOf(status) === -1) return { ok: false, error: 'Estado de pista invalido.' };
+  return conBloqueo(function () {
+    var row = buscarPorCodigo(datos.code);
+    if (!row) return { ok: false, error: 'Codigo no encontrado.' };
+    actualizarFila(HOJA.REGISTRO, row._fila, {
+      track_status: status,
+      track_notes: [row.track_notes, '[' + ahoraISO() + ' ' + sesion.alias + '] ' + status +
+                    (datos.nota ? ': ' + datos.nota : '')].filter(Boolean).join(' || ')
+    });
+    registrar(sesion.alias, sesion.rol, 'PISTA_ESTADO', row.code, status);
+    return { code: row.code, track_status: status };
+  });
+}
+
+/** Upload on behalf of a participant (e.g. a file received on the official WhatsApp). */
+function accionSubirPistaAdmin(datos, sesion) {
+  var row = buscarPorCodigo(datos.code);
+  if (!row || !normalizarTexto(row.code)) return { ok: false, error: 'Codigo no encontrado.' };
+  var stored = storeTrack(row, datos.file_name, datos.file_base64, datos.song_name);
+  if (!stored.ok) return stored;
+  var method = normalizarComparable(datos.method) || 'WHATSAPP';
+  return conBloqueo(function () { return recordTrack(row.code, stored, datos.song_name, method, sesion.alias); });
+}
+
+function accionPrepararCarpetasAudio(datos, sesion) {
+  var r = prepareAudioFolders();
+  registrar(sesion.alias, sesion.rol, 'CARPETAS_AUDIO', '', 'creadas=' + r.creadas);
+  return r;
+}
+
+function accionVerificarVideos(datos, sesion) {
+  var r = verifyPendingVideos({ all: esVerdadero(datos.todos), limit: Number(datos.limite) || 200 });
+  registrar(sesion.alias, sesion.rol, 'VERIFICAR_VIDEOS', '', JSON.stringify(r.por_estado));
+  return r;
+}
+
+// ---------------------------------------------------------------------------
+// Contacts for the official WhatsApp broadcast list
+// ---------------------------------------------------------------------------
+
+/**
+ * vCard file with everyone who authorized operational WhatsApp messages, to
+ * import into the phone that owns the official number. WhatsApp broadcast
+ * lists only reach people who saved that number too, which is why the
+ * confirmation screen asks participants to save it.
+ */
+function accionExportarContactos(datos, sesion) {
+  var scope = normalizarComparable(datos.alcance || 'CON_CODIGO');
+  var rows = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    if (!esVerdadero(r.consent_whatsapp) || !esTelefonoValido(r.whatsapp)) return false;
+    if (scope === 'CON_CODIGO') return !!normalizarTexto(r.code);
+    if (scope === 'APTOS') return normalizarComparable(r.eligibility_status) === 'APTO' || !!normalizarTexto(r.code);
+    return true;
+  });
+  var lines = [];
+  rows.forEach(function (r) {
+    var label = (r.code ? r.code + ' ' : '') + normalizarTexto(r.full_name) +
+                (r.artistic_name ? ' (' + normalizarTexto(r.artistic_name) + ')' : '');
+    lines.push('BEGIN:VCARD', 'VERSION:3.0',
+      'FN:' + label.replace(/[\r\n;]/g, ' '),
+      'N:' + normalizarTexto(r.full_name).replace(/[\r\n;]/g, ' ') + ';;;;',
+      'TEL;TYPE=CELL:+57' + normalizarTelefono(r.whatsapp),
+      'NOTE:EL BUNKER ' + (r.code || r.submission_id),
+      'END:VCARD');
+  });
+  var vcf = lines.join('\r\n') + '\r\n';
+  var name = 'CONTACTOS-' + scope + '-' + timestampForNames() + '.vcf';
+  var file = carpetaBackups().createFile(Utilities.newBlob(vcf, 'text/vcard', name));
+  registrar(sesion.alias, sesion.rol, 'EXPORTAR_CONTACTOS', scope, rows.length + ' contactos');
+  return { total: rows.length, archivo: name, url: file.getUrl(), vcf: vcf };
+}
+
+// ---------------------------------------------------------------------------
+// Committee decisions and production health
+// ---------------------------------------------------------------------------
+
+/**
+ * Minutes of the committee for a tie at the cut that the ladder could not
+ * break. The new decision replaces any previous one; RESULTADOS applies it
+ * only if it still matches the current tie.
+ */
+function accionRegistrarDeliberacion(datos, sesion) {
+  var codes = String(datos.codes_in_order || '').split(/[\s,;]+/).map(function (c) { return normalizarComparable(c); }).filter(Boolean);
+  if (codes.length < 2) return { ok: false, error: 'Indica el orden decidido con al menos dos codigos.' };
+  if (!normalizarTexto(datos.acta)) return { ok: false, error: 'Escribe el acta: quienes deliberaron y por que.' };
+  return conBloqueo(function () {
+    leerHoja(HOJA.DELIBERACIONES).forEach(function (d) {
+      if (normalizarComparable(d.status) === 'VIGENTE') actualizarFila(HOJA.DELIBERACIONES, d._fila, { status: 'REEMPLAZADA' });
+    });
+    var id = nuevoId('ACTA');
+    agregarFila(HOJA.DELIBERACIONES, {
+      deliberation_id: id, at: ahoraISO(), by: sesion.alias, codes_in_order: codes.join(','),
+      cut_position: cfgNumero('top_seleccionados', 8), minutes: String(datos.acta).slice(0, 2000), status: 'VIGENTE'
+    });
+    registrar(sesion.alias, sesion.rol, 'DELIBERACION', id, codes.join(','));
+    reconstruirResultados(leerHoja(HOJA.REGISTRO));
+    return { deliberation_id: id, codes_in_order: codes };
+  });
+}
+
+/** Counts rows that carry test-data markers. In production this must always be zero. */
+function auditTestData() {
+  var projects = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    return isTestData({ source: r.source, email: r.email, client_submission_id: '' }) ||
+           /^PRUEBA-/.test(String(r.artistic_name || ''));
+  });
+  var members = leerHoja(HOJA.INTEGRANTES).filter(function (m) { return normalizarComparable(m.source) === 'SEED'; });
+  return { entorno: environmentName(), marca_hoja: spreadsheetEnvironment(), proyectos_de_prueba: projects.length,
+           integrantes_de_prueba: members.length, limpio: projects.length === 0 && members.length === 0 };
+}
+
+function accionAuditarDatosDePrueba() {
+  return auditTestData();
+}
+
 // ========================================================================
 // 23_api_checkin.gs
 // ========================================================================
@@ -2619,62 +4416,126 @@ function accionRefrescarVistas(datos, sesion) {
 /**
  * EL BUNKER - Check-in desk actions (event day).
  *
- * This is the only module that has to keep working on a bad connection, so it
- * exposes a full roster download and a batch sync of queued operations.
+ * Flow on the day: access -> CHECK-IN -> PRECOLA -> EN AUDICION -> REALIZADA
+ * (exit). This is the only module that has to keep working on a bad
+ * connection, so it exposes a full roster download and a batch sync of queued
+ * operations.
  */
+
+/** Members of each group, keyed by group code, trimmed to what the desk needs to verify identity. */
+function membersByGroup() {
+  var byGroup = {};
+  leerHoja(HOJA.INTEGRANTES).forEach(function (m) {
+    var code = normalizarComparable(m.group_code);
+    if (!code) return;
+    if (!byGroup[code]) byGroup[code] = [];
+    byGroup[code].push({
+      full_name: m.full_name,
+      id_number: String(m.id_number || ''),
+      artistic_role: m.artistic_role,
+      is_leader: esVerdadero(m.is_leader),
+      member_status: m.member_status,
+      signature: !!normalizarTexto(m.signature_file_id),
+      consent_image: esVerdadero(m.consent_image)
+    });
+  });
+  return byGroup;
+}
+
+/** One participant as the desk sees it. */
+function deskView(r, members) {
+  var list = r.group_code ? (members[normalizarComparable(r.group_code)] || []) : [];
+  return {
+    code: r.code,
+    full_name: r.full_name,
+    id_number: String(r.id_number || ''),
+    artistic_name: r.artistic_name,
+    discipline: projectGenre(r),
+    participation_mode: r.participation_mode || 'SOLISTA',
+    group_code: r.group_code || '',
+    members_declared: Number(r.members_declared) || (r.group_code ? '' : 1),
+    members: list,
+    members_authorized: list.filter(function (m) { return normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length,
+    final_block: r.final_block || r.original_block,
+    arrival_time: r.arrival_time,
+    final_time: r.final_time || r.original_time,
+    attendance_status: r.attendance_status || ESTADO.CONFIRMADO,
+    audition_status: r.audition_status || '',
+    check_in_time: r.check_in_time || '',
+    precola_at: r.precola_at || '', stage_at: r.stage_at || '', done_at: r.done_at || '',
+    technical_needs: r.technical_needs || '',
+    own_equipment_detail: r.own_equipment_detail || '',
+    presentation_format: r.presentation_format || '',
+    song_name: r.song_name || '',
+    track_status: r.track_status || '',
+    consent_image: esVerdadero(r.consent_image),
+    change_status: r.change_status || ''
+  };
+}
 
 /** The whole roster, trimmed to what the desk legitimately needs to see. */
 function accionRosterCheckin() {
+  var members = membersByGroup();
   var filas = leerHoja(HOJA.REGISTRO).filter(function (r) { return normalizarTexto(r.code); });
   return {
     generado_at: ahoraISO(),
     total: filas.length,
-    roster: filas.map(function (r) {
-      return {
-        code: r.code,
-        full_name: r.full_name,
-        id_number: String(r.id_number || ''),
-        artistic_name: r.artistic_name,
-        discipline: r.discipline,
-        final_block: r.final_block || r.original_block,
-        arrival_time: r.arrival_time,
-        final_time: r.final_time || r.original_time,
-        attendance_status: r.attendance_status || ESTADO.CONFIRMADO,
-        audition_status: r.audition_status || '',
-        check_in_time: r.check_in_time || '',
-        technical_needs: r.technical_needs || ''
-      };
-    })
+    roster: filas.map(function (r) { return deskView(r, members); })
   };
 }
 
+/** Finds a project by code, the leader's ID number or ANY member's ID number. */
+function findForDesk(datos) {
+  var rows = leerHoja(HOJA.REGISTRO);
+  var code = normalizarComparable(datos.code);
+  if (code) {
+    var byCode = rows.filter(function (r) { return normalizarComparable(r.code) === code; })[0];
+    if (byCode) return { row: byCode, via: 'CODIGO' };
+  }
+  var doc = normalizarCedula(datos.id_number || datos.code);
+  if (!doc) return null;
+  var byLeader = rows.filter(function (r) {
+    return normalizarTexto(r.code) && normalizarCedula(r.normalized_id_number || r.id_number) === doc;
+  })[0];
+  if (byLeader) return { row: byLeader, via: 'DOCUMENTO' };
+  var member = leerHoja(HOJA.INTEGRANTES).filter(function (m) { return m.normalized_id_number === doc; })[0];
+  if (member) {
+    var project = rows.filter(function (r) {
+      return normalizarComparable(r.group_code) === normalizarComparable(member.group_code);
+    })[0];
+    if (project) return { row: project, via: 'INTEGRANTE' };
+  }
+  return null;
+}
+
 function accionBuscarParticipante(datos) {
-  var registro = null;
-  if (datos.code) registro = buscarPorCodigo(datos.code);
-  if (!registro && datos.id_number) registro = buscarPorCedula(datos.id_number);
-  if (!registro) return { ok: false, error: 'No encontramos ese codigo ni ese documento.' };
+  var found = findForDesk(datos);
+  if (!found || !normalizarTexto(found.row.code)) return { ok: false, error: 'No encontramos ese codigo ni ese documento entre quienes tienen cupo.' };
+  var registro = found.row;
 
   var horaAudicion = registro.final_time || registro.original_time || '';
   var puntualidad = horaAudicion
     ? evaluarPuntualidad(horaAudicion, datos.hora_llegada || horaActual(), agendaConfigurada())
     : null;
 
+  var view = deskView(registro, membersByGroup());
+  var warnings = [];
+  if (view.group_code && view.members_authorized < (Number(view.members_declared) || 0)) {
+    warnings.push('Autorizaciones de integrantes: ' + view.members_authorized + ' de ' + view.members_declared +
+                  '. Quien no haya autorizado debe firmar la constancia fisica antes de subir al escenario.');
+  }
+  if (!view.consent_image) warnings.push('NO autoriza uso de imagen/voz: no grabar ni publicar su presentacion.');
+  if (normalizarComparable(view.track_status) === 'PISTA PENDIENTE') warnings.push('La pista no ha llegado: pedir la USB de respaldo.');
+  if (normalizarComparable(view.track_status) === 'PISTA CON PROBLEMA') warnings.push('La pista tiene un problema reportado: avisar al tecnico de audio.');
+
   return {
-    participante: {
-      code: registro.code, full_name: registro.full_name,
-      id_number: String(registro.id_number || ''),
-      artistic_name: registro.artistic_name, discipline: registro.discipline,
-      final_block: registro.final_block || registro.original_block,
-      arrival_time: registro.arrival_time, final_time: horaAudicion,
-      attendance_status: registro.attendance_status || ESTADO.CONFIRMADO,
-      audition_status: registro.audition_status || '',
-      check_in_time: registro.check_in_time || '',
-      technical_needs: registro.technical_needs || '',
-      change_status: registro.change_status || ''
-    },
+    participante: view,
+    encontrado_por: found.via,
     puntualidad: puntualidad,
+    avisos: warnings,
     // The desk must always confirm against the physical document.
-    recordatorio: 'Valida la identidad con el documento fisico antes de confirmar.'
+    recordatorio: 'Valida la identidad con el documento fisico antes de confirmar' +
+                  (view.group_code ? ' (de cada integrante).' : '.')
   };
 }
 
@@ -2690,8 +4551,8 @@ function horaActual() {
 function accionRegistrarEstado(datos, sesion) {
   var clave = datos.client_op_id ? 'estado:' + datos.client_op_id : null;
 
-  return unaSolaVez(clave, function () {
-    return conBloqueo(function () {
+  return conBloqueo(function () {
+    return unaSolaVez(clave, function () {
       var registro = buscarPorCodigo(datos.code);
       if (!registro) return { ok: false, error: 'Codigo no encontrado: ' + datos.code };
 
@@ -2702,24 +4563,24 @@ function accionRegistrarEstado(datos, sesion) {
       );
       if (!transicion.ok) return { ok: false, error: transicion.mensaje, transicion: transicion };
 
+      var at = datos.at || ahoraISO();
       var cambios = {
         attendance_status: transicion.hacia,
         operador_check_in: sesion.alias || 'checkin'
       };
-      if (transicion.hacia === ESTADO.CHECK_IN && !registro.check_in_time) {
-        cambios.check_in_time = datos.check_in_time || ahoraISO();
-      }
-      if (transicion.hacia === ESTADO.CONTINGENCIA && !registro.contingencia_desde) {
-        cambios.contingencia_desde = ahoraISO();
-      }
+      if (transicion.hacia === ESTADO.CHECK_IN && !registro.check_in_time) cambios.check_in_time = datos.check_in_time || at;
+      if (transicion.hacia === ESTADO.PRECOLA) cambios.precola_at = at;
+      if (transicion.hacia === ESTADO.EN_AUDICION) cambios.stage_at = at;
+      if (transicion.hacia === ESTADO.CONTINGENCIA && !registro.contingencia_desde) cambios.contingencia_desde = at;
       if (transicion.hacia === ESTADO.REALIZADA) {
         cambios.audition_status = ESTADO.REALIZADA;
+        cambios.done_at = at;
       }
       if (transicion.hacia === ESTADO.NO_AUDICIONADO || transicion.hacia === ESTADO.NO_SHOW) {
         cambios.audition_status = transicion.hacia;
       }
       if (datos.notes) {
-        cambios.notes = [registro.notes, '[' + ahoraISO() + '] ' + datos.notes].filter(Boolean).join(' || ');
+        cambios.notes = [registro.notes, '[' + at + '] ' + datos.notes].filter(Boolean).join(' || ');
       }
 
       actualizarFila(HOJA.REGISTRO, registro._fila, cambios);
@@ -2729,8 +4590,7 @@ function accionRegistrarEstado(datos, sesion) {
           'Cambio manual ' + transicion.desde + ' -> ' + transicion.hacia,
           datos.notes || '', sesion.alias || 'checkin');
       }
-      registrar(sesion.alias, sesion.rol, 'ESTADO', datos.code,
-                transicion.desde + '->' + transicion.hacia);
+      registrar(sesion.alias, sesion.rol, 'ESTADO', datos.code, transicion.desde + '->' + transicion.hacia);
 
       return { code: registro.code, desde: transicion.desde, hacia: transicion.hacia,
                sin_cambio: !!transicion.sin_cambio, forzado: !!transicion.forzado };
@@ -2762,7 +4622,7 @@ function accionSincronizarCola(datos, sesion) {
   return { procesadas: resultados.length, resultados: resultados };
 }
 
-/** Ranks the contingency queue against the time actually left before 21:30. */
+/** Ranks the contingency queue against the time actually left before the close. */
 function accionPlanContingencia(datos) {
   var filas = leerHoja(HOJA.REGISTRO);
   var cola = filas.filter(function (r) {
@@ -2772,10 +4632,11 @@ function accionPlanContingencia(datos) {
 
   var cfgAgenda = agendaConfigurada();
   var ahoraMin = datos.ahora ? horaAMinutos(datos.ahora) : horaAMinutos(horaActual());
+  var inicio = Math.max(ahoraMin === null ? cfgAgenda.contingencia_inicio : ahoraMin, cfgAgenda.contingencia_inicio);
 
   var plan = planificarContingencia(cola, {
     agenda: cfgAgenda,
-    ahora_minutos: ahoraMin === null ? cfgAgenda.contingencia_inicio : ahoraMin,
+    ahora_minutos: inicio,
     cierre_minutos: cfgAgenda.contingencia_fin,
     minutos_por_audicion: cfgNumero('duracion_audicion_min', 3)
   });
@@ -2788,7 +4649,7 @@ function accionPlanContingencia(datos) {
   return plan;
 }
 
-/** 21:30 hard close: everybody pending becomes NO AUDICIONADO. */
+/** Hard close (21:00 by default): everybody pending becomes NO AUDICIONADO. */
 function accionCerrarJornada(datos, sesion) {
   return conBloqueo(function () {
     var filas = leerHoja(HOJA.REGISTRO);
@@ -2808,6 +4669,11 @@ function accionCerrarJornada(datos, sesion) {
     registrar(sesion.alias, sesion.rol, 'CERRAR_JORNADA', '', cierre.total + ' participantes');
     return { cerrados: cierre.total, detalle: cierre.cambios };
   });
+}
+
+/** Tracks for the stage and the audio technician, in agenda order (read-only). */
+function accionPistasEvento(datos) {
+  return accionListarPistas(datos);
 }
 
 // ========================================================================
@@ -2855,7 +4721,11 @@ function accionListaEvaluacion(datos, sesion) {
       return {
         code: r.code,
         artistic_name: r.artistic_name || '(sin nombre artistico)',
-        discipline: r.discipline,
+        discipline: projectGenre(r),
+        participation_mode: r.participation_mode || 'SOLISTA',
+        members_declared: Number(r.members_declared) || 1,
+        presentation_format: r.presentation_format || '',
+        song_name: r.song_name || '',
         attendance_status: r.attendance_status,
         audition_status: r.audition_status || '',
         evaluado: !!previo,
@@ -2902,7 +4772,7 @@ function accionGuardarEvaluacion(datos, sesion) {
     var fila = {
       code: registro.code,
       artistic_name: registro.artistic_name,
-      discipline: registro.discipline,
+      discipline: projectGenre(registro),
       total: calculo.total,
       valido: 'TRUE',
       observaciones: String(datos.observaciones || '').slice(0, 900),
@@ -2932,9 +4802,10 @@ function accionGuardarEvaluacion(datos, sesion) {
 /**
  * EL BUNKER - Materialised views.
  *
- * REGISTRO is the single source of truth. AGENDA, CHECK-IN, RESULTADOS and
- * DASHBOARD are rebuilt from it, which is precisely why a participant can never
- * show one schedule on one tab and a different one on another.
+ * REGISTRO (+ _INTEGRANTES for group members) is the single source of truth.
+ * AGENDA, CHECK-IN, AGRUPACIONES, PISTAS, RESULTADOS and DASHBOARD are rebuilt
+ * from it, which is precisely why a participant can never show one schedule on
+ * one tab and a different one on another.
  */
 
 function refrescarVistas() {
@@ -2942,6 +4813,8 @@ function refrescarVistas() {
   return {
     agenda: reconstruirAgenda(filas),
     check_in: reconstruirCheckIn(filas),
+    agrupaciones: reconstruirAgrupaciones(filas),
+    pistas: reconstruirPistas(filas),
     resultados: reconstruirResultados(filas),
     dashboard: reconstruirDashboard(filas)
   };
@@ -2953,6 +4826,13 @@ function limpiarDatos(nombreHoja) {
     h.getRange(2, 1, h.getLastRow() - 1, Math.max(1, h.getLastColumn())).clearContent();
   }
   return h;
+}
+
+function byBlockThenCode(a, b) {
+  var ba = Number(a.final_block || a.original_block || 99);
+  var bb = Number(b.final_block || b.original_block || 99);
+  if (ba !== bb) return ba - bb;
+  return String(a.code) < String(b.code) ? -1 : 1;
 }
 
 function reconstruirAgenda(filas) {
@@ -2978,31 +4858,109 @@ function reconstruirAgenda(filas) {
 
 function reconstruirCheckIn(filas) {
   limpiarDatos(HOJA.CHECK_IN);
-  var conCodigo = filas.filter(function (r) { return normalizarTexto(r.code); });
-
-  conCodigo.sort(function (a, b) {
-    var ba = Number(a.final_block || a.original_block || 99);
-    var bb = Number(b.final_block || b.original_block || 99);
-    if (ba !== bb) return ba - bb;
-    return String(a.code) < String(b.code) ? -1 : 1;
-  });
+  var members = membersByGroup();
+  var conCodigo = filas.filter(function (r) { return normalizarTexto(r.code); }).sort(byBlockThenCode);
 
   var datos = conCodigo.map(function (r) {
+    var v = deskView(r, members);
     return {
       code: r.code, full_name: r.full_name, artistic_name: r.artistic_name,
-      discipline: r.discipline,
-      final_block: r.final_block || r.original_block,
-      arrival_time: r.arrival_time,
-      final_time: r.final_time || r.original_time,
+      discipline: projectGenre(r),
+      final_block: v.final_block, arrival_time: r.arrival_time, final_time: v.final_time,
       check_in_time: r.check_in_time || '',
       attendance_status: r.attendance_status || ESTADO.CONFIRMADO,
       audition_status: r.audition_status || '',
       operador_check_in: r.operador_check_in || '',
-      notes: r.notes || ''
+      notes: r.notes || '',
+      participation_mode: v.participation_mode,
+      members_declared: v.members_declared,
+      members_authorized: r.group_code ? v.members_authorized : '',
+      track_status: r.track_status || '',
+      precola_at: r.precola_at || '', stage_at: r.stage_at || '', done_at: r.done_at || ''
     };
   });
   agregarFilas(HOJA.CHECK_IN, datos);
   return datos.length;
+}
+
+/**
+ * One master row per group and its members right below it, grouped so the
+ * operator can collapse or expand each group (the XLSX export keeps the
+ * outline). A group counts as one project: only master rows are projects.
+ */
+function reconstruirAgrupaciones(filas) {
+  var sheet = limpiarDatos(HOJA.AGRUPACIONES);
+  if (sheet.getMaxRows() > 1) {
+    try { sheet.getRange(2, 1, sheet.getMaxRows() - 1, 1).shiftRowGroupDepth(-8); } catch (e) { /* no groups yet */ }
+  }
+  var members = leerHoja(HOJA.INTEGRANTES);
+  var groups = filas.filter(function (r) { return normalizarTexto(r.group_code); });
+  groups.sort(function (a, b) { return String(a.group_code) < String(b.group_code) ? -1 : 1; });
+
+  var out = [];
+  var spans = [];
+  groups.forEach(function (g) {
+    var summary = groupSummary(g.group_code, members);
+    out.push({
+      row_type: 'PROYECTO', group_code: g.group_code, project_code: g.code || '',
+      submission_id: g.submission_id, group_display_name: g.group_display_name || g.artistic_name,
+      group_match_key: g.group_match_key, match_status: g.group_match_status || '',
+      leader_name: g.full_name, leader_id_number: g.id_number, leader_whatsapp: g.whatsapp, leader_email: g.email,
+      members_declared: g.members_declared, members_registered: summary.registered,
+      members_authorized: summary.authorized, genre: projectGenre(g), eligibility_status: g.eligibility_status
+    });
+    var first = out.length;
+    summary.list.forEach(function (m) {
+      out.push({
+        row_type: 'INTEGRANTE', group_code: g.group_code, project_code: g.code || '',
+        submission_id: g.submission_id, group_display_name: g.group_display_name || g.artistic_name,
+        member_id: m.member_id, member_name: m.full_name, member_id_number: m.id_number, member_age: m.age,
+        member_role: m.artistic_role + (esVerdadero(m.is_leader) ? ' (lider)' : ''),
+        member_consents: ['T:' + (esVerdadero(m.consent_terms) ? 'SI' : 'NO'), 'D:' + (esVerdadero(m.consent_data) ? 'SI' : 'NO'),
+                          'I:' + (esVerdadero(m.consent_image) ? 'SI' : 'NO')].join(' '),
+        member_signature: normalizarTexto(m.signature_file_id) ? 'SI' : (esVerdadero(m.is_leader) ? 'FORMULARIO 1' : 'NO'),
+        member_status: m.member_status, member_alert: m.member_alert
+      });
+    });
+    if (summary.list.length) spans.push({ start: first + 2, count: summary.list.length, master: first + 1 });
+  });
+
+  agregarFilas(HOJA.AGRUPACIONES, out);
+  spans.forEach(function (s) {
+    sheet.getRange(s.start, 1, s.count, 1).shiftRowGroupDepth(1);
+    try { sheet.getRange(s.master, 1, 1, sheet.getLastColumn()).setFontWeight('bold'); } catch (e) { /* cosmetic */ }
+  });
+  try {
+    sheet.setRowGroupControlPosition(SpreadsheetApp.GroupControlTogglePosition.BEFORE);
+    sheet.collapseAllRowGroups();
+  } catch (e) { /* cosmetic: grouping still works without it */ }
+  return groups.length;
+}
+
+/** What the audio technician works from, in agenda order. */
+function reconstruirPistas(filas) {
+  limpiarDatos(HOJA.PISTAS);
+  var rows = filas.filter(function (r) { return normalizarTexto(r.code) || esVerdadero(r.track_uses); }).sort(byBlockThenCode);
+  var datos = rows.map(function (r) {
+    return {
+      code: r.code, artistic_name: r.artistic_name || r.full_name, participation_mode: r.participation_mode,
+      song_name: r.song_name, track_uses: esVerdadero(r.track_uses) ? 'SI' : 'NO', track_method: r.track_method,
+      track_status: r.track_status || (esVerdadero(r.track_uses) ? TRACK_STATUS.PENDIENTE : TRACK_STATUS.NO_APLICA),
+      track_file_name: r.track_file_name, track_file_url: driveFileUrl(r.track_file_id),
+      track_updated_at: r.track_updated_at, track_notes: r.track_notes,
+      final_block: r.final_block || r.original_block, final_time: r.final_time || r.original_time
+    };
+  });
+  agregarFilas(HOJA.PISTAS, datos);
+  return datos.length;
+}
+
+/** The committee decision currently in force, if any. */
+function currentDeliberation() {
+  var d = leerHoja(HOJA.DELIBERACIONES).filter(function (x) { return normalizarComparable(x.status) === 'VIGENTE'; });
+  if (!d.length) return null;
+  var last = d[d.length - 1];
+  return { deliberation_id: last.deliberation_id, codes_in_order: String(last.codes_in_order || '').split(',') };
 }
 
 /** Joins the three jury sheets onto REGISTRO and writes the ranking. */
@@ -3024,15 +4982,16 @@ function reconstruirResultados(filas) {
   var artistas = filas.filter(function (r) { return normalizarTexto(r.code); }).map(function (r) {
     return {
       code: r.code, artistic_name: r.artistic_name, full_name: r.full_name,
-      discipline: r.discipline,
+      discipline: projectGenre(r),
       audition_status: r.audition_status || r.attendance_status,
       tarjetas: tarjetasPorCodigo[normalizarComparable(r.code)] || []
     };
   });
 
   var seleccion = seleccionarTop(artistas, {
-    top: cfgNumero('top_seleccionados', 7),
-    minimo_jurados: cfgNumero('minimo_jurados', 2)
+    top: cfgNumero('top_seleccionados', 8),
+    minimo_jurados: cfgNumero('minimo_jurados', 2),
+    deliberacion: currentDeliberation()
   });
 
   var enTop = {};
@@ -3050,7 +5009,7 @@ function reconstruirResultados(filas) {
       jurados_validos: a.jurados_validos, artist_final: a.artist_final,
       seleccionado: enTop[a.code] ? 'SI' : 'NO',
       requiere_comite: enEmpate[a.code] ? 'SI' : '',
-      observacion: ''
+      observacion: seleccion.deliberacion_aplicada ? 'Desempate por ' + seleccion.deliberacion_aplicada : ''
     };
   });
 
@@ -3061,6 +5020,9 @@ function reconstruirResultados(filas) {
       artist_final: '', seleccionado: 'NO', requiere_comite: '', observacion: e.motivo
     });
   });
+  if (seleccion.deliberacion_descartada) {
+    registrar('sistema', '', 'DELIBERACION_NO_APLICA', '', seleccion.deliberacion_descartada);
+  }
 
   agregarFilas(HOJA.RESULTADOS, datos);
   return datos.length;
@@ -3070,80 +5032,112 @@ function reconstruirResultados(filas) {
 function reconstruirDashboard(filas) {
   var m = calcularMetricas(filas);
   var h = limpiarDatos(HOJA.DASHBOARD);
+  if (h.getLastRow() > 0) h.getRange(1, 1, h.getMaxRows(), Math.max(3, h.getMaxColumns())).clearContent();
 
   var bloque = [
     ['INDICADOR', 'VALOR'],
-    ['Inscritos (total de filas)', m.inscritos],
-    ['Participantes unicos (por documento)', m.unicos],
+    ['Inscripciones recibidas (filas)', m.inscritos],
+    ['Validas (aptas + en revision)', m.validos],
+    ['Personas unicas (por documento)', m.unicos],
     ['Duplicados marcados', m.duplicados],
     ['Aptos', m.aptos],
     ['Incompletos', m.incompletos],
     ['No cumplen requisitos', m.no_cumplen],
     ['En revision', m.revision],
+    ['Solistas / duos / agrupaciones', m.solistas + ' / ' + m.duos + ' / ' + m.agrupaciones],
     ['Con codigo definitivo', m.con_codigo],
+    ['Con horario asignado', m.horarios],
     ['Cupos libres', m.cupos_libres],
     ['', ''],
+    ['Cambios solicitados / aprobados / rechazados / pendientes',
+      m.cambios.solicitados + ' / ' + m.cambios.aprobados + ' / ' + m.cambios.rechazados + ' / ' + m.cambios.pendientes],
+    ['Integrantes autorizados / registrados / declarados (con codigo)',
+      m.integrantes.autorizados + ' / ' + m.integrantes.registrados + ' / ' + m.integrantes.declarados],
+    ['Agrupaciones con autorizaciones completas', m.integrantes.grupos_completos + ' de ' + m.integrantes.grupos_con_codigo],
+    ['Pistas pendientes / recibidas / validadas / con problema',
+      (m.pistas['PISTA PENDIENTE'] || 0) + ' / ' + (m.pistas['PISTA RECIBIDA'] || 0) + ' / ' +
+      (m.pistas['PISTA VALIDADA'] || 0) + ' / ' + (m.pistas['PISTA CON PROBLEMA'] || 0)],
+    ['Videos accesibles / no accesibles / por revisar',
+      (m.videos['ACCESIBLE'] || 0) + ' / ' + (m.videos['NO ACCESIBLE'] || 0) + ' / ' +
+      ((m.videos['NO VERIFICABLE'] || 0) + (m.videos['PENDIENTE'] || 0))],
+    ['', ''],
     ['Confirmados (con turno, sin llegar)', m.confirmados],
-    ['Reasignados (cambio aprobado)', m.reasignados],
-    ['Cambios pendientes', m.cambios_pendientes],
-    ['Check-ins realizados', m.check_ins],
+    ['Check-in / precola / en audicion', m.check_ins + ' / ' + m.precola + ' / ' + m.en_audicion],
     ['Audiciones realizadas', m.realizadas],
     ['No show', m.no_show],
     ['En contingencia', m.contingencia],
     ['No audicionados', m.no_audicionados],
-    ['', ''],
     ['Avance de audiciones', m.avance_texto],
     ['Promedio global (audiciones validas)', m.promedio_global === null ? 'sin datos' : m.promedio_global],
     ['Requiere deliberacion del comite', m.requiere_comite ? 'SI' : 'NO'],
     ['Actualizado', ahoraISO()]
   ];
-
   h.getRange(1, 1, bloque.length, 2).setValues(bloque);
 
-  // Chart 1: score distribution by range.
-  var filaDist = bloque.length + 2;
-  h.getRange(filaDist, 1).setValue('DISTRIBUCION DE PUNTAJES');
-  var dist = [['Rango', 'Artistas']].concat(m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; }));
-  h.getRange(filaDist + 1, 1, dist.length, 2).setValues(dist);
-
-  // Chart 2: Top 7.
-  var filaTop = filaDist + dist.length + 2;
-  h.getRange(filaTop, 1).setValue('TOP ' + cfgNumero('top_seleccionados', 7));
-  var top = [['Artista', 'Puntaje']].concat(m.top.map(function (t) {
-    return [(t.artistic_name || t.code), t.artist_final];
-  }));
+  var fila = bloque.length + 2;
+  function seccion(titulo, tabla) {
+    h.getRange(fila, 1).setValue(titulo);
+    h.getRange(fila + 1, 1, tabla.length, tabla[0].length).setValues(tabla);
+    fila += tabla.length + 2;
+  }
+  seccion('INDICADOR OPERATIVO (' + m.operativo.hora + ')', [
+    ['Bloque actual', m.operativo.etiqueta], ['Esperados', m.operativo.esperados],
+    ['Check-in', m.operativo.check_in], ['Realizadas', m.operativo.realizadas],
+    ['No show', m.operativo.no_show], ['Contingencia', m.operativo.contingencia]
+  ]);
+  seccion('DISTRIBUCION DE PUNTAJES', [['Rango', 'Artistas']].concat(m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; })));
+  var top = [['Artista', 'Puntaje']].concat(m.top.map(function (t) { return [(t.artistic_name || t.code), t.artist_final]; }));
   if (top.length === 1) top.push(['(sin resultados aun)', 0]);
-  h.getRange(filaTop + 1, 1, top.length, 2).setValues(top);
-
-  // Chart 3: participant states.
-  var filaEstados = filaTop + top.length + 2;
-  h.getRange(filaEstados, 1).setValue('ESTADO DE PARTICIPANTES');
-  var estados = [['Estado', 'Cantidad'],
-    ['Confirmados', m.confirmados], ['Check-in', m.check_ins],
-    ['Realizadas', m.realizadas], ['No show', m.no_show],
-    ['Contingencia', m.contingencia], ['No audicionados', m.no_audicionados]];
-  h.getRange(filaEstados + 1, 1, estados.length, 2).setValues(estados);
-
-  // Chart 4: progress per block.
-  var filaBloques = filaEstados + estados.length + 2;
-  h.getRange(filaBloques, 1).setValue('AVANCE POR BLOQUE');
-  var bloques = [['Bloque', 'Realizadas', 'Asignados']].concat(m.por_bloque.map(function (b) {
+  seccion('TOP ' + cfgNumero('top_seleccionados', 8), top);
+  seccion('ESTADO DE PARTICIPANTES', [['Estado', 'Cantidad'],
+    ['Confirmados', m.confirmados], ['Check-in', m.check_ins], ['Precola', m.precola], ['En audicion', m.en_audicion],
+    ['Realizadas', m.realizadas], ['No show', m.no_show], ['Contingencia', m.contingencia], ['No audicionados', m.no_audicionados]]);
+  seccion('AVANCE POR BLOQUE', [['Bloque', 'Realizadas', 'Asignados']].concat(m.por_bloque.map(function (b) {
     return ['Bloque ' + b.block_id + ' (' + b.ventana + ')', b.realizadas, b.asignados];
-  }));
-  h.getRange(filaBloques + 1, 1, bloques.length, 3).setValues(bloques);
+  })));
 
   h.getRange(1, 1, 1, 2).setFontWeight('bold');
   return bloque.length;
 }
 
+/**
+ * The operational indicator: which block is running and how it is going.
+ * `hora` (HH:MM) lets the rehearsal and the dashboard simulate a moment.
+ */
+function operationalIndicator(filas, hora) {
+  var cfgAgenda = agendaConfigurada();
+  var hhmm = hora || horaActual();
+  var phase = currentBlock(horaAMinutos(hhmm), cfgAgenda);
+  var out = { hora: hhmm, fase: phase.phase, bloque: phase.block_id, esperados: 0, check_in: 0,
+              realizadas: 0, no_show: 0, contingencia: 0, etiqueta: '' };
+  filas.forEach(function (r) {
+    if (!normalizarTexto(r.code)) return;
+    var e = normalizarEstado(r.attendance_status || ESTADO.CONFIRMADO);
+    if (e === ESTADO.CONTINGENCIA) out.contingencia++;
+    if (phase.block_id && Number(r.final_block || r.original_block) === phase.block_id) {
+      out.esperados++;
+      if ([ESTADO.CHECK_IN, ESTADO.PRECOLA, ESTADO.EN_AUDICION, ESTADO.REALIZADA].indexOf(e) !== -1) out.check_in++;
+      if (e === ESTADO.REALIZADA) out.realizadas++;
+      if (e === ESTADO.NO_SHOW) out.no_show++;
+    }
+  });
+  var labels = { ANTES: 'Antes de iniciar', MARGEN: 'Margen operativo', CONTINGENCIA: 'Contingencia',
+                 CERRADO: 'Audiciones cerradas', DESCONOCIDO: 'Hora desconocida' };
+  out.etiqueta = phase.block_id
+    ? 'Bloque ' + phase.block_id + ' (' + horarioDeBloque(phase.block_id, cfgAgenda).ventana + ')'
+    : labels[phase.phase];
+  return out;
+}
+
 /** All dashboard numbers in one place, reused by the web dashboard. */
-function calcularMetricas(filas) {
+function calcularMetricas(filas, hora) {
   filas = filas || leerHoja(HOJA.REGISTRO);
   var resumen = resumenElegibilidad(filas);
   var cupo = cfgNumero('cupo_total', 100);
 
-  var conteo = { confirmados: 0, check_ins: 0, realizadas: 0, no_show: 0,
-                 contingencia: 0, no_audicionados: 0, incidentes: 0, reasignados: 0 };
+  var conteo = { confirmados: 0, check_ins: 0, precola: 0, en_audicion: 0, realizadas: 0, no_show: 0,
+                 contingencia: 0, no_audicionados: 0, incidentes: 0, reasignados: 0, horarios: 0 };
+  var pistas = {}, videos = {};
 
   var cfgAgenda = agendaConfigurada();
   var porBloque = {};
@@ -3151,18 +5145,40 @@ function calcularMetricas(filas) {
     porBloque[b] = { block_id: b, ventana: horarioDeBloque(b, cfgAgenda).ventana, asignados: 0, realizadas: 0 };
   }
 
+  var members = leerHoja(HOJA.INTEGRANTES);
+  var integrantes = { declarados: 0, registrados: 0, autorizados: 0, grupos_con_codigo: 0, grupos_completos: 0 };
+
   filas.forEach(function (r) {
+    if (normalizarTexto(r.video_url)) {
+      var vs = r.video_check_status || VIDEO_STATUS.PENDIENTE;
+      videos[vs] = (videos[vs] || 0) + 1;
+    }
     if (!normalizarTexto(r.code)) return;
     var e = normalizarEstado(r.attendance_status || ESTADO.CONFIRMADO);
     if (e === ESTADO.CONFIRMADO) conteo.confirmados++;
     else if (e === ESTADO.CHECK_IN) conteo.check_ins++;
+    else if (e === ESTADO.PRECOLA) conteo.precola++;
+    else if (e === ESTADO.EN_AUDICION) conteo.en_audicion++;
     else if (e === ESTADO.REALIZADA) conteo.realizadas++;
     else if (e === ESTADO.NO_SHOW) conteo.no_show++;
     else if (e === ESTADO.CONTINGENCIA) conteo.contingencia++;
     else if (e === ESTADO.NO_AUDICIONADO) conteo.no_audicionados++;
     else if (e === ESTADO.INCIDENTE) conteo.incidentes++;
-
+    if (normalizarTexto(r.final_time || r.original_time)) conteo.horarios++;
     if (normalizarComparable(r.change_status) === 'APROBADO') conteo.reasignados++;
+
+    var ts = r.track_status || (esVerdadero(r.track_uses) ? TRACK_STATUS.PENDIENTE : TRACK_STATUS.NO_APLICA);
+    pistas[ts] = (pistas[ts] || 0) + 1;
+
+    if (r.group_code) {
+      var s = groupSummary(r.group_code, members);
+      var declared = Number(r.members_declared) || 0;
+      integrantes.grupos_con_codigo++;
+      integrantes.declarados += declared;
+      integrantes.registrados += s.registered;
+      integrantes.autorizados += s.authorized;
+      if (declared && s.authorized >= declared) integrantes.grupos_completos++;
+    }
 
     var bloque = Number(r.final_block || r.original_block || 0);
     if (porBloque[bloque]) {
@@ -3172,7 +5188,13 @@ function calcularMetricas(filas) {
   });
 
   var cambios = leerHoja(HOJA.CAMBIOS);
-  var pendientes = cambios.filter(function (c) { return normalizarComparable(c.estado) === 'PENDIENTE'; }).length;
+  var cambiosResumen = { solicitados: cambios.length, pendientes: 0, aprobados: 0, rechazados: 0 };
+  cambios.forEach(function (c) {
+    var st = normalizarComparable(c.estado);
+    if (st === 'PENDIENTE') cambiosResumen.pendientes++;
+    else if (st === 'APROBADO') cambiosResumen.aprobados++;
+    else if (st === 'RECHAZADO') cambiosResumen.rechazados++;
+  });
 
   var resultados = leerHoja(HOJA.RESULTADOS).filter(function (r) { return r.artist_final !== '' && r.artist_final !== undefined; });
   var notas = resultados.map(function (r) { return Number(r.artist_final); }).filter(isFinite);
@@ -3180,33 +5202,39 @@ function calcularMetricas(filas) {
 
   var ranking = resultados
     .filter(function (r) { return r.posicion !== '' && r.posicion !== undefined; })
-    .map(function (r) { return { code: r.code, artistic_name: r.artistic_name, artist_final: Number(r.artist_final) }; })
-    .sort(function (a, b) { return b.artist_final - a.artist_final; });
+    .map(function (r) { return { code: r.code, artistic_name: r.artistic_name, artist_final: Number(r.artist_final),
+                                 posicion: Number(r.posicion), seleccionado: r.seleccionado }; })
+    .sort(function (a, b) { return a.posicion - b.posicion; });
 
   var objetivo = resumen.con_codigo || cupo;
 
   return {
-    inscritos: resumen.total, unicos: resumen.unicos, duplicados: resumen.duplicado,
+    inscritos: resumen.total, validos: resumen.validos, unicos: resumen.unicos, duplicados: resumen.duplicado,
     aptos: resumen.apto, incompletos: resumen.incompleto, no_cumplen: resumen.no_cumple,
-    revision: resumen.revision, con_codigo: resumen.con_codigo,
+    revision: resumen.revision, con_codigo: resumen.con_codigo, horarios: conteo.horarios,
+    solistas: resumen.solistas, duos: resumen.duos, agrupaciones: resumen.agrupaciones,
     cupos_libres: Math.max(0, cupo - resumen.con_codigo),
-    confirmados: conteo.confirmados, check_ins: conteo.check_ins,
-    realizadas: conteo.realizadas, no_show: conteo.no_show,
+    confirmados: conteo.confirmados, check_ins: conteo.check_ins, precola: conteo.precola,
+    en_audicion: conteo.en_audicion, realizadas: conteo.realizadas, no_show: conteo.no_show,
     contingencia: conteo.contingencia, no_audicionados: conteo.no_audicionados,
-    reasignados: conteo.reasignados, cambios_pendientes: pendientes,
+    reasignados: conteo.reasignados, cambios_pendientes: cambiosResumen.pendientes, cambios: cambiosResumen,
+    integrantes: integrantes, pistas: pistas, videos: videos,
     avance: objetivo ? redondear((conteo.realizadas / objetivo) * 100, 1) : 0,
     avance_texto: conteo.realizadas + ' de ' + objetivo + ' (' +
                   (objetivo ? redondear((conteo.realizadas / objetivo) * 100, 1) : 0) + '%)',
     promedio_global: promedio,
     distribucion: distribucionPuntajes(ranking),
-    top: ranking.slice(0, cfgNumero('top_seleccionados', 7)),
+    top: ranking.filter(function (r) { return normalizarComparable(r.seleccionado) === 'SI'; }),
+    top_n: cfgNumero('top_seleccionados', 8),
     por_bloque: Object.keys(porBloque).map(function (k) { return porBloque[k]; }),
-    requiere_comite: leerHoja(HOJA.RESULTADOS).some(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; })
+    operativo: operationalIndicator(filas, hora),
+    requiere_comite: leerHoja(HOJA.RESULTADOS).some(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; }),
+    entorno: entorno()
   };
 }
 
-function accionDashboard() {
-  return { metricas: calcularMetricas() };
+function accionDashboard(datos) {
+  return { metricas: calcularMetricas(null, datos && horaAMinutos(datos.hora) !== null ? datos.hora : null) };
 }
 
 function accionResultados(datos, sesion) {
@@ -3215,8 +5243,11 @@ function accionResultados(datos, sesion) {
   return {
     top: filas.filter(function (r) { return normalizarComparable(r.seleccionado) === 'SI'; }),
     ranking: filas.filter(function (r) { return r.posicion !== '' && r.posicion !== undefined; }),
-    excluidos: filas.filter(function (r) { return r.observacion; }),
-    requiere_comite: filas.some(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; })
+    excluidos: filas.filter(function (r) { return r.observacion && !r.posicion; }),
+    requiere_comite: filas.some(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; }),
+    empatados: filas.filter(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; })
+      .map(function (r) { return { code: r.code, artistic_name: r.artistic_name, artist_final: r.artist_final }; }),
+    deliberacion: currentDeliberation()
   };
 }
 
@@ -3225,24 +5256,39 @@ function accionResultados(datos, sesion) {
 // ========================================================================
 
 /**
- * EL BUNKER - XLSX export and backups.
+ * EL BUNKER - XLSX export, labelled backups, audio backup and restore.
  *
- * The backup is a real .xlsx snapshot in Drive, not a copy of the live
- * spreadsheet: a copy keeps editing with the original, a snapshot does not.
+ * A backup is a real .xlsx snapshot plus a JSON dump of every source sheet.
+ * The XLSX is for people (it keeps the collapsible group outline); the JSON is
+ * what makes a restore possible. Both go to the backups folder in Drive.
  */
+
+/** Sheets that hold original data (everything else is rebuilt from these). */
+var SOURCE_SHEETS = ['REGISTRO', '_INTEGRANTES', 'JURADO_1', 'JURADO_2', 'JURADO_3', 'INCIDENTES',
+                     '_CAMBIOS', '_DELIBERACIONES'];
+
+/** Every sheet that goes into a JSON backup. */
+var BACKUP_SHEETS = SOURCE_SHEETS.concat(['AGENDA', 'CHECK-IN', 'AGRUPACIONES', 'PISTAS', 'RESULTADOS',
+                                          'CONFIG', '_USUARIOS', '_LOG']);
+
+/** Labels offered in the admin panel: the brief asks for one backup per milestone. */
+var BACKUP_LABELS = ['MANUAL', 'DIARIO', 'PRE-EVENTO', 'AGENDA', 'POST-EVENTO', 'RESULTADOS', 'ENSAYO'];
 
 function carpetaBackups() {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty(PROP.CARPETA_BACKUPS);
   if (id) {
-    try { return DriveApp.getFolderById(id); } catch (e) { /* recreate below */ }
+    try {
+      var existing = DriveApp.getFolderById(id);
+      if (!existing.isTrashed()) return existing;
+    } catch (e) { /* recreate below */ }
   }
-  var carpeta = DriveApp.createFolder('EL BUNKER - Respaldos');
+  var carpeta = DriveApp.createFolder(envFolderName('EL BUNKER - Respaldos'));
   props.setProperty(PROP.CARPETA_BACKUPS, carpeta.getId());
   return carpeta;
 }
 
-/** Exports the whole spreadsheet as XLSX and returns a download link. */
+/** Exports the whole spreadsheet as XLSX into the backups folder. */
 function exportarXlsx(nombreArchivo) {
   var id = PropertiesService.getScriptProperties().getProperty(PROP.SPREADSHEET_ID);
   var url = 'https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx';
@@ -3267,41 +5313,95 @@ function accionExportar(datos, sesion) {
   return r;
 }
 
-/**
- * Backup = XLSX snapshot + a JSON dump of every sheet.
- * The JSON is what makes a restore possible without Google Sheets.
- */
-function accionRespaldar(datos, sesion) {
+/** XLSX + JSON with a label, so each milestone backup is easy to find. */
+function backupNow(label) {
+  var tag = BACKUP_LABELS.indexOf(String(label || '').toUpperCase()) !== -1 ? String(label).toUpperCase() : 'MANUAL';
   var marca = Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd-HHmmss');
-  var xlsx = exportarXlsx('RESPALDO-' + marca);
+  refrescarVistas();
+  var xlsx = exportarXlsx('RESPALDO-' + tag + '-' + marca);
 
   var volcado = {};
-  [HOJA.REGISTRO, HOJA.AGENDA, HOJA.CHECK_IN, HOJA.JURADO_1, HOJA.JURADO_2,
-   HOJA.JURADO_3, HOJA.RESULTADOS, HOJA.INCIDENTES, HOJA.CONFIG,
-   HOJA.CAMBIOS, HOJA.USUARIOS, HOJA.LOG].forEach(function (nombre) {
-    volcado[nombre] = leerHoja(nombre);
-  });
+  BACKUP_SHEETS.forEach(function (nombre) { volcado[nombre] = leerHoja(nombre); });
 
   var json = carpetaBackups().createFile(
-    Utilities.newBlob(JSON.stringify({ generado_at: ahoraISO(), version: VERSION_SISTEMA, datos: volcado },
-      null, 2), 'application/json', 'RESPALDO-' + marca + '.json'));
-
-  registrar(sesion.alias, sesion.rol, 'RESPALDO', marca, xlsx.bytes + ' bytes xlsx');
-  return { xlsx: xlsx, json: { nombre: json.getName(), url: json.getUrl(), id: json.getId() },
+    Utilities.newBlob(JSON.stringify({ generado_at: ahoraISO(), version: VERSION_SISTEMA, entorno: environmentName(),
+                                       etiqueta: tag, datos: volcado }, null, 1),
+      'application/json', 'RESPALDO-' + tag + '-' + marca + '.json'));
+  return { etiqueta: tag, xlsx: xlsx, json: { nombre: json.getName(), url: json.getUrl(), id: json.getId() },
            carpeta: carpetaBackups().getUrl() };
 }
 
-/** Restores REGISTRO from a JSON backup. Destructive: asks for the file id explicitly. */
-function restaurarDesdeJson(idArchivo) {
-  var contenido = DriveApp.getFileById(idArchivo).getBlob().getDataAsString();
-  var respaldo = JSON.parse(contenido);
-  if (!respaldo.datos || !respaldo.datos[HOJA.REGISTRO]) {
+function accionRespaldar(datos, sesion) {
+  var r = backupNow(datos.etiqueta);
+  registrar(sesion.alias, sesion.rol, 'RESPALDO', r.etiqueta, r.xlsx.bytes + ' bytes xlsx');
+  return r;
+}
+
+/** Daily backup (XLSX + JSON, so it can be restored). Installed as a time trigger. */
+function respaldoAutomatico() {
+  try {
+    var r = backupNow('DIARIO');
+    registrar('sistema', 'admin', 'RESPALDO_AUTOMATICO', r.xlsx.nombre, '');
+  } catch (e) {
+    console.error('Respaldo automatico fallo: ' + e.message);
+    registrar('sistema', 'admin', 'RESPALDO_AUTOMATICO_FALLO', '', e.message);
+  }
+}
+
+/**
+ * Copies the whole Audio/B-XXX tree into a dated backup folder. Resumable:
+ * files already copied are skipped, and it stops cleanly before the 6-minute
+ * limit, so running it again finishes the job.
+ */
+function backupAudio() {
+  var started = Date.now();
+  var root = audioRootFolder();
+  var target = childFolder(carpetaBackups(), 'AUDIO-' + Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd'));
+  var copied = 0, skipped = 0, complete = true;
+  var folders = root.getFolders();
+  while (folders.hasNext()) {
+    var src = folders.next();
+    var dst = childFolder(target, src.getName());
+    var files = src.getFiles();
+    while (files.hasNext()) {
+      if (Date.now() - started > 4.5 * 60 * 1000) { complete = false; break; }
+      var f = files.next();
+      if (dst.getFilesByName(f.getName()).hasNext()) { skipped++; continue; }
+      f.makeCopy(f.getName(), dst);
+      copied++;
+    }
+    if (!complete) break;
+  }
+  return { copiados: copied, ya_estaban: skipped, completo: complete, carpeta: target.getUrl() };
+}
+
+function accionRespaldarAudios(datos, sesion) {
+  var r = backupAudio();
+  registrar(sesion.alias, sesion.rol, 'RESPALDO_AUDIOS', '', JSON.stringify(r));
+  return r;
+}
+
+/**
+ * Restores the SOURCE sheets from a JSON backup and rebuilds every view.
+ * Destructive, so it demands the file id and an explicit confirmation word.
+ */
+function restaurarDesdeJson(idArchivo, confirmacion) {
+  if (confirmacion !== 'SI-RESTAURAR') {
+    throw new Error('Para restaurar llama restaurarDesdeJson("<id del archivo>", "SI-RESTAURAR"). ' +
+                    'Esto reemplaza las hojas de datos por el contenido del respaldo.');
+  }
+  var respaldo = JSON.parse(DriveApp.getFileById(idArchivo).getBlob().getDataAsString());
+  if (!respaldo.datos || !respaldo.datos.REGISTRO) {
     throw new Error('El archivo no parece un respaldo valido de EL BUNKER.');
+  }
+  if (respaldo.entorno && respaldo.entorno !== environmentName()) {
+    throw new Error('BLOQUEADO: el respaldo es del entorno "' + respaldo.entorno + '" y este proyecto es "' +
+                    environmentName() + '". No se mezclan datos entre entornos.');
   }
 
   return conBloqueo(function () {
-    [HOJA.REGISTRO, HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3,
-     HOJA.INCIDENTES, HOJA.CAMBIOS].forEach(function (nombre) {
+    var restored = {};
+    SOURCE_SHEETS.forEach(function (nombre) {
       if (!respaldo.datos[nombre]) return;
       limpiarDatos(nombre);
       var limpias = respaldo.datos[nombre].map(function (f) {
@@ -3310,22 +5410,27 @@ function restaurarDesdeJson(idArchivo) {
         return copia;
       });
       agregarFilas(nombre, limpias);
+      restored[nombre] = limpias.length;
     });
     refrescarVistas();
     registrar('sistema', 'admin', 'RESTAURAR', idArchivo, respaldo.generado_at);
-    return { restaurado_de: respaldo.generado_at, hojas: Object.keys(respaldo.datos).length };
+    return { restaurado_de: respaldo.generado_at, etiqueta: respaldo.etiqueta || '', filas: restored };
   });
 }
 
-/** Daily backup. Installed by setupInicial as a time-based trigger. */
-function respaldoAutomatico() {
-  try {
-    refrescarVistas();
-    var r = exportarXlsx('AUTO-' + Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd-HHmm'));
-    registrar('sistema', 'admin', 'RESPALDO_AUTOMATICO', r.nombre, '');
-  } catch (e) {
-    console.error('Respaldo automatico fallo: ' + e.message);
-  }
+/**
+ * Editor entry point for the recovery manual: reads the file id from CONFIG
+ * (restaurar_desde) and the confirmation word (restaurar_confirmacion), because
+ * the editor's Run button can not pass arguments.
+ */
+function RESTAURAR() {
+  invalidarCacheConfig();
+  var id = cfg('restaurar_desde', '');
+  var word = cfg('restaurar_confirmacion', '');
+  if (!id) throw new Error('Escribe en CONFIG > restaurar_desde el ID del archivo JSON de respaldo.');
+  var r = restaurarDesdeJson(String(id).trim(), String(word).trim());
+  console.log('Restaurado: ' + JSON.stringify(r));
+  return r;
 }
 
 // ========================================================================
@@ -3333,150 +5438,250 @@ function respaldoAutomatico() {
 // ========================================================================
 
 /**
- * EL BUNKER - Message templates for email and WhatsApp.
+ * EL BUNKER - Message templates for e-mail and WhatsApp.
  *
- * WhatsApp is never automated from here: the spec forbids acting outside an
- * authorised API, so the system produces the exact text plus a click-to-chat
- * link, and a human presses send.
+ * WhatsApp is never automated from here: sending through WhatsApp needs the
+ * paid Business API (or a provider such as Twilio), so the system produces the
+ * exact text plus a click-to-chat link and a human presses send from the
+ * official number. Only the reception e-mail is automatic (Gmail quota).
  */
 
+function commsContext() {
+  var fecha = cfgFecha('evento_fecha', '2026-10-23');
+  return {
+    evento: cfg('evento_nombre', 'EL BÚNKER by Arte es la Solución'),
+    fecha_texto: humanDate(fecha),
+    sede: cfg('evento_sede', 'PENDIENTE DE COMPLETAR'),
+    municipio_sede: cfg('evento_municipio_sede', 'Sabaneta, Antioquia'),
+    punto: cfg('evento_direccion', ''),
+    duracion: cfgNumero('duracion_audicion_min', 3),
+    tolerancia: cfgNumero('tolerancia_min', 5),
+    antelacion: cfgNumero('antelacion_llegada_min', 15),
+    contingencia: humanTime(cfgHora('contingencia_inicio', '20:30')) + ' a ' + humanTime(cfgHora('cierre_audiciones', '21:00')),
+    cierre: humanTime(cfgHora('cierre_audiciones', '21:00')),
+    cupo: cfgNumero('cupo_total', 100),
+    numero: cfg('whatsapp_oficial', ''),
+    nombre_contacto: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución'),
+    correo_datos: cfg('data_protection_email', 'PENDIENTE DE COMPLETAR')
+  };
+}
+
+function lugarTexto(c) {
+  var p = normalizarTexto(c.punto);
+  return c.sede + ', ' + c.municipio_sede + (p && p.indexOf('PENDIENTE') !== 0 ? ' (' + p + ')' : '');
+}
+
+/** The line every message repeats: WhatsApp broadcast lists only reach people who saved the number. */
+function saveNumberLine(c) {
+  return c.numero
+    ? 'Importante: guarda el número ' + c.numero + ' en tus contactos como "' + c.nombre_contacto +
+      '". Desde ese número recibirás tu código, horario, recordatorios y novedades de la convocatoria.'
+    : '';
+}
+
 function plantillas() {
-  var evento = cfg('evento_nombre', 'EL BUNKER');
-  var fecha = cfg('evento_fecha', '2026-10-02');
-  var sede = cfg('evento_sede', 'PENDIENTE DE COMPLETAR');
-  var duracion = cfgNumero('duracion_audicion_min', 3);
-  var tolerancia = cfgNumero('tolerancia_min', 5);
-  var correoDatos = cfg('data_protection_email', 'PENDIENTE DE COMPLETAR');
+  var c = commsContext();
+  var firma = '\n\n— Equipo ' + c.evento;
+  var lugar = lugarTexto(c);
 
   return {
     RECEPCION: {
-      id: 'RECEPCION',
-      nombre: '1. Recepcion de inscripcion',
-      asunto: evento + ' - recibimos tu inscripcion',
+      id: 'RECEPCION', nombre: '1. Recepción de inscripción',
+      audiencia: function (r) { var e = normalizarComparable(r.eligibility_status); return e === 'APTO' || e === 'REVISION'; },
+      asunto: c.evento + ' — recibimos tu inscripción',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Recibimos tu inscripcion a ' + evento + '.\n\n' +
-        'Estamos validando los datos de todas las personas inscritas. Si quedas dentro de los ' +
-        cfgNumero('cupo_total', 100) + ' cupos, te enviaremos tu CODIGO y tu HORARIO.\n\n' +
-        'Ten presente que inscribirte no garantiza seleccion, contratacion ni presentacion.\n\n' +
-        'Si tienes dudas sobre tus datos personales escribe a ' + correoDatos + '.\n\n' +
-        '- Equipo ' + evento
+        'Recibimos tu inscripción a ' + c.evento + ' (comprobante {{submission_id}}).\n\n' +
+        'La organización revisa cada inscripción —datos, requisitos y muestra artística— y asigna los ' + c.cupo +
+        ' cupos en orden de inscripción entre quienes cumplen. Si quedas dentro, te enviaremos tu CÓDIGO y tu HORARIO.\n' +
+        '{{bloque_grupo}}\n' +
+        saveNumberLine(c) + '\n\n' +
+        'Puedes consultar tu inscripción en: {{url_mi_inscripcion}}\n\n' +
+        'Inscribirte no garantiza selección, contratación ni presentación.\n' +
+        'Dudas sobre tus datos personales: ' + c.correo_datos + '.' + firma
     },
 
     ASIGNACION: {
-      id: 'ASIGNACION',
-      nombre: '2. Asignacion de codigo y horario',
-      asunto: evento + ' - tu codigo {{code}} y tu horario',
+      id: 'ASIGNACION', nombre: '2. Asignación de código y horario',
+      audiencia: function (r) { return !!normalizarTexto(r.code); },
+      asunto: c.evento + ' — tu código {{code}} y tu horario',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Quedaste dentro de los participantes de ' + evento + '.\n\n' +
-        'CODIGO: {{code}}\n' +
-        'FECHA: ' + fecha + '\n' +
-        'HORA DE LLEGADA: {{arrival_time}}\n' +
-        'HORA DE AUDICION: {{final_time}}\n' +
-        'BLOQUE: {{final_block}}\n' +
-        'LUGAR: ' + sede + '\n\n' +
+        '¡Quedaste dentro de los ' + c.cupo + ' cupos de ' + c.evento + '!\n\n' +
+        'CÓDIGO: {{code}}\n' +
+        'FECHA: ' + c.fecha_texto + '\n' +
+        'LLEGADA (check-in): {{hora_llegada_texto}}\n' +
+        'AUDICIÓN: {{hora_audicion_texto}} (bloque {{final_block}})\n' +
+        'LUGAR: ' + lugar + '\n\n' +
         'IMPORTANTE:\n' +
-        '- Llega a la hora de llegada indicada, no a la hora de audicion.\n' +
-        '- Trae tu documento de identidad fisico: sin el no hay check-in.\n' +
-        '- Tu audicion dura maximo ' + duracion + ' minutos.\n' +
-        '- Tolerancia de ' + tolerancia + ' minutos. Si llegas mas tarde pierdes tu turno y pasas a contingencia ' +
-        '(audicionas solo si queda tiempo disponible).\n\n' +
-        'Tu codigo NO cambia nunca. Si tienes un impedimento real para asistir en tu horario, ' +
-        'tienes UNA sola solicitud de cambio aqui: {{url_cambio}}\n' +
-        'No respondas este mensaje para cambiar el horario: solo cuentan las solicitudes por ese enlace.\n\n' +
-        '- Equipo ' + evento
+        '- Llega a la hora de llegada, no a la de audición.\n' +
+        '- Trae tu documento de identidad original: sin él no hay check-in.\n' +
+        '- Tu audición dura máximo ' + c.duracion + ' minutos.\n' +
+        '- Tolerancia de ' + c.tolerancia + ' minutos. Si llegas más tarde pierdes tu turno y pasas a contingencia (' +
+        c.contingencia + '), solo si queda tiempo.\n' +
+        '{{bloque_pista}}{{bloque_grupo}}\n' +
+        'Tu código NO cambia nunca. Si tienes un impedimento real para asistir en tu horario, tienes UNA sola ' +
+        'solicitud de cambio aquí: {{url_cambio}}\n\n' +
+        saveNumberLine(c) + firma
     },
 
     CAMBIO_APROBADO: {
-      id: 'CAMBIO_APROBADO',
-      nombre: '3. Cambio aprobado',
-      asunto: evento + ' - cambio APROBADO, tu nuevo horario',
+      id: 'CAMBIO_APROBADO', nombre: '3. Cambio aprobado',
+      audiencia: function (r) { return normalizarComparable(r.change_status) === 'APROBADO'; },
+      asunto: c.evento + ' — cambio APROBADO, tu nuevo horario',
       cuerpo:
         'Hola {{full_name}},\n\n' +
         'Tu solicitud de cambio fue APROBADA.\n\n' +
-        'CODIGO: {{code}} (no cambia)\n' +
-        'NUEVA HORA DE LLEGADA: {{arrival_time}}\n' +
-        'NUEVA HORA DE AUDICION: {{final_time}}\n' +
-        'NUEVO BLOQUE: {{final_block}}\n\n' +
-        'Este es tu horario definitivo. El dia del evento no hay mas cambios.\n\n' +
-        '- Equipo ' + evento
+        'CÓDIGO: {{code}} (no cambia)\n' +
+        'NUEVA LLEGADA: {{hora_llegada_texto}}\n' +
+        'NUEVA AUDICIÓN: {{hora_audicion_texto}} (bloque {{final_block}})\n\n' +
+        'Este es tu horario definitivo. El día del evento no hay más cambios.' + firma
     },
 
     CAMBIO_RECHAZADO: {
-      id: 'CAMBIO_RECHAZADO',
-      nombre: '4. Cambio no aprobado',
-      asunto: evento + ' - tu solicitud de cambio no fue aprobada',
+      id: 'CAMBIO_RECHAZADO', nombre: '4. Cambio no aprobado',
+      audiencia: function (r) { return normalizarComparable(r.change_status) === 'RECHAZADO'; },
+      asunto: c.evento + ' — tu solicitud de cambio no fue aprobada',
       cuerpo:
         'Hola {{full_name}},\n\n' +
         'Revisamos tu solicitud de cambio y NO fue aprobada por disponibilidad de la agenda.\n\n' +
         'Tu horario sigue siendo:\n' +
-        'CODIGO: {{code}}\n' +
-        'HORA DE LLEGADA: {{arrival_time}}\n' +
-        'HORA DE AUDICION: {{final_time}}\n\n' +
-        'Si no puedes asistir, tu cupo quedara como no audicionado. Gracias por avisarnos.\n\n' +
-        '- Equipo ' + evento
+        'CÓDIGO: {{code}}\nLLEGADA: {{hora_llegada_texto}}\nAUDICIÓN: {{hora_audicion_texto}}\n\n' +
+        'Si no puedes asistir, tu cupo quedará como no audicionado. Gracias por avisarnos.' + firma
     },
 
     RECORDATORIO_24H: {
-      id: 'RECORDATORIO_24H',
-      nombre: '5. Recordatorio 24 h antes',
-      asunto: evento + ' - manana es tu audicion ({{code}})',
+      id: 'RECORDATORIO_24H', nombre: '5. Recordatorio 24 h antes',
+      audiencia: function (r) { return !!normalizarTexto(r.code); },
+      asunto: c.evento + ' — mañana es tu audición ({{code}})',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Manana ' + fecha + ' es tu audicion en ' + evento + '.\n\n' +
-        'CODIGO: {{code}}\n' +
-        'LLEGADA: {{arrival_time}} | AUDICION: {{final_time}}\n' +
-        'LUGAR: ' + sede + '\n\n' +
-        'Lleva tu documento fisico. Prepara ' + duracion + ' minutos exactos.\n' +
-        'Recuerda la tolerancia de ' + tolerancia + ' minutos.\n\n' +
-        '- Equipo ' + evento
+        'Mañana, ' + c.fecha_texto + ', es tu audición en ' + c.evento + '.\n\n' +
+        'CÓDIGO: {{code}}\nLLEGADA: {{hora_llegada_texto}} · AUDICIÓN: {{hora_audicion_texto}}\nLUGAR: ' + lugar + '\n\n' +
+        'Lleva tu documento original. Prepara máximo ' + c.duracion + ' minutos.\n' +
+        '{{bloque_pista}}Recuerda la tolerancia de ' + c.tolerancia + ' minutos.' + firma
     },
 
     RECORDATORIO_DIA: {
-      id: 'RECORDATORIO_DIA',
-      nombre: '6. Recordatorio del dia',
-      asunto: evento + ' - hoy es tu audicion ({{code}})',
+      id: 'RECORDATORIO_DIA', nombre: '6. Recordatorio del día',
+      audiencia: function (r) { return !!normalizarTexto(r.code); },
+      asunto: c.evento + ' — hoy es tu audición ({{code}})',
       cuerpo:
-        '{{full_name}}, hoy es tu audicion.\n\n' +
-        'CODIGO {{code}} | LLEGADA {{arrival_time}} | AUDICION {{final_time}}\n' +
-        'LUGAR: ' + sede + '\n\n' +
-        'Documento fisico obligatorio. Tolerancia ' + tolerancia + ' min.\n\n' +
-        '- Equipo ' + evento
+        '{{full_name}}, hoy es tu audición.\n\n' +
+        'CÓDIGO {{code}} · LLEGADA {{hora_llegada_texto}} · AUDICIÓN {{hora_audicion_texto}}\n' +
+        'LUGAR: ' + lugar + '\n\n' +
+        'Documento original obligatorio. Tolerancia de ' + c.tolerancia + ' minutos.' + firma
     },
 
     CONTINGENCIA: {
-      id: 'CONTINGENCIA',
-      nombre: '7. Contingencia / no show',
-      asunto: evento + ' - tu turno paso a contingencia',
+      id: 'CONTINGENCIA', nombre: '7. Contingencia / no show',
+      audiencia: function (r) {
+        var e = normalizarEstado(r.attendance_status);
+        return e === 'CONTINGENCIA' || e === 'NO SHOW';
+      },
+      asunto: c.evento + ' — tu turno pasó a contingencia',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Tu turno ({{code}}, {{final_time}}) paso a CONTINGENCIA.\n\n' +
-        'La contingencia funciona entre ' + cfg('contingencia_inicio', '21:00') + ' y ' +
-        cfg('cierre_audiciones', '21:30') + ', y solo alcanza para quienes quepan en el tiempo disponible, ' +
-        'en orden de llegada a la lista.\n\n' +
-        'Acercate al punto de check-in y espera el llamado. A las ' + cfg('cierre_audiciones', '21:30') +
-        ' se cierran definitivamente las audiciones.\n\n' +
-        '- Equipo ' + evento
+        'Tu turno ({{code}}, {{hora_audicion_texto}}) pasó a CONTINGENCIA.\n\n' +
+        'La contingencia funciona de ' + c.contingencia + ' y solo alcanza para quienes quepan en el tiempo ' +
+        'disponible, en orden de llegada a la lista.\n\n' +
+        'Acércate al punto de check-in y espera el llamado. A las ' + c.cierre +
+        ' se cierran definitivamente las audiciones.' + firma
+    },
+
+    INTEGRANTES_PENDIENTES: {
+      id: 'INTEGRANTES_PENDIENTES', nombre: '8. Agrupación: faltan autorizaciones',
+      audiencia: function (r, extra) { return !!r.group_code && extra.integrantes_autorizados < extra.integrantes_declarados; },
+      asunto: c.evento + ' — faltan autorizaciones de tu agrupación',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'En {{artistic_name}} ({{group_code}}) llevan {{integrantes_autorizados}} de {{integrantes_declarados}} ' +
+        'integrantes con su autorización individual.\n\n' +
+        'Cada integrante debe completar la suya en este enlace (tú no puedes autorizar por otra persona):\n' +
+        '{{members_link}}\n\n' +
+        'Sin la autorización de todos, quien falte deberá firmar la constancia física el día del evento.' + firma
+    },
+
+    PISTA_PENDIENTE: {
+      id: 'PISTA_PENDIENTE', nombre: '9. Pista pendiente',
+      audiencia: function (r) {
+        return !!normalizarTexto(r.code) && esVerdadero(r.track_uses) &&
+               normalizarComparable(r.track_status) === normalizarComparable(TRACK_STATUS.PENDIENTE);
+      },
+      asunto: c.evento + ' — envíanos tu pista ({{code}})',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'Aún no hemos recibido la pista de {{code}}.\n\n' +
+        'Envía el archivo indicando tu código {{code}}:\n' +
+        '- Por la web (recomendado): {{url_mi_inscripcion}}\n' +
+        (c.numero ? '- O por WhatsApp al ' + c.numero + ', escribiendo tu código {{code}} en el mensaje.\n' : '') +
+        '\nEl día del evento lleva también una copia en USB. Bluetooth no es el método principal.' + firma
+    },
+
+    GRUPO_WHATSAPP: {
+      id: 'GRUPO_WHATSAPP', nombre: '10. Invitación al grupo de WhatsApp',
+      audiencia: function (r) {
+        return esVerdadero(r.consent_whatsapp) &&
+               (normalizarComparable(r.eligibility_status) === 'APTO' || !!normalizarTexto(r.code));
+      },
+      asunto: c.evento + ' — grupo de WhatsApp de la convocatoria',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'Tu inscripción cumple los requisitos. Por aquí compartiremos las indicaciones operativas finales:\n' +
+        '{{enlace_grupo_whatsapp}}\n\n' +
+        saveNumberLine(c) + firma
     }
   };
 }
 
-/** Fills {{placeholders}} from a participant row. */
+/**
+ * Fills {{placeholders}} from a participant row plus explicit extras.
+ * A placeholder whose value is missing from the row stays visible on purpose,
+ * so a half-filled message is never sent unnoticed; extras (optional blocks)
+ * may legitimately be empty.
+ */
 function renderizarPlantilla(plantilla, registro, extras) {
-  var datos = Object.assign({}, registro, extras || {});
+  extras = extras || {};
   function sustituir(texto) {
     return String(texto).replace(/\{\{(\w+)\}\}/g, function (_, clave) {
-      var v = datos[clave];
+      if (extras.hasOwnProperty(clave)) return String(extras[clave] === null || extras[clave] === undefined ? '' : extras[clave]);
+      var v = registro[clave];
       return (v === undefined || v === null || v === '') ? '{{' + clave + '}}' : String(v);
     });
   }
-  return { asunto: sustituir(plantilla.asunto), cuerpo: sustituir(plantilla.cuerpo) };
+  return { asunto: sustituir(plantilla.asunto), cuerpo: sustituir(plantilla.cuerpo).replace(/\n{3,}/g, '\n\n') };
+}
+
+/** Per-row values the templates need that are not columns of REGISTRO. */
+function messageExtras(r, base, members) {
+  var summary = r.group_code ? groupSummary(r.group_code, members) : { authorized: 0, registered: 0 };
+  var declared = Number(r.members_declared) || 0;
+  var link = r.group_code ? membersLink(r.group_code) : '';
+  var groupLink = cfg('whatsapp_grupo_enlace', '');
+  return {
+    url_cambio: base + '?p=cambio-horario&code=' + encodeURIComponent(r.code || ''),
+    url_mi_inscripcion: base + '?p=mi-inscripcion',
+    members_link: link,
+    hora_llegada_texto: r.arrival_time ? humanTime(r.arrival_time) : '',
+    hora_audicion_texto: (r.final_time || r.original_time) ? humanTime(r.final_time || r.original_time) : '',
+    integrantes_autorizados: summary.authorized,
+    integrantes_declarados: declared,
+    enlace_grupo_whatsapp: groupLink && String(groupLink).indexOf('PENDIENTE') !== 0 ? groupLink : '(enlace pendiente)',
+    bloque_grupo: r.group_code
+      ? '\nAGRUPACIÓN ' + r.group_code + ': cada integrante debe dar su propia autorización en ' + link +
+        ' (van ' + summary.authorized + ' de ' + (declared || summary.registered) + ').\n'
+      : '',
+    bloque_pista: esVerdadero(r.track_uses)
+      ? '- PISTA: envíala antes del evento desde "Mi inscripción" (' + base + '?p=mi-inscripcion) indicando tu código ' +
+        (r.code || '') + ', y lleva una copia en USB.\n'
+      : ''
+  };
 }
 
 /**
- * Builds every message for a given template without sending anything.
- * Returns WhatsApp click-to-chat links so a human sends them one by one.
+ * Builds every message for a template without sending anything.
+ * Returns WhatsApp click-to-chat links (only for people who authorized
+ * WhatsApp) so a human sends them one by one from the official number.
  */
 function accionMensajes(datos, sesion) {
   var todas = plantillas();
@@ -3485,34 +5690,33 @@ function accionMensajes(datos, sesion) {
     return { ok: false, error: 'Plantilla desconocida.', disponibles: Object.keys(todas) };
   }
 
-  var base = ScriptApp.getService().getUrl();
-  var filas = leerHoja(HOJA.REGISTRO).filter(function (r) {
-    if (datos.solo_con_codigo !== 'NO' && !normalizarTexto(r.code)) return false;
-    if (datos.code) return normalizarComparable(r.code) === normalizarComparable(datos.code);
-    if (datos.bloque) return String(r.final_block || r.original_block) === String(datos.bloque);
-    return true;
-  });
-
-  var mensajes = filas.map(function (r) {
-    var render = renderizarPlantilla(plantilla, r, {
-      url_cambio: base + '?p=cambio-horario&code=' + encodeURIComponent(r.code || '')
-    });
+  var base = webAppUrl();
+  var members = leerHoja(HOJA.INTEGRANTES);
+  var mensajes = [];
+  leerHoja(HOJA.REGISTRO).forEach(function (r) {
+    if (datos.code && normalizarComparable(r.code) !== normalizarComparable(datos.code)) return;
+    if (datos.bloque && String(r.final_block || r.original_block) !== String(datos.bloque)) return;
+    var extras = messageExtras(r, base, members);
+    if (!plantilla.audiencia(r, extras)) return;
+    var render = renderizarPlantilla(plantilla, r, extras);
     var tel = normalizarTelefono(r.whatsapp);
-    return {
-      code: r.code, full_name: r.full_name, email: r.email, whatsapp: r.whatsapp,
-      consent_whatsapp: r.consent_whatsapp, asunto: render.asunto, cuerpo: render.cuerpo,
-      whatsapp_url: tel ? 'https://wa.me/57' + tel + '?text=' + encodeURIComponent(render.cuerpo) : ''
-    };
+    var allowsWhatsapp = esVerdadero(r.consent_whatsapp);
+    mensajes.push({
+      code: r.code, submission_id: r.submission_id, full_name: r.full_name, email: r.email, whatsapp: r.whatsapp,
+      consent_whatsapp: allowsWhatsapp, asunto: render.asunto, cuerpo: render.cuerpo,
+      whatsapp_url: tel && allowsWhatsapp ? 'https://wa.me/57' + tel + '?text=' + encodeURIComponent(render.cuerpo) : '',
+      sin_whatsapp: !allowsWhatsapp ? 'No autorizó WhatsApp: usar correo' : (!tel ? 'Sin número válido' : '')
+    });
   });
 
   registrar(sesion.alias, sesion.rol, 'GENERAR_MENSAJES', plantilla.id, mensajes.length + ' destinatarios');
-  return { plantilla: plantilla.id, nombre: plantilla.nombre, total: mensajes.length, mensajes: mensajes };
+  return { plantilla: plantilla.id, nombre: plantilla.nombre, total: mensajes.length, mensajes: mensajes,
+           plantillas: Object.keys(todas).map(function (k) { return { id: k, nombre: todas[k].nombre }; }) };
 }
 
 /**
- * Sends the emails for a template.
- *
- * A consumer Gmail account can send ~100 emails per day, so this reports the
+ * Sends the e-mails for a template.
+ * A consumer Gmail account can send ~100 e-mails per day, so this reports the
  * remaining quota and stops cleanly instead of failing halfway through.
  */
 function accionEnviarCorreos(datos, sesion) {
@@ -3529,11 +5733,10 @@ function accionEnviarCorreos(datos, sesion) {
     var m = preparado.mensajes[i];
     if (enviados.length >= limite) { omitidos.push({ code: m.code, motivo: 'CUOTA_O_LIMITE' }); continue; }
     if (!esEmailValido(m.email)) { omitidos.push({ code: m.code, motivo: 'SIN_CORREO_VALIDO' }); continue; }
-
+    if (/\.test$/i.test(normalizarEmail(m.email))) { omitidos.push({ code: m.code, motivo: 'DATO_DE_PRUEBA' }); continue; }
     try {
-      MailApp.sendEmail({ to: m.email, subject: m.asunto, body: m.cuerpo,
-                          name: cfg('evento_nombre', 'EL BUNKER') });
-      enviados.push(m.code);
+      MailApp.sendEmail({ to: m.email, subject: m.asunto, body: m.cuerpo, name: cfg('evento_nombre', 'EL BUNKER') });
+      enviados.push(m.code || m.submission_id);
     } catch (e) {
       omitidos.push({ code: m.code, motivo: e.message });
     }
@@ -3546,9 +5749,238 @@ function accionEnviarCorreos(datos, sesion) {
     plantilla: preparado.plantilla, enviados: enviados.length, omitidos: omitidos,
     cuota_restante: MailApp.getRemainingDailyQuota(),
     nota: omitidos.length
-      ? 'Quedaron mensajes sin enviar. Reintenta manana o envialos por WhatsApp con los enlaces generados.'
+      ? 'Quedaron mensajes sin enviar. Reintenta mañana o envíalos por WhatsApp con los enlaces generados.'
       : ''
   };
+}
+
+// ========================================================================
+// 33_media.gs
+// ========================================================================
+
+/**
+ * EL BUNKER - Drive folders for backing tracks and signatures, and the
+ * video-link checks. The decisions (names, formats, statuses) are pure and
+ * live in 06_core_media.gs; this file only talks to Drive and the network.
+ */
+
+/** Test-environment folders are prefixed so nobody mixes them up in Drive. */
+function envFolderName(base) {
+  return esPruebas() ? '[PRUEBAS] ' + base : base;
+}
+
+function rootFolderFromProperty(propKey, baseName) {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty(propKey);
+  if (id) {
+    try {
+      var existing = DriveApp.getFolderById(id);
+      if (!existing.isTrashed()) return existing;
+    } catch (e) { /* recreated below */ }
+  }
+  var folder = DriveApp.createFolder(envFolderName(baseName));
+  props.setProperty(propKey, folder.getId());
+  return folder;
+}
+
+function audioRootFolder() { return rootFolderFromProperty(PROP.AUDIO_FOLDER, 'EL BUNKER - Audio'); }
+function signaturesRootFolder() { return rootFolderFromProperty(PROP.SIGNATURES_FOLDER, 'EL BUNKER - Firmas'); }
+
+function childFolder(parent, name) {
+  var it = parent.getFoldersByName(name);
+  return it.hasNext() ? it.next() : parent.createFolder(name);
+}
+
+/** Audio/B-001/ ... one folder per issued code. Idempotent. */
+function prepareAudioFolders() {
+  var root = audioRootFolder();
+  var created = 0, existing = 0;
+  leerHoja(HOJA.REGISTRO).forEach(function (r) {
+    if (!normalizarTexto(r.code)) return;
+    if (root.getFoldersByName(r.code).hasNext()) { existing++; return; }
+    root.createFolder(r.code);
+    created++;
+  });
+  return { creadas: created, existentes: existing, carpeta: root.getUrl() };
+}
+
+function audioMimeType(ext) {
+  return { mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac',
+           ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac' }[ext] || 'application/octet-stream';
+}
+
+function timestampForNames() {
+  return Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd-HHmmss');
+}
+
+/**
+ * Stores a backing track as Audio/B-XXX/B-XXX_ARTISTA_CANCION.ext.
+ * A previous file is never deleted: it is renamed ..._REEMPLAZADA_<fecha>, so
+ * the technician can always go back to what was sent before.
+ */
+function storeTrack(row, originalName, base64, songName) {
+  var bytes;
+  try { bytes = Utilities.base64Decode(String(base64 || '')); }
+  catch (e) { return { ok: false, error: 'El archivo llego danado. Intenta de nuevo.' }; }
+
+  var check = validateTrackUpload(originalName, bytes.length, bytes.slice(0, 12), {
+    max_mb: cfgNumero('pista_max_mb', 15),
+    formats: cfg('pista_formatos', 'mp3,wav,m4a,aac,ogg,flac')
+  });
+  if (!check.ok) return check;
+
+  var folder = childFolder(audioRootFolder(), row.code);
+  var name = trackFileName(row.code, row.artistic_name || row.full_name, songName || row.song_name, check.extension);
+  var stamp = timestampForNames();
+  var previous = folder.getFiles();
+  while (previous.hasNext()) {
+    var f = previous.next();
+    if (f.getName().indexOf('_REEMPLAZADA_') === -1) {
+      f.setName(f.getName().replace(/(\.[A-Za-z0-9]+)?$/, '_REEMPLAZADA_' + stamp + '$1'));
+    }
+  }
+  var file = folder.createFile(Utilities.newBlob(bytes, audioMimeType(check.extension), name));
+  return { ok: true, file_id: file.getId(), file_name: name, url: file.getUrl(), bytes: bytes.length };
+}
+
+/** Saves a drawn signature and returns its Drive id and SHA-256 (evidence of what was stored). */
+function storeSignature(groupCode, memberId, dataUrl) {
+  var parsed = parsePngDataUrl(dataUrl);
+  if (!parsed.ok) return parsed;
+  var bytes = Utilities.base64Decode(parsed.base64);
+  if (!isPngBytes(bytes)) return { ok: false, error: 'La firma no es una imagen PNG valida.' };
+  if (bytes.length > 300 * 1024) return { ok: false, error: 'La imagen de la firma es demasiado grande.' };
+  var folder = childFolder(signaturesRootFolder(), groupCode);
+  var file = folder.createFile(Utilities.newBlob(bytes, 'image/png', groupCode + '_' + memberId + '_' + timestampForNames() + '.png'));
+  var hash = bytesToHex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, bytes));
+  return { ok: true, file_id: file.getId(), sha256: hash };
+}
+
+/** data:image/png;base64,... of a stored signature, for the printable record. */
+function signatureDataUrl(fileId) {
+  if (!fileId) return '';
+  try {
+    return 'data:image/png;base64,' + Utilities.base64Encode(DriveApp.getFileById(fileId).getBlob().getBytes());
+  } catch (e) { return ''; }
+}
+
+// ---------------------------------------------------------------------------
+// Video links
+// ---------------------------------------------------------------------------
+
+function videoCacheKey(url) {
+  return 'video:' + bytesToHex(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, normalizarTexto(url))).slice(0, 24);
+}
+
+function probeParams(req) {
+  return { method: req.method || 'get', muteHttpExceptions: true, followRedirects: req.followRedirects };
+}
+
+function interpretResponse(req, response) {
+  var headers = response.getHeaders() || {};
+  var location = headers.Location || headers.location || '';
+  var body = '';
+  if (req.method !== 'head') {
+    try { body = response.getContentText().slice(0, 4000); } catch (e) { body = ''; }
+  }
+  return interpretVideoProbe(req.provider, response.getResponseCode(), location, body);
+}
+
+/**
+ * Checks one link as an anonymous visitor would (no cookies, no login).
+ * Results are cached for 6 hours so the live check in the form and the
+ * submission share one request.
+ */
+function checkVideoUrl(url, useCache) {
+  var immediate = videoStatusWithoutProbe(url);
+  if (immediate) return immediate;
+  var cache = CacheService.getScriptCache();
+  var key = videoCacheKey(url);
+  if (useCache !== false) {
+    var hit = cache.get(key);
+    if (hit) return JSON.parse(hit);
+  }
+  var req = videoProbeRequest(url);
+  var out;
+  try {
+    out = interpretResponse(req, UrlFetchApp.fetch(req.url, probeParams(req)));
+  } catch (e) {
+    out = { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'No se pudo consultar el enlace: ' + String(e.message).slice(0, 120) };
+  }
+  cache.put(key, JSON.stringify(out), 21600);
+  return out;
+}
+
+/** Cached result only, never a network call (used inside the submission lock). */
+function cachedVideoCheck(url) {
+  var immediate = videoStatusWithoutProbe(url);
+  if (immediate) return immediate;
+  var hit = CacheService.getScriptCache().get(videoCacheKey(url));
+  return hit ? JSON.parse(hit) : null;
+}
+
+/**
+ * Re-checks every pending link (or all of them) in parallel batches and writes
+ * the result into REGISTRO. Runs from the admin panel and from an hourly trigger.
+ */
+function verifyPendingVideos(options) {
+  options = options || {};
+  var limit = options.limit || 200;
+  var rows = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    if (!normalizarTexto(r.video_url)) return false;
+    if (options.all) return true;
+    var st = normalizarComparable(r.video_check_status);
+    return !st || st === 'PENDIENTE';
+  }).slice(0, limit);
+
+  var now = ahoraISO();
+  var updates = [];
+  var counts = {};
+  var probes = [];
+  rows.forEach(function (r) {
+    var immediate = videoStatusWithoutProbe(r.video_url);
+    if (immediate) {
+      updates.push({ fila: r._fila, cambios: { video_check_status: immediate.status, video_check_detail: immediate.detail, video_checked_at: now } });
+      counts[immediate.status] = (counts[immediate.status] || 0) + 1;
+    } else {
+      probes.push({ row: r, req: videoProbeRequest(r.video_url) });
+    }
+  });
+
+  for (var i = 0; i < probes.length; i += 20) {
+    var chunk = probes.slice(i, i + 20);
+    var responses = null;
+    try {
+      responses = UrlFetchApp.fetchAll(chunk.map(function (p) {
+        return Object.assign({ url: p.req.url }, probeParams(p.req));
+      }));
+    } catch (e) { responses = null; }
+    chunk.forEach(function (p, j) {
+      var out;
+      try {
+        var response = responses ? responses[j] : UrlFetchApp.fetch(p.req.url, probeParams(p.req));
+        out = interpretResponse(p.req, response);
+      } catch (err) {
+        out = { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'No se pudo consultar el enlace.' };
+      }
+      CacheService.getScriptCache().put(videoCacheKey(p.row.video_url), JSON.stringify(out), 21600);
+      updates.push({ fila: p.row._fila, cambios: { video_check_status: out.status, video_check_detail: out.detail, video_checked_at: now } });
+      counts[out.status] = (counts[out.status] || 0) + 1;
+    });
+  }
+
+  actualizarFilasEnLote(HOJA.REGISTRO, updates);
+  return { revisados: updates.length, por_estado: counts };
+}
+
+/** Hourly trigger entry point. */
+function verificarVideosPendientes() {
+  try {
+    var r = verifyPendingVideos({ limit: 150 });
+    if (r.revisados) registrar('sistema', 'admin', 'VERIFICAR_VIDEOS', '', JSON.stringify(r.por_estado));
+  } catch (e) {
+    console.error('Verificacion de videos fallo: ' + e.message);
+  }
 }
 
 // ========================================================================
@@ -3556,89 +5988,53 @@ function accionEnviarCorreos(datos, sesion) {
 // ========================================================================
 
 /**
- * EL BUNKER - One-time setup.
- *
- * Run setupInicial() once from the Apps Script editor. It is idempotent: it
- * creates what is missing and leaves existing data alone.
+ * EL BUNKER - Installation, migration of an existing base, accounts and the
+ * health check. Everything here is idempotent: it creates what is missing and
+ * leaves existing data alone.
  */
 
 function setupInicial() {
   var props = PropertiesService.getScriptProperties();
+  var env = environmentName();
   var id = props.getProperty(PROP.SPREADSHEET_ID);
-  var libroNuevo;
+  var book = null;
 
   if (id) {
-    try { libroNuevo = SpreadsheetApp.openById(id); }
-    catch (e) { id = null; }
+    try { book = SpreadsheetApp.openById(id); } catch (e) { book = null; }
   }
-  if (!id) {
-    libroNuevo = SpreadsheetApp.create('EL BUNKER - BASE MAESTRA');
-    props.setProperty(PROP.SPREADSHEET_ID, libroNuevo.getId());
-    libroNuevo.setSpreadsheetTimeZone('America/Bogota');
+  if (!book) {
+    book = SpreadsheetApp.create(env === 'test' ? '[PRUEBAS] EL BUNKER - BASE MAESTRA' : 'EL BUNKER - BASE MAESTRA');
+    props.setProperty(PROP.SPREADSHEET_ID, book.getId());
+    book.setSpreadsheetTimeZone('America/Bogota');
   }
 
-  var definiciones = [
-    [HOJA.REGISTRO, COLUMNAS_REGISTRO],
-    [HOJA.AGENDA, COLUMNAS_AGENDA],
-    [HOJA.CHECK_IN, COLUMNAS_CHECK_IN],
-    [HOJA.JURADO_1, COLUMNAS_JURADO],
-    [HOJA.JURADO_2, COLUMNAS_JURADO],
-    [HOJA.JURADO_3, COLUMNAS_JURADO],
-    [HOJA.RESULTADOS, COLUMNAS_RESULTADOS],
-    [HOJA.DASHBOARD, ['INDICADOR', 'VALOR']],
-    [HOJA.INCIDENTES, COLUMNAS_INCIDENTES],
-    [HOJA.CONFIG, ['clave', 'valor', 'descripcion']],
-    [HOJA.CAMBIOS, COLUMNAS_CAMBIOS],
-    [HOJA.USUARIOS, COLUMNAS_USUARIOS],
-    [HOJA.LOG, COLUMNAS_LOG],
-    [HOJA.IDEMPOTENCIA, COLUMNAS_IDEMPOTENCIA]
-  ];
+  markSpreadsheetEnvironment(book, env);          // refuses to mix environments
+  var schema = ensureSchema(book);
 
-  definiciones.forEach(function (d) {
-    var h = libroNuevo.getSheetByName(d[0]);
-    if (!h) h = libroNuevo.insertSheet(d[0]);
-    if (h.getLastRow() === 0 || String(h.getRange(1, 1).getValue()).trim() === '') {
-      h.getRange(1, 1, 1, d[1].length).setValues([d[1]]);
-    }
-    h.getRange(1, 1, 1, Math.max(1, h.getLastColumn())).setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff');
-    h.setFrozenRows(1);
-  });
-
-  // Drop the default "Hoja 1" only once every real sheet exists.
+  // Drop the default first sheet only once every real sheet exists.
   ['Sheet1', 'Hoja 1', 'Hoja1'].forEach(function (n) {
-    var s = libroNuevo.getSheetByName(n);
-    if (s && libroNuevo.getSheets().length > 1) libroNuevo.deleteSheet(s);
+    var s = book.getSheetByName(n);
+    if (s && book.getSheets().length > 1) book.deleteSheet(s);
   });
 
-  // CONFIG defaults, only for keys that do not exist yet.
-  var hojaConfig = libroNuevo.getSheetByName(HOJA.CONFIG);
-  var existentes = {};
-  if (hojaConfig.getLastRow() > 1) {
-    hojaConfig.getRange(2, 1, hojaConfig.getLastRow() - 1, 1).getValues()
-      .forEach(function (f) { existentes[String(f[0]).trim()] = true; });
-  }
-  var porDefecto = configuracionPorDefecto().slice(1);
-  var faltantes = porDefecto.filter(function (f) { return !existentes[f[0]]; });
-  if (faltantes.length) {
-    hojaConfig.getRange(hojaConfig.getLastRow() + 1, 1, faltantes.length, 3).setValues(faltantes);
-  }
-  hojaConfig.setColumnWidth(1, 220).setColumnWidth(2, 320).setColumnWidth(3, 460);
-
+  var config = ensureConfig(book, false);
   invalidarCacheConfig();
   secretoHmac();                                   // generate the signing key now
   instalarDisparadores();
   refrescarVistas();
 
   var admin = provisionarUsuario('admin', ROL.ADMIN, 'Cuenta principal de administracion');
-
-  registrar('sistema', 'admin', 'SETUP_INICIAL', libroNuevo.getId(), VERSION_SISTEMA);
+  registrar('sistema', 'admin', 'SETUP_INICIAL', book.getId(), VERSION_SISTEMA + ' ' + env);
 
   var resumen = {
-    spreadsheet_id: libroNuevo.getId(),
-    spreadsheet_url: libroNuevo.getUrl(),
+    entorno: env,
+    spreadsheet_id: book.getId(),
+    spreadsheet_url: book.getUrl(),
     web_app_url: urlSegura(),
     enlace_admin: admin.url,
-    version: VERSION_SISTEMA
+    version: VERSION_SISTEMA,
+    esquema: schema,
+    config: config
   };
   console.log(JSON.stringify(resumen, null, 2));
   return resumen;
@@ -3649,6 +6045,73 @@ function urlSegura() {
   catch (e) { return '(despliega la app como Web App para obtener la URL)'; }
 }
 
+/** "1899-12-30T16:00:00"/Date -> "16:00"; "2026-10-02T00:00:00" -> "2026-10-02". */
+function configValueAsText(value) {
+  if (value instanceof Date) {
+    var tz = zonaHoraria();
+    if (value.getFullYear() < 1901) return Utilities.formatDate(value, tz, 'HH:mm');
+    var time = Utilities.formatDate(value, tz, 'HH:mm');
+    return Utilities.formatDate(value, tz, 'yyyy-MM-dd') + (time !== '00:00' ? ' ' + time : '');
+  }
+  var s = String(value === null || value === undefined ? '' : value);
+  var t = s.match(/^1899-12-3\d[T ](\d{2}:\d{2})/);
+  if (t) return t[1];
+  var d = s.match(/^(\d{4}-\d{2}-\d{2})T00:00:00$/);
+  if (d) return d[1];
+  return s;
+}
+
+/**
+ * Makes CONFIG plain text (Sheets otherwise turns "15:00" into a date), adds
+ * missing keys and, when migrating, updates values that still hold an
+ * iteration-1 default. Anything an operator typed on purpose is kept and
+ * reported as a conflict.
+ */
+function ensureConfig(book, migrate) {
+  var sheet = book.getSheetByName(HOJA.CONFIG);
+  var defaults = configuracionPorDefecto().slice(1);
+  var defaultByKey = {};
+  defaults.forEach(function (d) { defaultByKey[d[0]] = d; });
+
+  var last = sheet.getLastRow();
+  var rows = last > 1 ? sheet.getRange(2, 1, last - 1, 3).getValues() : [];
+  sheet.getRange(2, 2, Math.max(1, sheet.getMaxRows() - 1), 1).setNumberFormat('@');
+
+  var report = { agregadas: [], actualizadas: [], conflictos: [], convertidas: 0 };
+  var present = {};
+  rows.forEach(function (row, i) {
+    var key = String(row[0]).trim();
+    if (!key) return;
+    present[key] = true;
+    var text = configValueAsText(row[1]);
+    var rowNumber = i + 2;
+    if (text !== row[1]) { sheet.getRange(rowNumber, 2).setValue(text); report.convertidas++; }
+
+    var def = defaultByKey[key];
+    if (!def) return;
+    if (migrate && text !== def[1]) {
+      var olds = (CONFIG_ITERATION1_VALUES[key] || []).map(configValueAsText);
+      var replaceable = text === '' || text.indexOf('PENDIENTE') === 0 || olds.indexOf(text) !== -1;
+      if (replaceable) {
+        sheet.getRange(rowNumber, 2).setValue(def[1]);
+        report.actualizadas.push(key + ': "' + text + '" -> "' + def[1] + '"');
+      } else {
+        report.conflictos.push(key + ': se conserva "' + text + '" (valor nuevo sugerido: "' + def[1] + '")');
+      }
+    }
+    if (migrate && String(row[2]) !== def[2]) sheet.getRange(rowNumber, 3).setValue(def[2]);
+  });
+
+  var missing = defaults.filter(function (d) { return !present[d[0]]; });
+  if (missing.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, missing.length, 3).setValues(missing);
+    report.agregadas = missing.map(function (d) { return d[0]; });
+  }
+  sheet.setColumnWidth(1, 240).setColumnWidth(2, 360).setColumnWidth(3, 520);
+  invalidarCacheConfig();
+  return report;
+}
+
 function instalarDisparadores() {
   var existentes = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   if (existentes.indexOf('respaldoAutomatico') === -1) {
@@ -3657,26 +6120,38 @@ function instalarDisparadores() {
   if (existentes.indexOf('refrescarVistas') === -1) {
     ScriptApp.newTrigger('refrescarVistas').timeBased().everyHours(6).create();
   }
+  if (existentes.indexOf('verificarVideosPendientes') === -1) {
+    ScriptApp.newTrigger('verificarVideosPendientes').timeBased().everyHours(1).create();
+  }
 }
 
-/**
- * Creates the five operating accounts and prints their access links.
- * Run once, hand each link to its person, never share links between roles.
- */
+/** Operating accounts: one link per person, never shared between roles. */
+var OPERATIONAL_ACCOUNTS = [
+  ['admin', ROL.ADMIN, 'Cuenta principal de administracion'],
+  ['coordinacion', ROL.LOGISTICA, 'Coordinador logistico'],
+  ['direccion', ROL.DIRECCION, 'Direccion / gerencia'],
+  ['checkin-1', ROL.CHECKIN, 'Mesa de check-in 1'],
+  ['checkin-2', ROL.CHECKIN, 'Mesa de check-in 2'],
+  ['stage-manager', ROL.CHECKIN, 'Stage manager y cronometro (precola / audicion / salida)'],
+  ['tecnico-audio', ROL.CHECKIN, 'Tecnico de audio (pistas)'],
+  ['jurado-1', ROL.JURADO, 'jurado 1'],
+  ['jurado-2', ROL.JURADO, 'jurado 2'],
+  ['jurado-3', ROL.JURADO, 'jurado 3']
+];
+
+/** Creates (or refreshes) every operating account and prints its link. */
 function crearAccesosOperativos() {
-  var cuentas = [
-    ['admin', ROL.ADMIN, 'Cuenta principal de administracion'],
-    ['coordinacion', ROL.LOGISTICA, 'Coordinador logistico'],
-    ['direccion', ROL.DIRECCION, 'Direccion / gerencia'],
-    ['checkin-1', ROL.CHECKIN, 'Mesa de check-in 1'],
-    ['checkin-2', ROL.CHECKIN, 'Mesa de check-in 2'],
-    ['jurado-1', ROL.JURADO, 'jurado 1'],
-    ['jurado-2', ROL.JURADO, 'jurado 2'],
-    ['jurado-3', ROL.JURADO, 'jurado 3']
-  ];
-  var salida = cuentas.map(function (c) { return provisionarUsuario(c[0], c[1], c[2]); });
+  var salida = OPERATIONAL_ACCOUNTS.map(function (c) { return provisionarUsuario(c[0], c[1], c[2]); });
   console.log(salida.map(function (s) { return s.alias + ' (' + s.rol + '):\n  ' + s.url; }).join('\n\n'));
   return salida;
+}
+
+/** Only the accounts that do not exist yet; existing links keep working untouched. */
+function ensureOperationalAccounts() {
+  var existing = {};
+  leerHoja(HOJA.USUARIOS).forEach(function (u) { existing[normalizarComparable(u.email_o_alias)] = true; });
+  return OPERATIONAL_ACCOUNTS.filter(function (c) { return !existing[normalizarComparable(c[0])]; })
+    .map(function (c) { return provisionarUsuario(c[0], c[1], c[2]); });
 }
 
 /** Prints the live access links again without re-issuing tokens. */
@@ -3685,24 +6160,148 @@ function verAccesos() {
     return normalizarComparable(u.activo) !== 'NO';
   });
   var salida = usuarios.map(function (u) {
-    return { alias: u.email_o_alias, rol: u.rol, url: urlPanel(u.rol, u.token) };
+    return { alias: u.email_o_alias, rol: u.rol, url: urlPanel(u.rol, u.token), expira: tokenExpiry(u.token) };
   });
-  console.log(salida.map(function (s) { return s.alias + ' (' + s.rol + '):\n  ' + s.url; }).join('\n\n'));
+  console.log(salida.map(function (s) { return s.alias + ' (' + s.rol + ', vence ' + s.expira + '):\n  ' + s.url; }).join('\n\n'));
   return salida;
 }
 
-/** Full reset of operational data. Keeps CONFIG and users. Asks for confirmation. */
+function tokenExpiry(token) {
+  try {
+    var payload = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(String(token).split('.')[0])).getDataAsString());
+    return Utilities.formatDate(new Date(payload.e), zonaHoraria(), 'yyyy-MM-dd');
+  } catch (e) { return '?'; }
+}
+
+/**
+ * Upgrades an EXISTING base (production) to this version. Only adds: sheets,
+ * columns at the end, CONFIG keys; updates CONFIG values that still hold an
+ * iteration-1 default. A raw backup is taken first and row counts are compared
+ * before and after.
+ */
+function migrarBase() {
+  var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty(PROP.SPREADSHEET_ID)) throw new Error('No hay base maestra: usa INSTALAR.');
+  var book = libro();
+  var env = environmentName();
+
+  var countRows = function () {
+    var out = {};
+    ['REGISTRO', '_CAMBIOS', '_USUARIOS', 'INCIDENTES', 'JURADO_1', 'JURADO_2', 'JURADO_3'].forEach(function (n) {
+      out[n] = leerHoja(n).length;
+    });
+    return out;
+  };
+  var before = countRows();
+  var safety = rawBackup('PRE-MIGRACION');
+
+  var marker = markSpreadsheetEnvironment(book, env);
+  var schema = ensureSchema(book);
+  var config = ensureConfig(book, true);
+  invalidarCacheConfig();
+  instalarDisparadores();
+  var accounts = ensureOperationalAccounts();
+  refrescarVistas();
+
+  var after = countRows();
+  var intact = Object.keys(before).every(function (k) { return before[k] === after[k]; });
+  var report = {
+    entorno: env, marca_hoja: marker, version: VERSION_SISTEMA, filas_antes: before, filas_despues: after,
+    datos_intactos: intact, respaldo_previo: safety, esquema: schema, config: config,
+    cuentas_nuevas: accounts.map(function (a) { return a.alias; })
+  };
+  registrar('sistema', 'admin', 'MIGRAR_V2', book.getId(), JSON.stringify({ intactos: intact, conflictos: config.conflictos.length }));
+  if (!intact) throw new Error('ATENCION: cambio el numero de filas durante la migracion. Revisa el respaldo ' + safety.json);
+  return report;
+}
+
+/** Backup of the sheets exactly as they are, without rebuilding views first (used before a migration). */
+function rawBackup(label) {
+  var marca = Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd-HHmmss');
+  var xlsx = exportarXlsx('RESPALDO-' + label + '-' + marca);
+  var dump = {};
+  libro().getSheets().forEach(function (s) { dump[s.getName()] = leerHoja(s.getName()); });
+  var json = carpetaBackups().createFile(Utilities.newBlob(
+    JSON.stringify({ generado_at: ahoraISO(), version: 'previa', entorno: environmentName(), etiqueta: label, datos: dump }, null, 1),
+    'application/json', 'RESPALDO-' + label + '-' + marca + '.json'));
+  return { xlsx: xlsx.nombre, json: json.getName(), json_id: json.getId() };
+}
+
+/**
+ * Health check for the release report: environment keys, schema, forms,
+ * triggers, legal flags and - in production - that no test data is present.
+ */
+function systemHealth() {
+  var book = libro();
+  var missingColumns = {};
+  sheetDefinitions().forEach(function (d) {
+    var sheet = book.getSheetByName(d[0]);
+    if (!sheet) { missingColumns[d[0]] = 'FALTA LA HOJA'; return; }
+    var header = encabezados(d[0]);
+    var miss = d[1].filter(function (c) { return header.indexOf(c) === -1; });
+    if (miss.length) missingColumns[d[0]] = miss;
+  });
+  var triggers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
+  var audit = auditTestData();
+  var legalPending = ['legal_name', 'nit', 'legal_address', 'data_protection_email', 'institutional_phone', 'terms_version']
+    .filter(function (k) { return String(cfg(k, 'PENDIENTE')).indexOf('PENDIENTE') === 0; });
+  return {
+    version: VERSION_SISTEMA,
+    entorno: environmentName(),
+    marca_hoja: spreadsheetEnvironment(book),
+    llaves_coinciden: environmentName() === spreadsheetEnvironment(book),
+    base: book.getName(),
+    web_app: urlSegura(),
+    esquema_completo: Object.keys(missingColumns).length === 0,
+    columnas_faltantes: missingColumns,
+    disparadores: triggers,
+    formularios: {
+      inscripcion: cfgBool('inscripciones_abiertas', true), cambios: cfgBool('cambios_abiertos', true),
+      integrantes: cfgBool('integrantes_abierto', true), pistas: cfgBool('pistas_abiertas', true)
+    },
+    evento: { fecha: cfgFecha('evento_fecha', ''), inicio: cfgHora('evento_hora_inicio', ''), sede: cfg('evento_sede', ''),
+              edades: cfgNumero('edad_minima', 18) + '-' + cfgNumero('edad_maxima', 30), top: cfgNumero('top_seleccionados', 8) },
+    legal: { datos_verificados: cfgBool('datos_legales_verificados', false), pendientes: legalPending,
+             terms_version: cfg('terms_version', ''), policy_version: cfg('policy_version', '') },
+    datos_de_prueba: audit,
+    produccion_limpia: environmentName() !== 'production' || audit.limpio
+  };
+}
+
+function accionEstadoSistema() {
+  return { salud: systemHealth() };
+}
+
+/** Full reset of operational data in the TEST environment. Keeps CONFIG and users. */
 function borrarDatosDePrueba(confirmacion) {
+  exigirEntornoPruebas('LIMPIAR');
   if (confirmacion !== 'SI-BORRAR') {
     throw new Error('Para evitar un borrado accidental, llama borrarDatosDePrueba("SI-BORRAR").');
   }
   return conBloqueo(function () {
-    [HOJA.REGISTRO, HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3,
+    [HOJA.REGISTRO, HOJA.INTEGRANTES, HOJA.DELIBERACIONES, HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3,
      HOJA.INCIDENTES, HOJA.CAMBIOS, HOJA.LOG, HOJA.IDEMPOTENCIA].forEach(limpiarDatos);
+    var trashed = trashTestFiles();
+    resetRehearsalState();
     refrescarVistas();
-    registrar('sistema', 'admin', 'BORRAR_DATOS_PRUEBA', '', 'confirmado');
-    return { ok: true, mensaje: 'Datos operativos borrados. CONFIG y usuarios intactos.' };
+    registrar('sistema', 'admin', 'BORRAR_DATOS_PRUEBA', '', 'confirmado; archivos a la papelera=' + trashed);
+    return { ok: true, archivos_a_papelera: trashed, mensaje: 'Datos operativos de PRUEBAS borrados. CONFIG y usuarios intactos.' };
   });
+}
+
+/** Sends the test environment's audio and signature files to the Drive trash. Test only. */
+function trashTestFiles() {
+  exigirEntornoPruebas('LIMPIAR ARCHIVOS');
+  var count = 0;
+  [PROP.AUDIO_FOLDER, PROP.SIGNATURES_FOLDER].forEach(function (key) {
+    var id = PropertiesService.getScriptProperties().getProperty(key);
+    if (!id) return;
+    try {
+      var folders = DriveApp.getFolderById(id).getFolders();
+      while (folders.hasNext()) { folders.next().setTrashed(true); count++; }
+    } catch (e) { /* folder already gone */ }
+  });
+  return count;
 }
 
 // ========================================================================
@@ -3710,14 +6309,20 @@ function borrarDatosDePrueba(confirmacion) {
 // ========================================================================
 
 /**
- * EL BUNKER - Fictitious test dataset.
+ * EL BUNKER - Fictitious test dataset and the end-to-end rehearsal (ENSAYO).
  *
- * Generates 130 submissions on purpose: more than the 100 seats, and salted
- * with every failure mode from the QA list, so running the real pipeline over
- * it proves that exactly 100 definitive codes are issued and everything else
- * lands in a correct, traceable state.
+ * Generates 130 project submissions on purpose: more than the 100 seats, and
+ * salted with every failure mode from the QA list (duplicates, out-of-range
+ * ages, residence, incomplete forms, repeated group names, malformed groups,
+ * minor members, missing signatures...), so running the real pipeline over it
+ * proves that exactly 100 definitive codes are issued and everything else lands
+ * in a correct, traceable state.
  *
- * Names and documents are invented. No real person's data is used.
+ * Names and documents are invented. No real person's data is used, and every
+ * row carries seed markers (source "seed", SEED- ids, @ejemplo-bunker.test
+ * e-mails) that production refuses.
+ *
+ * Everything above cargarDatosDePrueba() is pure (the Node tests load it).
  */
 
 var NOMBRES_PRUEBA = ['Ana', 'Carlos', 'Daniela', 'Esteban', 'Farid', 'Gabriela', 'Hector',
@@ -3727,8 +6332,15 @@ var APELLIDOS_PRUEBA = ['Restrepo', 'Gomez', 'Arango', 'Zapata', 'Ospina', 'Card
   'Mesa', 'Quintero', 'Betancur', 'Jaramillo', 'Munoz', 'Ramirez', 'Agudelo', 'Salazar'];
 var SECTORES_PRUEBA = ['Aliadas del Sur', 'Betania', 'Calle del Banco', 'Holanda', 'La Doctora',
   'Los Alcazares', 'Maria Auxiliadora', 'Playa Rica', 'Restrepo Naranjo', 'San Joaquin', 'Vegas de la Doctora'];
-var DISCIPLINAS_PRUEBA = ['Canto', 'Rap / Hip hop', 'Danza urbana', 'Danza contemporanea',
-  'Musica instrumental', 'Teatro', 'Poesia / spoken word', 'DJ / produccion', 'Circo'];
+var TEST_GENRES = ['Pop', 'Urbano', 'Rap / Hip hop', 'Trap', 'R&B / Soul', 'Rock', 'Salsa',
+  'Musica popular', 'Electronica / DJ', 'Balada', 'Folclor', 'Freestyle'];
+var TEST_ROLES = ['Voz', 'Guitarra', 'Bajo', 'Bateria', 'Teclado', 'Coros', 'DJ', 'Baile', 'Percusion'];
+
+/** A tiny valid PNG (1x1), used as the drawn signature of seed members. */
+var TEST_SIGNATURE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+/** A public, long-lived video: exercises the ACCESIBLE path of the video check. */
+var TEST_PUBLIC_VIDEO = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
 
 function seudoAleatorio(semilla) {
   var s = semilla;
@@ -3738,13 +6350,15 @@ function seudoAleatorio(semilla) {
   };
 }
 
+function pad3(n) { var s = String(n); while (s.length < 3) s = '0' + s; return s; }
+
 /**
- * Builds the dataset in memory. Deterministic: the same seed always produces
- * the same 130 rows, so a failing QA run can be reproduced exactly.
+ * Builds the project submissions in memory. Deterministic: the same seed
+ * always produces the same rows, so a failing QA run can be reproduced exactly.
  */
 function construirDatasetPrueba(total) {
   total = total || 130;
-  var azar = seudoAleatorio(20261002);
+  var azar = seudoAleatorio(20261023);
   var filas = [];
   var base = 1000000000;
 
@@ -3752,30 +6366,46 @@ function construirDatasetPrueba(total) {
     var nombre = NOMBRES_PRUEBA[Math.floor(azar() * NOMBRES_PRUEBA.length)];
     var apellido = APELLIDOS_PRUEBA[Math.floor(azar() * APELLIDOS_PRUEBA.length)];
     var apellido2 = APELLIDOS_PRUEBA[Math.floor(azar() * APELLIDOS_PRUEBA.length)];
-    // Age is kept strictly inside 19..27 so that ONLY the deliberately seeded
-    // rows below fall outside the 18-28 rule. Months are capped at September so
-    // the birthday has already passed on 2 October and the age is exact.
-    var edad = 19 + Math.floor(azar() * 9);                    // 19..27
+    // Ages stay strictly inside 19..29 so that ONLY the seeded rows below fall
+    // outside the 18-30 rule. Months are capped at September so the birthday
+    // has already passed on 23 October and the computed age is exact.
+    var edad = 19 + Math.floor(azar() * 11);                   // 19..29
     var anio = 2026 - edad;
     var mes = 1 + Math.floor(azar() * 9);                      // 1..9
     var dia = 1 + Math.floor(azar() * 28);
 
+    var mode = i % 10 === 3 ? 'AGRUPACION' : (i % 10 === 7 ? 'DUO' : 'SOLISTA');
+    var format = PRESENTATION_FORMATS[i % PRESENTATION_FORMATS.length];
+    var usesTrack = i % 3 === 0;
+
     var fila = {
       client_submission_id: 'SEED-' + i,
+      form_elapsed_ms: 60000,
       full_name: nombre + ' ' + apellido + ' ' + apellido2,
       id_number: String(base + i * 137),
       birth_date: anio + '-' + (mes < 10 ? '0' : '') + mes + '-' + (dia < 10 ? '0' : '') + dia,
+      adult_confirmation: true,
       neighborhood_sector: SECTORES_PRUEBA[Math.floor(azar() * SECTORES_PRUEBA.length)],
-      resides_in_sabaneta: true,
+      resides_in_sabaneta: 'SI',
       email: 'prueba' + i + '@ejemplo-bunker.test',
       whatsapp: '3' + String(100000000 + i * 7919).slice(0, 9),
-      artistic_name: 'PRUEBA-' + String(i).padStart(3, '0'),
-      discipline: DISCIPLINAS_PRUEBA[Math.floor(azar() * DISCIPLINAS_PRUEBA.length)],
-      genre_or_proposal: 'Propuesta de prueba ' + i,
-      artist_description: 'Descripcion ficticia para pruebas del sistema.',
-      audition_description: 'Presenta una pieza de 3 minutos (dato ficticio).',
-      video_url: 'https://www.youtube.com/watch?v=PRUEBA' + i,
-      technical_needs: i % 4 === 0 ? 'Microfono' : 'Ninguna',
+      participation_mode: mode,
+      artistic_name: mode === 'AGRUPACION' ? 'COLECTIVO PRUEBA ' + i
+        : (mode === 'DUO' ? 'DUO PRUEBA ' + i : 'PRUEBA-' + pad3(i)),
+      members_declared: mode === 'AGRUPACION' ? String(3 + (i % 3)) : (mode === 'DUO' ? '2' : '1'),
+      genre_primary: TEST_GENRES[i % TEST_GENRES.length],
+      genre_secondary: i % 4 === 0 ? TEST_GENRES[(i + 5) % TEST_GENRES.length] : '',
+      audition_description: 'Propuesta ficticia de 3 minutos para pruebas del sistema.',
+      presentation_format: format,
+      presentation_other: format === 'OTRA' ? 'Performance de prueba' : '',
+      needs: i % 2 === 0 ? 'MICROFONO' : 'MICROFONO,PISTA',
+      needs_other: '',
+      own_equipment: i % 5 === 0 ? 'SI' : 'NO',
+      own_equipment_detail: i % 5 === 0 ? 'Guitarra acustica (dato ficticio)' : '',
+      song_name: 'Cancion de prueba ' + i,
+      track_uses: usesTrack ? 'SI' : 'NO',
+      track_method: usesTrack ? ['ARCHIVO', 'USB', 'WHATSAPP'][i % 3 === 0 ? (i / 3) % 3 : 0] : '',
+      video_url: i % 20 === 0 ? TEST_PUBLIC_VIDEO : 'https://www.youtube.com/watch?v=PRUEBA' + i,
       availability_statement: true,
       accept_terms: true,
       accept_data_processing: true,
@@ -3789,43 +6419,114 @@ function construirDatasetPrueba(total) {
       fila.id_number = String(base);               // same as record 0
       fila.email = 'otro' + i + '@ejemplo-bunker.test';
     }
-    if (i === 112) {                               // duplicate by email only -> alert
-      fila.email = 'prueba1@ejemplo-bunker.test';
+    if (i === 112) fila.email = 'prueba1@ejemplo-bunker.test';     // same e-mail -> alert only
+    if (i === 113) fila.whatsapp = '3100000000';                   // same phone as record 0 -> alert
+    if (i === 114) fila.birth_date = '2012-05-10';                 // too young
+    if (i === 115) fila.birth_date = '1990-03-22';                 // too old
+    if (i === 116) fila.resides_in_sabaneta = 'NO';                // outside Sabaneta
+    if (i === 117) fila.email = '';                                // incomplete
+    if (i === 118) fila.accept_data_processing = false;            // consent missing
+    if (i === 119) fila.video_url = 'lo tengo en el celular';      // malformed link -> review
+    if (i === 120) fila.whatsapp = '6044441111';                   // landline -> invalid
+    if (i === 121) fila.birth_date = '31/02/2003';                 // impossible date
+    if (i === 122) fila.full_name = '';                            // incomplete
+    if (i === 124 || i === 125) {                                  // same group, typed differently
+      fila.participation_mode = 'AGRUPACION';
+      fila.members_declared = '4';
+      fila.artistic_name = i === 124 ? 'El Arte es La Solución' : 'EL ARTE ES LA SOLUCIÓN';
     }
-    if (i === 113) {                               // duplicate by phone only -> alert
-      fila.whatsapp = '3100000000';             // same number as record 0
-    }
-    if (i === 114) fila.birth_date = '2012-05-10';         // too young
-    if (i === 115) fila.birth_date = '1990-03-22';         // too old
-    if (i === 116) fila.resides_in_sabaneta = false;       // outside Sabaneta
-    if (i === 117) fila.email = '';                        // incomplete
-    if (i === 118) fila.accept_data_processing = false;    // consent missing
-    if (i === 119) fila.video_url = 'lo tengo en el celular'; // review
-    if (i === 120) fila.whatsapp = '6044441111';           // landline -> invalid
-    if (i === 121) fila.birth_date = '31/02/2003';         // impossible date
-    if (i === 122) fila.full_name = '';                    // incomplete
+    if (i === 126) { fila.participation_mode = 'AGRUPACION'; fila.members_declared = ''; }   // group size missing
+    if (i === 127) { fila.participation_mode = 'DUO'; fila.members_declared = '3'; }         // a duo of three
+    if (i === 128) fila.birth_date = '1996-10-23';                 // exactly 30 on the day -> eligible
+    if (i === 129) fila.birth_date = '1995-10-22';                 // 31 on the day -> out
 
     filas.push(fila);
   }
-  // Record 123: byte-identical retry of record 5 (same client_submission_id).
-  var repetido = JSON.parse(JSON.stringify(filas[5]));
-  filas.push(repetido);
-
+  // Last: byte-identical retry of record 5 (same client_submission_id).
+  filas.push(JSON.parse(JSON.stringify(filas[5])));
   return filas;
 }
 
 /**
+ * Member submissions for the given group projects ({group_code, members_declared}).
+ * The leader is registered automatically by Form 1, so each group gets
+ * declared-1 members, with seeded anomalies on the first groups:
+ *   group 0: one member is 16                -> NO CUMPLE
+ *   group 1: one member did not sign         -> INCOMPLETO
+ *   group 2: one member never shows up       -> group left incomplete
+ *   group 3: one member also plays in group 0 -> cross-group alert
+ *   group 4: one member is sent twice (retry) and once more re-signing
+ */
+function buildTestMembers(groups) {
+  var out = [];
+  var base = 2000000000;
+  var counter = 0;
+  var firstMemberOfGroup0 = null;
+
+  groups.forEach(function (g, gi) {
+    var declared = parseInt(g.members_declared, 10) || 2;
+    var toCreate = declared - 1;
+    if (gi === 2) toCreate = Math.max(0, toCreate - 1);
+    for (var k = 0; k < toCreate; k++) {
+      counter++;
+      var member = {
+        client_submission_id: 'SEED-M-' + g.group_code + '-' + k,
+        form_elapsed_ms: 60000,
+        source: 'seed',
+        group_code: g.group_code,
+        full_name: NOMBRES_PRUEBA[(counter * 7) % NOMBRES_PRUEBA.length] + ' ' +
+                   APELLIDOS_PRUEBA[(counter * 3) % APELLIDOS_PRUEBA.length] + ' Integrante',
+        id_number: String(base + counter * 101),
+        birth_date: (2026 - 20 - (counter % 8)) + '-0' + (1 + (counter % 8)) + '-15',
+        artistic_role: TEST_ROLES[counter % TEST_ROLES.length],
+        adult_confirmation: true,
+        accept_terms: true,
+        accept_data_processing: true,
+        accept_image_voice: counter % 4 !== 0,
+        signature_png: TEST_SIGNATURE_PNG
+      };
+      if (gi === 0 && k === 0) { member.birth_date = '2010-06-01'; }
+      if (gi === 0 && k === 1) { firstMemberOfGroup0 = member.id_number; }
+      if (gi === 1 && k === 0) { member.signature_png = ''; }
+      if (gi === 3 && k === 0 && firstMemberOfGroup0) { member.id_number = firstMemberOfGroup0; }
+      out.push(member);
+      if (gi === 4 && k === 0) {
+        out.push(JSON.parse(JSON.stringify(member)));                       // identical retry
+        var resign = JSON.parse(JSON.stringify(member));
+        resign.client_submission_id += '-RESIGN';                            // same person, new submission
+        resign.artistic_role = 'Voz principal';
+        out.push(resign);
+      }
+    }
+  });
+  return out;
+}
+
+/** A few bytes that look like an MP3 (ID3 header), to exercise the upload path. */
+function buildTestTrackBase64() {
+  var bytes = [0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a];
+  for (var i = 0; i < 2048; i++) bytes.push(i % 251);
+  return Utilities.base64Encode(bytes);
+}
+
+// ===========================================================================
+// Apps-Script-only below this line (the Node tests strip from here down).
+// ===========================================================================
+
+/**
  * Loads the dataset through the REAL public endpoint, so the test exercises
- * validation, duplicate detection and idempotency exactly as production will.
+ * validation, duplicate detection, group detection and idempotency exactly as
+ * production will. Only runs in the test environment.
  */
 function cargarDatosDePrueba() {
+  exigirEntornoPruebas('CARGAR DATOS DE PRUEBA');
   var filas = construirDatasetPrueba(130);
   var resultados = { total: filas.length, por_estado: {}, repetidos: 0 };
 
   filas.forEach(function (f) {
     var r = accionInscribir(f);
     if (r.repetido) resultados.repetidos++;
-    var e = r.eligibility_status || 'ERROR';
+    var e = r.eligibility_status || ('ERROR: ' + (r.error || ''));
     resultados.por_estado[e] = (resultados.por_estado[e] || 0) + 1;
   });
 
@@ -3834,79 +6535,223 @@ function cargarDatosDePrueba() {
   return resultados;
 }
 
+/** Registers the seed members of every group project through the real action. */
+function cargarIntegrantesDePrueba() {
+  exigirEntornoPruebas('CARGAR INTEGRANTES DE PRUEBA');
+  var groups = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    return r.group_code && normalizarComparable(r.eligibility_status) !== 'INCOMPLETO';
+  });
+  var payloads = buildTestMembers(groups);
+  var summary = { total: payloads.length, por_estado: {}, repetidos: 0, errores: 0 };
+  payloads.forEach(function (p) {
+    p.group_key = groupAccessKey(p.group_code);
+    var r = accionRegistrarIntegrante(p);
+    if (r.repetido) summary.repetidos++;
+    if (r.ok === false) { summary.errores++; return; }
+    summary.por_estado[r.member_status] = (summary.por_estado[r.member_status] || 0) + 1;
+  });
+  registrar('sistema', 'admin', 'CARGAR_INTEGRANTES_PRUEBA', '', JSON.stringify(summary));
+  return summary;
+}
+
 /**
- * End-to-end rehearsal: loads the dataset, issues codes, simulates the event
- * day (check-ins, one late arrival, a no-show, contingency, the 21:30 close),
- * scores with three jurors and produces the Top 7.
- *
- * This is the "ensayo integral" of the 28-sep milestone, runnable on demand.
+ * End-to-end rehearsal, resumable: Apps Script stops any execution at 6
+ * minutes, and a full rehearsal (130 submissions, members, codes, a simulated
+ * day, three jurors, backups) does not fit in one. Each phase is idempotent and
+ * the progress lives in a Script Property, so running ENSAYO again continues
+ * where it stopped; a one-off trigger does it automatically.
  */
+var REHEARSAL_STATE_KEY = 'ENSAYO_ESTADO';
+var REHEARSAL_BUDGET_MS = 4.5 * 60 * 1000;
+
 function ensayoIntegral() {
-  var informe = { pasos: [] };
-  function paso(nombre, valor) {
-    informe.pasos.push({ paso: nombre, resultado: valor });
-    console.log(nombre + ': ' + JSON.stringify(valor));
+  exigirEntornoPruebas('ENSAYO');
+  var started = Date.now();
+  var props = PropertiesService.getScriptProperties();
+  var state = JSON.parse(props.getProperty(REHEARSAL_STATE_KEY) || '{"done":[],"report":[]}');
+  var admin = { ok: true, rol: ROL.ADMIN, alias: 'ensayo' };
+
+  var phases = [
+    ['1. Inscripciones (130 + reintento)', function () { return cargarDatosDePrueba(); }],
+    ['2. Integrantes de agrupaciones', function () { return cargarIntegrantesDePrueba(); }],
+    ['3. Agrupacion repetida: el operador decide', function () { return rehearsalResolveRepeatedGroup(admin); }],
+    ['4. Revalidar', function () { return accionRevalidarTodo({}, admin).resumen; }],
+    ['5. Emitir codigos', function () {
+      var c = accionAsignarCodigos({}, admin);
+      return { asignados: c.asignados, sin_cupo: c.sin_cupo, total: c.total_con_codigo };
+    }],
+    ['6. Carpetas de audio y pistas', function () { return rehearsalTracks(admin); }],
+    ['7. Verificar videos (muestra)', function () { return verifyPendingVideos({ limit: 15 }); }],
+    ['8. Cambios de horario', function () { return rehearsalScheduleChanges(admin); }],
+    ['9. Jornada simulada', function () { return rehearsalEventDay(admin); }],
+    ['10. Tres jurados', function () { return rehearsalJury(); }],
+    ['11. Cerrar jornada', function () { return accionCerrarJornada({}, admin).cerrados; }],
+    ['12. Resultados', function () {
+      var r = accionResultados({}, admin);
+      return { top: r.top.map(function (t) { return t.code + ' ' + t.artist_final; }), requiere_comite: r.requiere_comite };
+    }],
+    ['13. Respaldo', function () { return accionRespaldar({ etiqueta: 'ENSAYO' }, admin).xlsx.nombre; }]
+  ];
+
+  for (var i = 0; i < phases.length; i++) {
+    var name = phases[i][0];
+    if (state.done.indexOf(name) !== -1) continue;
+    if (Date.now() - started > REHEARSAL_BUDGET_MS) {
+      scheduleRehearsalContinuation();
+      console.log('ENSAYO en pausa por tiempo. Continua solo en 1 minuto (o ejecuta ENSAYO otra vez).');
+      return { en_curso: true, hechas: state.done.length, total: phases.length };
+    }
+    var result = phases[i][1]();
+    state.done.push(name);
+    state.report.push({ paso: name, resultado: result });
+    props.setProperty(REHEARSAL_STATE_KEY, JSON.stringify(state).slice(0, 8500));
+    console.log(name + ': ' + JSON.stringify(result));
   }
 
-  var sesionAdmin = { ok: true, rol: ROL.ADMIN, alias: 'ensayo' };
-
-  paso('1. Cargar dataset', cargarDatosDePrueba());
-  paso('2. Revalidar', accionRevalidarTodo({}, sesionAdmin).resumen);
-
-  var codigos = accionAsignarCodigos({}, sesionAdmin);
-  paso('3. Asignar codigos', { asignados: codigos.asignados, sin_cupo: codigos.sin_cupo, total: codigos.total_con_codigo });
-
-  // --- simulate the day -----------------------------------------------------
-  var conCodigo = leerHoja(HOJA.REGISTRO).filter(function (r) { return normalizarTexto(r.code); });
-  var realizadas = 0, noShow = 0, contingencia = 0;
-
-  conCodigo.forEach(function (r, idx) {
-    if (idx % 17 === 0) {                                   // no show
-      accionRegistrarEstado({ code: r.code, estado: ESTADO.NO_SHOW }, sesionAdmin);
-      noShow++;
-    } else if (idx % 23 === 0) {                            // late -> contingency
-      accionRegistrarEstado({ code: r.code, estado: ESTADO.CONTINGENCIA }, sesionAdmin);
-      contingencia++;
-    } else {
-      accionRegistrarEstado({ code: r.code, estado: ESTADO.CHECK_IN }, sesionAdmin);
-      accionRegistrarEstado({ code: r.code, estado: ESTADO.REALIZADA }, sesionAdmin);
-      realizadas++;
-    }
-  });
-  paso('4. Jornada simulada', { realizadas: realizadas, no_show: noShow, contingencia: contingencia });
-
-  // --- three jurors ---------------------------------------------------------
-  var azar = seudoAleatorio(777);
-  [1, 2, 3].forEach(function (n) {
-    var sesionJurado = { ok: true, rol: ROL.JURADO, alias: 'jurado-' + n };
-    var hojaJ = 'JURADO_' + n;
-    var filasJ = [];
-    leerHoja(HOJA.REGISTRO).forEach(function (r) {
-      if (normalizarEstado(r.audition_status) !== ESTADO.REALIZADA) return;
-      var puntajes = {};
-      RUBRICA.forEach(function (f) { puntajes[f.id] = 4 + Math.floor(azar() * 7); });   // 4..10
-      var calculo = calcularPuntajeJurado(puntajes);
-      var fila = { code: r.code, artistic_name: r.artistic_name, discipline: r.discipline,
-                   total: calculo.total, valido: 'TRUE', observaciones: 'Ensayo integral',
-                   evaluado_at: ahoraISO(), evaluado_by: 'jurado-' + n };
-      RUBRICA.forEach(function (f) { fila[f.id] = puntajes[f.id]; });
-      filasJ.push(fila);
-    });
-    limpiarDatos(hojaJ);
-    agregarFilas(hojaJ, filasJ);
-  });
-  paso('5. Evaluaciones cargadas', { jurados: 3 });
-
-  paso('6. Cerrar jornada', accionCerrarJornada({}, sesionAdmin));
-
-  refrescarVistas();
-  var resultados = accionResultados({}, sesionAdmin);
-  paso('7. Top', resultados.top.map(function (t) {
-    return { posicion: t.posicion, code: t.code, artista: t.artistic_name, puntaje: t.artist_final };
-  }));
-  paso('8. Requiere comite', resultados.requiere_comite);
-  paso('9. Respaldo', accionRespaldar({}, sesionAdmin).xlsx.nombre);
-
+  props.deleteProperty(REHEARSAL_STATE_KEY);
+  removeRehearsalTriggers();
   console.log('\n=== ENSAYO INTEGRAL COMPLETO ===');
-  return informe;
+  return { completo: true, informe: state.report };
+}
+
+function ENSAYO_CONTINUAR() {
+  removeRehearsalTriggers();
+  return ensayoIntegral();
+}
+
+function scheduleRehearsalContinuation() {
+  removeRehearsalTriggers();
+  ScriptApp.newTrigger('ENSAYO_CONTINUAR').timeBased().after(60 * 1000).create();
+}
+
+function removeRehearsalTriggers() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'ENSAYO_CONTINUAR') ScriptApp.deleteTrigger(t);
+  });
+}
+
+/** Forgets rehearsal progress (used by LIMPIAR so the next ENSAYO starts over). */
+function resetRehearsalState() {
+  PropertiesService.getScriptProperties().deleteProperty(REHEARSAL_STATE_KEY);
+  removeRehearsalTriggers();
+}
+
+/** The operator confirms the seeded repeated group IS the same project. */
+function rehearsalResolveRepeatedGroup(admin) {
+  var pending = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    return normalizarComparable(r.group_match_status) === 'POSIBLE_REPETIDA';
+  });
+  return pending.map(function (r) {
+    var res = accionResolverCoincidenciaGrupo({ submission_id: r.submission_id, decision: 'MISMO',
+      motivo: 'Ensayo: mismo proyecto inscrito dos veces con distinta escritura' }, admin);
+    return r.submission_id + ' -> ' + (res.eligibility_status || res.error);
+  });
+}
+
+/** Creates the audio folders and uploads a fake track for a few projects. */
+function rehearsalTracks(admin) {
+  var folders = accionPrepararCarpetasAudio({}, admin);
+  var withTrack = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    return r.code && esVerdadero(r.track_uses);
+  }).slice(0, 5);
+  var uploads = withTrack.map(function (r) {
+    var res = accionSubirPista({
+      id_number: String(r.id_number), code: r.code, song_name: r.song_name,
+      file_name: 'mi pista.mp3', file_base64: buildTestTrackBase64(),
+      client_submission_id: 'SEED-TRACK-' + r.code, form_elapsed_ms: 60000, source: 'seed'
+    });
+    return r.code + ': ' + (res.track_file_name || res.error);
+  });
+  if (withTrack.length) {
+    accionMarcarPista({ code: withTrack[0].code, track_status: TRACK_STATUS.VALIDADA, nota: 'Ensayo' }, admin);
+  }
+  if (withTrack.length > 1) {
+    accionMarcarPista({ code: withTrack[1].code, track_status: TRACK_STATUS.PROBLEMA, nota: 'Ensayo: archivo cortado' }, admin);
+  }
+  return { carpetas: folders.creadas + folders.existentes, subidas: uploads };
+}
+
+/** One approved and one rejected Form-2 request, plus a refused second request. */
+function rehearsalScheduleChanges(admin) {
+  var coded = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.code; });
+  if (coded.length < 3) return 'sin codigos suficientes';
+  var a = coded[1], b = coded[2];
+  var r1 = accionSolicitarCambio({ participant_code: a.code, full_name: a.full_name, can_attend_original: false,
+    reason_short: 'Ensayo: examen', contact: 'whatsapp', acceptance: true, client_submission_id: 'SEED-CB-1' });
+  var r2 = accionSolicitarCambio({ participant_code: b.code, full_name: b.full_name, can_attend_original: false,
+    reason_short: 'Ensayo: trabajo', contact: 'whatsapp', acceptance: true, client_submission_id: 'SEED-CB-2' });
+  var again = accionSolicitarCambio({ participant_code: a.code, full_name: a.full_name, can_attend_original: false,
+    reason_short: 'Ensayo: segunda vez', contact: 'whatsapp', acceptance: true, client_submission_id: 'SEED-CB-3' });
+  // Free a seat in block 10 so the approval has somewhere to go.
+  accionRegistrarEstado({ code: coded[coded.length - 1].code, estado: ESTADO.NO_SHOW }, admin);
+  var ap = accionResolverCambio({ solicitud_id: r1.solicitud_id, aprobar: true, nuevo_bloque: 10 }, admin);
+  var rj = accionResolverCambio({ solicitud_id: r2.solicitud_id, aprobar: false, observacion: 'Ensayo: sin cupo' }, admin);
+  return { aprobado: ap.estado || ap.error, rechazado: rj.estado || rj.error, segunda_solicitud: again.motivo || again.error };
+}
+
+/**
+ * The day: most projects go CHECK-IN -> PRECOLA -> EN AUDICION -> REALIZADA
+ * through the real action; some are no-shows, some arrive late and drop to
+ * contingency. The first dozen go through the real per-row action (so the
+ * state machine and timestamps are exercised); the rest in one batch write.
+ */
+function rehearsalEventDay(admin) {
+  var coded = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.code; });
+  var counts = { realizadas: 0, no_show: 0, contingencia: 0 };
+  var batch = [];
+  coded.forEach(function (r, idx) {
+    var current = normalizarEstado(r.attendance_status || ESTADO.CONFIRMADO);
+    if (current !== ESTADO.CONFIRMADO) return;
+    var target = idx % 17 === 0 ? ESTADO.NO_SHOW : (idx % 23 === 0 ? ESTADO.CONTINGENCIA : ESTADO.REALIZADA);
+    if (idx < 12) {
+      if (target === ESTADO.REALIZADA) {
+        [ESTADO.CHECK_IN, ESTADO.PRECOLA, ESTADO.EN_AUDICION, ESTADO.REALIZADA].forEach(function (s) {
+          accionRegistrarEstado({ code: r.code, estado: s, client_op_id: 'SEED-' + r.code + '-' + s }, admin);
+        });
+      } else {
+        accionRegistrarEstado({ code: r.code, estado: target }, admin);
+      }
+    } else {
+      var changes = { attendance_status: target, operador_check_in: 'ensayo' };
+      if (target === ESTADO.REALIZADA) {
+        changes.audition_status = ESTADO.REALIZADA;
+        changes.check_in_time = ahoraISO(); changes.done_at = ahoraISO();
+      }
+      if (target === ESTADO.NO_SHOW) changes.audition_status = ESTADO.NO_SHOW;
+      if (target === ESTADO.CONTINGENCIA) changes.contingencia_desde = ahoraISO();
+      batch.push({ fila: r._fila, cambios: changes });
+    }
+    if (target === ESTADO.REALIZADA) counts.realizadas++;
+    else if (target === ESTADO.NO_SHOW) counts.no_show++;
+    else counts.contingencia++;
+  });
+  actualizarFilasEnLote(HOJA.REGISTRO, batch);
+  var plan = accionPlanContingencia({ ahora: '20:30' });
+  counts.contingencia_entran = plan.entran.length;
+  return counts;
+}
+
+/** Three jurors score every performed audition; one card is left incomplete on purpose. */
+function rehearsalJury() {
+  var azar = seudoAleatorio(777);
+  var performed = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    return normalizarEstado(r.audition_status) === ESTADO.REALIZADA;
+  });
+  [1, 2, 3].forEach(function (n) {
+    var rows = [];
+    performed.forEach(function (r, idx) {
+      var scores = {};
+      RUBRICA.forEach(function (f) { scores[f.id] = 4 + Math.floor(azar() * 7); });
+      if (n === 3 && idx === 0) scores.digital = '';                    // incomplete card -> invalid
+      var calc = calcularPuntajeJurado(scores);
+      var row = { code: r.code, artistic_name: r.artistic_name, discipline: projectGenre(r),
+                  total: calc.valido ? calc.total : '', valido: calc.valido ? 'TRUE' : 'FALSE',
+                  observaciones: 'Ensayo integral', evaluado_at: ahoraISO(), evaluado_by: 'jurado-' + n };
+      RUBRICA.forEach(function (f) { row[f.id] = scores[f.id]; });
+      rows.push(row);
+    });
+    limpiarDatos('JURADO_' + n);
+    agregarFilas('JURADO_' + n, rows);
+  });
+  return { jurados: 3, tarjetas_por_jurado: performed.length };
 }
