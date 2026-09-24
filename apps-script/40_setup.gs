@@ -271,7 +271,7 @@ function systemHealth() {
       integrantes: cfgBool('integrantes_abierto', true), pistas: cfgBool('pistas_abiertas', true)
     },
     evento: { fecha: cfgFecha('evento_fecha', ''), inicio: cfgHora('evento_hora_inicio', ''), sede: cfg('evento_sede', ''),
-              edades: cfgNumero('edad_minima', 18) + '-' + cfgNumero('edad_maxima', 30), top: cfgNumero('top_seleccionados', 8) },
+              edades: cfgNumero('edad_minima', 18) + '-' + cfgNumero('edad_maxima', 30), top: cfgNumero('top_seleccionados', 7) },
     legal: { datos_verificados: cfgBool('datos_legales_verificados', false), pendientes: legalPending,
              terms_version: cfg('terms_version', ''), policy_version: cfg('policy_version', '') },
     datos_de_prueba: audit,
@@ -313,4 +313,41 @@ function trashTestFiles() {
     } catch (e) { /* folder already gone */ }
   });
   return count;
+}
+
+/**
+ * Deletes specific registrations by submission_id (with their group members and
+ * change requests). Meant for test rows that reached a live base; a raw backup
+ * is taken first and every removed ID is logged.
+ */
+function quitarInscripciones(ids, confirmacion) {
+  if (confirmacion !== 'SI-QUITAR') throw new Error('BLOQUEADO: confirma con SI-QUITAR.');
+  var wanted = {};
+  (ids || []).forEach(function (id) { wanted[normalizarComparable(id)] = true; });
+  return conBloqueo(function () {
+    var rows = leerHoja(HOJA.REGISTRO).filter(function (r) { return wanted[normalizarComparable(r.submission_id)]; });
+    if (!rows.length) return { quitadas: [], mensaje: 'No hay filas con esos IDs: nada que quitar.' };
+    var backup = rawBackup('ANTES-DE-QUITAR');
+    var groups = {}, codes = {};
+    rows.forEach(function (r) {
+      if (r.group_code) groups[normalizarComparable(r.group_code)] = true;
+      if (r.code) codes[normalizarComparable(r.code)] = true;
+    });
+    var removeWhere = function (sheetName, test) {
+      var sheet = libro().getSheetByName(sheetName);
+      if (!sheet) return 0;
+      var doomed = leerHoja(sheetName).filter(test).map(function (r) { return r._fila; }).sort(function (a, b) { return b - a; });
+      doomed.forEach(function (n) { sheet.deleteRow(n); });
+      return doomed.length;
+    };
+    var removed = {
+      registro: removeWhere(HOJA.REGISTRO, function (r) { return wanted[normalizarComparable(r.submission_id)]; }),
+      integrantes: removeWhere(HOJA.INTEGRANTES, function (m) { return groups[normalizarComparable(m.group_code)]; }),
+      cambios: removeWhere(HOJA.CAMBIOS, function (c) { return codes[normalizarComparable(c.code)]; })
+    };
+    registrar('sistema', 'admin', 'QUITAR_INSCRIPCIONES', rows.map(function (r) { return r.submission_id; }).join(','),
+              JSON.stringify(removed) + ' respaldo=' + backup.json);
+    refrescarVistas();
+    return { quitadas: rows.map(function (r) { return r.submission_id; }), filas: removed, respaldo: backup };
+  });
 }

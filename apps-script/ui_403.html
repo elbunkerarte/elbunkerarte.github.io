@@ -4,24 +4,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <?!= incluir('ui_estilos') ?></head>
 <body>
+<?
+  var RAZONES = {
+    SIN_TOKEN: 'Abriste una sección interna sin tu enlace personal.',
+    FORMATO: 'El enlace está incompleto. Ábrelo completo, sin recortarlo.',
+    FIRMA_INVALIDA: 'El enlace no es válido para este sistema.',
+    PAYLOAD_ILEGIBLE: 'El enlace está dañado.',
+    EXPIRADO: 'Tu enlace caducó.',
+    USUARIO_INACTIVO: 'Tu acceso fue desactivado.',
+    TOKEN_REEMPLAZADO: 'Coordinación te generó un enlace nuevo; este ya no sirve.',
+    ROL_SIN_ACCESO_A_ESTA_PAGINA: 'Tu rol no tiene acceso a esta página.',
+    PAGINA_DESCONOCIDA: 'Esa página no existe.'
+  };
+  var razon = RAZONES[motivo] || '';
+?>
 <div class="envoltura">
-  <header class="cabecera">
-    <div class="marca"><h1>EL <span>BÚNKER</span></h1><div class="sub">Acceso restringido</div></div>
-  </header>
+  <?!= incluir('ui_cabecera') ?>
   <div class="aviso error">
     <b>No tienes acceso a esta sección</b>
-    Esta área es interna. Usa el enlace personal que te entregó la coordinación.
+    <?= razon || 'Esta área es interna. Usa el enlace personal que te entregó la coordinación.' ?>
   </div>
   <div class="tarjeta">
     <h2>¿Qué hago?</h2>
     <p class="pista" style="margin:0">
-      Motivo técnico: <code><?= motivo ?></code><br><br>
-      • Si eres <b>participante</b>, esta no es tu página: usa el enlace público de la convocatoria.<br>
-      • Si eres del <b>equipo</b>, pide a coordinación que te reenvíe tu enlace de acceso: los enlaces
-      caducan y se revocan si tu usuario queda inactivo.
+      • Si eres <b>participante</b>, esta no es tu página: usa
+      <a href="<?= BASE_URL ?>?p=inscripcion">la inscripción</a> o <a href="<?= BASE_URL ?>?p=mi-inscripcion">Mi inscripción</a>.<br>
+      • Si eres del <b>equipo</b>, pide a coordinación tu enlace vigente. Los enlaces son personales, caducan y
+      dejan de servir cuando se genera uno nuevo.<br><br>
+      <span style="opacity:.7">Motivo técnico: <code><?= motivo ?></code></span>
     </p>
   </div>
 </div>
+<?!= incluir('ui_scripts') ?>
 <script>window.ENTORNO = '<?= ENTORNO ?>';</script>
 </body>
 </html>

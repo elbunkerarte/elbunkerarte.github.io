@@ -5,14 +5,15 @@
 <?!= incluir('ui_estilos') ?></head>
 <body>
 <div class="envoltura">
-  <header class="cabecera">
-    <div class="marca"><h1>EL <span>BÚNKER</span></h1><div class="sub">by Arte es la Solución</div></div>
-  </header>
+  <?!= incluir('ui_cabecera') ?>
   <div class="aviso ok"><b>Listo</b>Recibimos tu información.</div>
   <div class="tarjeta"><h2>Consulta tu estado</h2>
-    <p class="pista">Ingresa tu código y tu documento para ver tu horario.</p>
-    <div class="campo"><label for="code">Código</label><input type="text" id="code" placeholder="B-001"></div>
-    <div class="campo"><label for="id_number">Documento</label><input type="text" id="id_number" inputmode="numeric"></div>
+    <p class="pista">Para ver tu horario, tu agrupación y enviar tu pista entra a
+      <a href="<?= BASE_URL ?>?p=mi-inscripcion">Mi inscripción</a>. Aquí puedes consultar rápido con tu código.</p>
+    <div class="rejilla dos">
+      <div class="campo"><label for="code">Código</label><input type="text" id="code" placeholder="B-001"></div>
+      <div class="campo"><label for="id_number">Documento</label><input type="text" id="id_number" inputmode="numeric"></div>
+    </div>
     <button class="boton" id="btn">Consultar</button>
     <div id="salida" style="margin-top:16px"></div>
   </div>
@@ -26,7 +27,7 @@ $('#btn').addEventListener('click', function () {
     .then(function (r) {
       ocupado(b, false);
       $('#salida').innerHTML = '<div class="aviso info"><b>' + escaparHtml(r.code || 'Sin código aún') + '</b>' +
-        'Elegibilidad: ' + escaparHtml(r.eligibility_status) +
+        'Estado: ' + etiquetaEstado(r.eligibility_status) +
         (r.hora_audicion ? '<br>Llegada: <b>' + escaparHtml(r.hora_llegada) + '</b> · Audición: <b>' +
           escaparHtml(r.hora_audicion) + '</b> (bloque ' + escaparHtml(r.bloque) + ')' : '') + '</div>';
     })

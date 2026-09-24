@@ -7,12 +7,8 @@
 </head>
 <body>
 <div class="envoltura">
-  <header class="cabecera">
-    <div class="marca">
-      <h1>EL <span>BÚNKER</span></h1>
-      <div class="sub">Solicitud de cambio de horario</div>
-    </div>
-  </header>
+  <?!= incluir('ui_cabecera') ?>
+  <h2 class="titulo-pagina">Solicitud de cambio de horario</h2>
 
   <div id="avisoGlobal"></div>
 
@@ -21,6 +17,7 @@
     Este formulario es <b>solo</b> para quien tiene un impedimento real y <b>no puede asistir</b> en su horario.
     Tienes <b>una sola</b> solicitud. <b>No eliges la nueva hora</b>: la asigna producción según disponibilidad.
     Mientras no te confirmen, tu horario original sigue vigente.
+    <br>Plazo para solicitar: hasta el <b id="plazoCambios">día anterior al evento</b>.
   </div>
 
   <div id="formulario">
@@ -63,6 +60,7 @@
           puede ser <b>no aprobada</b>, y que el día del evento <b>no hay cambios</b>.
           <span class="req">*</span></span>
       </label>
+      <div class="trampa" aria-hidden="true"><label for="hp_field">No completar</label><input type="text" id="hp_field" tabindex="-1" autocomplete="off"></div>
       <button class="boton" id="btnEnviar" style="margin-top:6px">Enviar solicitud</button>
     </div>
   </div>
@@ -79,6 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (precargado) $('#participant_code').value = precargado;
 
   llamar('config_publica').then(function (c) {
+    if (c.cierre_cambios_texto) $('#plazoCambios').textContent = c.cierre_cambios_texto;
     if (!c.cambios_abiertos) {
       $('#formulario').classList.add('oculto');
       mostrarAviso('#avisoGlobal', 'alerta', 'El plazo de cambios ya cerró',
@@ -99,6 +98,9 @@ function enviar() {
     reason_short: ($('#reason_short').value || '').trim(),
     can_attend_original: false,
     acceptance: $('#acceptance').checked,
+    hp_field: ($('#hp_field').value || ''),
+    form_elapsed_ms: formElapsedMs(),
+    source: 'web',
     client_submission_id: idEnvio('cambio')
   };
 

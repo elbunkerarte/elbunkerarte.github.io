@@ -12,7 +12,7 @@ function commsContext() {
   return {
     evento: cfg('evento_nombre', 'EL BÚNKER by Arte es la Solución'),
     fecha_texto: humanDate(fecha),
-    sede: cfg('evento_sede', 'PENDIENTE DE COMPLETAR'),
+    sede: cfg('evento_sede', ''),
     municipio_sede: cfg('evento_municipio_sede', 'Sabaneta, Antioquia'),
     punto: cfg('evento_direccion', ''),
     duracion: cfgNumero('duracion_audicion_min', 3),
@@ -23,13 +23,20 @@ function commsContext() {
     cupo: cfgNumero('cupo_total', 100),
     numero: cfg('whatsapp_oficial', ''),
     nombre_contacto: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución'),
-    correo_datos: cfg('data_protection_email', 'PENDIENTE DE COMPLETAR')
+    correo_datos: cfg('data_protection_email', '')
   };
 }
 
 function lugarTexto(c) {
   var p = normalizarTexto(c.punto);
-  return c.sede + ', ' + c.municipio_sede + (p && p.indexOf('PENDIENTE') !== 0 ? ' (' + p + ')' : '');
+  var place = [normalizarTexto(c.sede), normalizarTexto(c.municipio_sede)].filter(Boolean).join(', ');
+  return place + (p && p.indexOf('PENDIENTE') !== 0 ? ' (' + p + ')' : '');
+}
+
+/** The WhatsApp group invite, or '' while the organization has not created it. */
+function groupInviteLink() {
+  var link = normalizarTexto(cfg('whatsapp_grupo_enlace', ''));
+  return /^https:\/\//i.test(link) ? link : '';
 }
 
 /** The line every message repeats: WhatsApp broadcast lists only reach people who saved the number. */
@@ -181,6 +188,7 @@ function plantillas() {
 
     GRUPO_WHATSAPP: {
       id: 'GRUPO_WHATSAPP', nombre: '10. Invitación al grupo de WhatsApp',
+      disponible: function () { return !!groupInviteLink(); },
       audiencia: function (r) {
         return esVerdadero(r.consent_whatsapp) &&
                (normalizarComparable(r.eligibility_status) === 'APTO' || !!normalizarTexto(r.code));
@@ -193,6 +201,13 @@ function plantillas() {
         saveNumberLine(c) + firma
     }
   };
+}
+
+/** Templates that can be used right now: one that needs missing data is not offered at all. */
+function plantillasDisponibles() {
+  var all = plantillas();
+  return Object.keys(all).filter(function (k) { return !all[k].disponible || all[k].disponible(); })
+    .map(function (k) { return { id: k, nombre: all[k].nombre }; });
 }
 
 /**
@@ -218,7 +233,7 @@ function messageExtras(r, base, members) {
   var summary = r.group_code ? groupSummary(r.group_code, members) : { authorized: 0, registered: 0 };
   var declared = Number(r.members_declared) || 0;
   var link = r.group_code ? membersLink(r.group_code) : '';
-  var groupLink = cfg('whatsapp_grupo_enlace', '');
+  var groupLink = groupInviteLink();
   return {
     url_cambio: base + '?p=cambio-horario&code=' + encodeURIComponent(r.code || ''),
     url_mi_inscripcion: base + '?p=mi-inscripcion',
@@ -227,7 +242,7 @@ function messageExtras(r, base, members) {
     hora_audicion_texto: (r.final_time || r.original_time) ? humanTime(r.final_time || r.original_time) : '',
     integrantes_autorizados: summary.authorized,
     integrantes_declarados: declared,
-    enlace_grupo_whatsapp: groupLink && String(groupLink).indexOf('PENDIENTE') !== 0 ? groupLink : '(enlace pendiente)',
+    enlace_grupo_whatsapp: groupLink,
     bloque_grupo: r.group_code
       ? '\nAGRUPACIÓN ' + r.group_code + ': cada integrante debe dar su propia autorización en ' + link +
         ' (van ' + summary.authorized + ' de ' + (declared || summary.registered) + ').\n'
@@ -249,6 +264,9 @@ function accionMensajes(datos, sesion) {
   var plantilla = todas[String(datos.plantilla || '').toUpperCase()];
   if (!plantilla) {
     return { ok: false, error: 'Plantilla desconocida.', disponibles: Object.keys(todas) };
+  }
+  if (plantilla.disponible && !plantilla.disponible()) {
+    return { ok: false, error: 'Esta plantilla aun no se puede usar: falta el enlace del grupo de WhatsApp en CONFIG (whatsapp_grupo_enlace).' };
   }
 
   var base = webAppUrl();
@@ -272,7 +290,7 @@ function accionMensajes(datos, sesion) {
 
   registrar(sesion.alias, sesion.rol, 'GENERAR_MENSAJES', plantilla.id, mensajes.length + ' destinatarios');
   return { plantilla: plantilla.id, nombre: plantilla.nombre, total: mensajes.length, mensajes: mensajes,
-           plantillas: Object.keys(todas).map(function (k) { return { id: k, nombre: todas[k].nombre }; }) };
+           plantillas: plantillasDisponibles() };
 }
 
 /**

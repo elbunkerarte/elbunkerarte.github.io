@@ -12,10 +12,12 @@
  *   ENSAYO            full rehearsal with fictitious data (test environment only)
  *   LIMPIAR           wipes operational data (test environment only)
  *   RESTAURAR         restores a JSON backup (see docs/MANUAL-RECUPERACION.md)
+ *   QUITAR_PRUEBAS_PRELANZAMIENTO  removes the two test registrations made in production before launch
  */
 function INSTALAR() {
   var resumen = setupInicial();
-  var accesos = crearAccesosOperativos();
+  // Re-running must not re-issue links: a new link revokes the previous one.
+  var accesos = leerHoja(HOJA.USUARIOS).length ? (ensureOperationalAccounts(), verAccesos()) : crearAccesosOperativos();
 
   var lineas = [
     '',
@@ -39,8 +41,7 @@ function INSTALAR() {
   lineas.push('    Quien tiene acceso: Cualquier usuario');
   lineas.push('  Sin esto los enlaces de arriba no abren.');
   lineas.push('');
-  lineas.push('DESPUES: revisa la hoja CONFIG. Los datos legales vienen marcados');
-  lineas.push('datos_legales_verificados = NO hasta que alguien los verifique.');
+  lineas.push('DESPUES: revisa la hoja CONFIG (fecha, lugar, datos legales, enlaces).');
   lineas.push('========================================================');
   console.log(lineas.join('\n'));
   return { base: resumen.spreadsheet_url, accesos: accesos };
@@ -108,5 +109,16 @@ function LIMPIAR() {
   exigirEntornoPruebas('LIMPIAR');
   var r = borrarDatosDePrueba('SI-BORRAR');
   console.log(r.mensaje);
+  return r;
+}
+
+/**
+ * The two registrations made in production before launch were tests (confirmed
+ * by the organization on 2026-09-24). Removes exactly those rows, after a raw
+ * backup, and logs it. Running it again finds nothing and changes nothing.
+ */
+function QUITAR_PRUEBAS_PRELANZAMIENTO() {
+  var r = quitarInscripciones(['S-07BE9C53', 'S-E780AA04'], 'SI-QUITAR');
+  console.log(JSON.stringify(r, null, 2));
   return r;
 }

@@ -18,8 +18,8 @@ function registryRowView(r) {
     eligibility_override: r.eligibility_override,
     duplicate_flag: r.duplicate_flag, duplicate_reason: r.duplicate_reason,
     validation_notes: r.validation_notes,
-    original_block: r.original_block, original_time: r.original_time,
-    final_block: r.final_block, final_time: r.final_time,
+    original_block: r.original_block, original_time: clockText(r.original_time),
+    final_block: r.final_block, final_time: clockText(r.final_time),
     change_status: r.change_status, attendance_status: r.attendance_status,
     consent_whatsapp: r.consent_whatsapp, consent_image: r.consent_image,
     terms_version: r.terms_version, legacy: !r.participation_mode
@@ -491,7 +491,7 @@ function accionListarPistas(datos) {
       track_method: r.track_method, track_status: status, track_file_name: r.track_file_name,
       track_file_url: driveFileUrl(r.track_file_id), track_updated_at: r.track_updated_at,
       track_notes: r.track_notes, final_block: r.final_block || r.original_block,
-      final_time: r.final_time || r.original_time, attendance_status: r.attendance_status
+      final_time: clockText(r.final_time || r.original_time), attendance_status: r.attendance_status
     };
   });
   var folderId = PropertiesService.getScriptProperties().getProperty(PROP.AUDIO_FOLDER);
@@ -595,7 +595,7 @@ function accionRegistrarDeliberacion(datos, sesion) {
     var id = nuevoId('ACTA');
     agregarFila(HOJA.DELIBERACIONES, {
       deliberation_id: id, at: ahoraISO(), by: sesion.alias, codes_in_order: codes.join(','),
-      cut_position: cfgNumero('top_seleccionados', 8), minutes: String(datos.acta).slice(0, 2000), status: 'VIGENTE'
+      cut_position: cfgNumero('top_seleccionados', 7), minutes: String(datos.acta).slice(0, 2000), status: 'VIGENTE'
     });
     registrar(sesion.alias, sesion.rol, 'DELIBERACION', id, codes.join(','));
     reconstruirResultados(leerHoja(HOJA.REGISTRO));
@@ -616,4 +616,40 @@ function auditTestData() {
 
 function accionAuditarDatosDePrueba() {
   return auditTestData();
+}
+
+/**
+ * Data for the printable record of a group: project, members, their
+ * authorizations and drawn signatures, plus blank lines for anyone who signs
+ * on paper at the desk (the brief's alternative to the digital signature).
+ */
+function constanciaData(groupCode) {
+  var code = normalizarComparable(groupCode);
+  var project = findGroupProject(code);
+  if (!project) return null;
+  var summary = groupSummary(code);
+  var declared = Number(project.members_declared) || summary.registered;
+  return {
+    group_code: code,
+    project_code: project.code || '(sin codigo aun)',
+    group_display_name: project.group_display_name || project.artistic_name,
+    participation_mode: project.participation_mode,
+    leader_name: project.full_name,
+    leader_id_number: project.id_number,
+    genre: projectGenre(project),
+    members_declared: declared,
+    terms_version: cfg('terms_version', ''),
+    policy_version: cfg('policy_version', 'v2'),
+    legal_name: cfg('legal_name', ''),
+    generated_at: ahoraISO(),
+    members: summary.list.map(function (m) {
+      return {
+        full_name: m.full_name, id_number: m.id_number, artistic_role: m.artistic_role,
+        is_leader: esVerdadero(m.is_leader), status: m.member_status, consent_at: m.consent_at,
+        consent_image: esVerdadero(m.consent_image), signature: signatureDataUrl(m.signature_file_id),
+        signature_sha256: m.signature_sha256
+      };
+    }),
+    blank_lines: Math.max(0, declared - summary.list.length)
+  };
 }

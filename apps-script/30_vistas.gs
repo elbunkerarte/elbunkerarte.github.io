@@ -65,7 +65,7 @@ function reconstruirCheckIn(filas) {
     return {
       code: r.code, full_name: r.full_name, artistic_name: r.artistic_name,
       discipline: projectGenre(r),
-      final_block: v.final_block, arrival_time: r.arrival_time, final_time: v.final_time,
+      final_block: v.final_block, arrival_time: v.arrival_time, final_time: v.final_time,
       check_in_time: r.check_in_time || '',
       attendance_status: r.attendance_status || ESTADO.CONFIRMADO,
       audition_status: r.audition_status || '',
@@ -147,7 +147,7 @@ function reconstruirPistas(filas) {
       track_status: r.track_status || (esVerdadero(r.track_uses) ? TRACK_STATUS.PENDIENTE : TRACK_STATUS.NO_APLICA),
       track_file_name: r.track_file_name, track_file_url: driveFileUrl(r.track_file_id),
       track_updated_at: r.track_updated_at, track_notes: r.track_notes,
-      final_block: r.final_block || r.original_block, final_time: r.final_time || r.original_time
+      final_block: r.final_block || r.original_block, final_time: clockText(r.final_time || r.original_time)
     };
   });
   agregarFilas(HOJA.PISTAS, datos);
@@ -188,7 +188,7 @@ function reconstruirResultados(filas) {
   });
 
   var seleccion = seleccionarTop(artistas, {
-    top: cfgNumero('top_seleccionados', 8),
+    top: cfgNumero('top_seleccionados', 7),
     minimo_jurados: cfgNumero('minimo_jurados', 2),
     deliberacion: currentDeliberation()
   });
@@ -287,7 +287,7 @@ function reconstruirDashboard(filas) {
   seccion('DISTRIBUCION DE PUNTAJES', [['Rango', 'Artistas']].concat(m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; })));
   var top = [['Artista', 'Puntaje']].concat(m.top.map(function (t) { return [(t.artistic_name || t.code), t.artist_final]; }));
   if (top.length === 1) top.push(['(sin resultados aun)', 0]);
-  seccion('TOP ' + cfgNumero('top_seleccionados', 8), top);
+  seccion('TOP ' + cfgNumero('top_seleccionados', 7), top);
   seccion('ESTADO DE PARTICIPANTES', [['Estado', 'Cantidad'],
     ['Confirmados', m.confirmados], ['Check-in', m.check_ins], ['Precola', m.precola], ['En audicion', m.en_audicion],
     ['Realizadas', m.realizadas], ['No show', m.no_show], ['Contingencia', m.contingencia], ['No audicionados', m.no_audicionados]]);
@@ -424,7 +424,7 @@ function calcularMetricas(filas, hora) {
     promedio_global: promedio,
     distribucion: distribucionPuntajes(ranking),
     top: ranking.filter(function (r) { return normalizarComparable(r.seleccionado) === 'SI'; }),
-    top_n: cfgNumero('top_seleccionados', 8),
+    top_n: cfgNumero('top_seleccionados', 7),
     por_bloque: Object.keys(porBloque).map(function (k) { return porBloque[k]; }),
     operativo: operationalIndicator(filas, hora),
     requiere_comite: leerHoja(HOJA.RESULTADOS).some(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; }),

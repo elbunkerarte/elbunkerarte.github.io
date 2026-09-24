@@ -267,7 +267,7 @@ describe('Check-in flow: access -> check-in -> pre-queue -> audition -> exit', (
   });
 });
 
-describe('Selection: top 8 and minuted committee decisions', () => {
+describe('Selection: top 7 and minuted committee decisions', () => {
   function artist(code, score) {
     const p = {}; ['talento', 'performance', 'identidad', 'repertorio', 'profesionalismo', 'presencia', 'digital', 'proyecto']
       .forEach(k => { p[k] = score; });
@@ -275,28 +275,55 @@ describe('Selection: top 8 and minuted committee decisions', () => {
              tarjetas: [1, 2, 3].map(j => ({ jurado: j, puntajes: p })) };
   }
   const list = [];
-  for (let i = 1; i <= 7; i++) list.push(artist('B-00' + i, 10 - i * 0.5));
-  list.push(artist('B-008', 5), artist('B-009', 5), artist('B-010', 3));
+  for (let i = 1; i <= 6; i++) list.push(artist('B-00' + i, 10 - i * 0.5));
+  list.push(artist('B-007', 5), artist('B-008', 5), artist('B-009', 3));
 
-  it('selects 8 by default', () => {
-    const r = C.seleccionarTop(list.slice(0, 7).concat([artist('B-011', 4), artist('B-012', 2)]));
-    expect(r.top).toHaveLength(8);
+  it('selects 7 by default', () => {
+    const r = C.seleccionarTop(list.slice(0, 6).concat([artist('B-011', 4), artist('B-012', 2), artist('B-013', 1)]));
+    expect(r.top).toHaveLength(7);
   });
   it('an exact tie at the cut is left for the committee, never invented', () => {
     const r = C.seleccionarTop(list);
     expect(r.requiere_comite).toBe(true);
-    expect(r.empates_sin_resolver.map(a => a.code).sort()).toEqual(['B-008', 'B-009']);
+    expect(r.empates_sin_resolver.map(a => a.code).sort()).toEqual(['B-007', 'B-008']);
   });
   it('the minuted decision orders exactly the tied artists and closes the tie', () => {
-    const r = C.seleccionarTop(list, { deliberacion: { deliberation_id: 'ACTA-1', codes_in_order: ['B-009', 'B-008'] } });
+    const r = C.seleccionarTop(list, { deliberacion: { deliberation_id: 'ACTA-1', codes_in_order: ['B-008', 'B-007'] } });
     expect(r.requiere_comite).toBe(false);
-    expect(r.top[7].code).toBe('B-009');
+    expect(r.top[6].code).toBe('B-008');
     expect(r.deliberacion_aplicada).toBe('ACTA-1');
   });
   it('a decision about a different set of artists does not apply', () => {
-    const r = C.seleccionarTop(list, { deliberacion: { deliberation_id: 'ACTA-2', codes_in_order: ['B-009', 'B-010'] } });
+    const r = C.seleccionarTop(list, { deliberacion: { deliberation_id: 'ACTA-2', codes_in_order: ['B-008', 'B-009'] } });
     expect(r.requiere_comite).toBe(true);
     expect(r.deliberacion_descartada.indexOf('ACTA-2')).toBe(0);
+  });
+});
+
+describe('Values Sheets hands back with another type', () => {
+  it('a duplicate ID is detected when the stored ID came back as a number', () => {
+    const stored = [{ submission_id: 'S-1', normalized_id_number: 1036448960, normalized_email: 'a@x.co', normalized_phone: 3012345678 }];
+    const r = C.detectarDuplicado({ submission_id: 'S-2', normalized_id_number: '1036448960', normalized_email: 'b@x.co', normalized_phone: '3000000000' }, stored);
+    expect(r.duplicate_flag).toBe(true);
+    expect(r.registro_principal).toBe('S-1');
+  });
+  it('a repeated phone raises the alert when the stored phone came back as a number', () => {
+    const stored = [{ submission_id: 'S-1', normalized_id_number: '1', normalized_email: 'a@x.co', normalized_phone: 3012345678 }];
+    const r = C.detectarDuplicado({ submission_id: 'S-2', normalized_id_number: '2', normalized_email: 'b@x.co', normalized_phone: '3012345678' }, stored);
+    expect(r.alerta).toBe(true);
+  });
+  it('clockText reads plain, seconds and 1899-12-30 times alike', () => {
+    expect(C.clockText('15:45')).toBe('15:45');
+    expect(C.clockText('9:05:00')).toBe('09:05');
+    expect(C.clockText('1899-12-30T15:45:00')).toBe('15:45');
+    expect(C.clockText('')).toBe('');
+  });
+  it('humanTime never shows a 1899 date to a participant', () => {
+    expect(C.humanTime('1899-12-30T15:45:00')).toBe('3:45 p. m.');
+  });
+  it('deadlineText keeps the wall time written in CONFIG', () => {
+    expect(C.deadlineText('2026-10-22T18:00:00-05:00')).toBe('jueves 22 de octubre de 2026, 6:00 p. m.');
+    expect(C.deadlineText('')).toBe('');
   });
 });
 
@@ -304,10 +331,19 @@ describe('Source hygiene', () => {
   const fs = require('fs');
   const path = require('path');
   const dir = path.join(__dirname, '..', 'apps-script');
+  const sources = () => fs.readdirSync(dir).filter(f => /\.(gs|html)$/.test(f))
+    .map(f => ({ f, text: fs.readFileSync(path.join(dir, f), 'utf8') }));
   it('no source file contains raw combining marks (regex ranges must use \\u escapes)', () => {
-    const offenders = fs.readdirSync(dir).filter(f => /\.(gs|html)$/.test(f))
-      .filter(f => /[̀-ͯ]/.test(fs.readFileSync(path.join(dir, f), 'utf8')));
-    expect(offenders).toEqual([]);
+    expect(sources().filter(s => /[\u0300-\u036f]/.test(s.text)).map(s => s.f)).toEqual([]);
+  });
+  it('no source file contains raw U+2028/U+2029 (they end a line inside a regex literal)', () => {
+    expect(sources().filter(s => /[\u2028\u2029]/.test(s.text)).map(s => s.f)).toEqual([]);
+  });
+  it('every .gs file parses as JavaScript', () => {
+    const broken = sources().filter(s => /\.gs$/.test(s.f)).filter(s => {
+      try { new Function(s.text); return false; } catch (e) { return true; }
+    }).map(s => s.f);
+    expect(broken).toEqual([]);
   });
 });
 

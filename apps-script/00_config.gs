@@ -281,8 +281,8 @@ var PERMISOS = {
 /**
  * Default CONFIG rows. Written on setup, then owned by the operator.
  * Legal values are the ones INFORMED by the organization in the iteration-2
- * brief; `datos_legales_verificados` stays NO until someone checks them against
- * the current legal documents. Nothing here is invented.
+ * brief and confirmed by the organization on 2026-09-24. Nothing here is invented;
+ * a value that does not exist yet stays empty and the pages leave it out.
  */
 function configuracionPorDefecto() {
   return [
@@ -293,7 +293,7 @@ function configuracionPorDefecto() {
     ['evento_hora_fin', '21:00', 'Fin de la jornada (HH:MM, 24 h).'],
     ['evento_sede', 'Centro Comercial Mayorca', 'Lugar de las audiciones.'],
     ['evento_municipio_sede', 'Sabaneta, Antioquia', 'Municipio del lugar.'],
-    ['evento_direccion', 'PENDIENTE DE COMPLETAR', 'Punto exacto dentro del lugar (plazoleta, piso, entrada).'],
+    ['evento_direccion', '', 'Punto exacto dentro del lugar (plazoleta, piso, entrada). Vacio = no se muestra.'],
     ['cupo_total', '100', 'Numero de codigos definitivos B-001..B-100. Una agrupacion = un cupo.'],
     ['edad_minima', '18', 'Edad minima cumplida el dia del evento.'],
     ['edad_maxima', '30', 'Edad maxima cumplida el dia del evento.'],
@@ -305,7 +305,7 @@ function configuracionPorDefecto() {
     ['contingencia_inicio', '20:30', 'Inicio de la ventana de contingencia (HH:MM).'],
     ['cierre_audiciones', '21:00', 'Cierre definitivo de audiciones (HH:MM).'],
     ['cierre_cambios', '2026-10-22T18:00:00-05:00', 'Fecha y hora limite del Formulario 2 (cambio de horario).'],
-    ['top_seleccionados', '8', 'Numero de artistas/proyectos seleccionados. El brief dice 7 y la nota confirmada dice 8: confirmar.'],
+    ['top_seleccionados', '7', 'Numero de artistas/proyectos seleccionados (confirmado por la organizacion: 7).'],
     ['jurados', '3', 'Numero de jurados.'],
     ['minimo_jurados', '2', 'Tarjetas validas minimas para entrar al ranking.'],
     ['inscripciones_abiertas', 'SI', 'SI / NO. Cierra el Formulario 1 sin tocar codigo.'],
@@ -323,23 +323,23 @@ function configuracionPorDefecto() {
     ['limite_envios_minuto', '30', 'Maximo de envios de formularios por minuto en todo el sistema.'],
     ['limite_envios_documento_hora', '5', 'Maximo de envios por documento en una hora.'],
     ['tiempo_minimo_formulario_seg', '10', 'Un envio mas rapido que esto se trata como automatizado.'],
-    // ---- Legal block: values INFORMED by the organization, pending verification ----
+    // ---- Legal block: values given by the organization and confirmed on 2026-09-24 ----
     ['legal_name', 'Corporación Socio cultural El Arte es la Solución', 'Razon social del responsable del tratamiento.'],
     ['nit', '901292696', 'NIT informado (sin digito de verificacion: no se infiere).'],
     ['legal_representative', 'Jeison Duval Mazo Castañeda', 'Representante legal informado.'],
     ['legal_address', 'Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia', 'Direccion informada para contacto.'],
     ['data_protection_email', 'El.arterslasolucion@gmail.com', 'Canal para datos y reclamos (tal como fue informado).'],
     ['institutional_phone', '3042328502', 'Telefono informado.'],
-    ['canal_fisico_reclamos', 'PENDIENTE DE COMPLETAR', 'Canal fisico para derechos y reclamos, si se configura.'],
-    ['datos_legales_verificados', 'NO', 'Cambiar a SI solo tras verificar contra el documento legal vigente.'],
-    ['terms_version', 'PENDIENTE-DOCUMENTO-FUENTE', 'Version de los Terminos. Cambiar al publicar el documento fuente.'],
+    ['canal_fisico_reclamos', 'Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia', 'Canal fisico para derechos y reclamos (la direccion del responsable).'],
+    ['datos_legales_verificados', 'SI', 'Datos legales confirmados por la organizacion (2026-09-24).'],
+    ['terms_version', 'v1-2026-09-24', 'Version de los Terminos y Condiciones publicados (legal/TERMINOS_Y_CONDICIONES_v1.md).'],
     ['policy_version', 'v2-2026-09-24', 'Version de la politica de tratamiento de datos.'],
     ['consent_version', 'v2', 'Version del formulario de autorizaciones.'],
-    ['domain', 'PENDIENTE DE COMPLETAR', 'Dominio propio del sitio, cuando exista.'],
+    ['domain', '', 'Dominio propio del sitio, cuando exista. Vacio = se usa sitio_url.'],
     ['sitio_url', 'https://miguelgamer77721-ui.github.io/el-bunker/', 'Direccion publica del sitio informativo.'],
     ['privacy_policy_url', 'https://miguelgamer77721-ui.github.io/el-bunker/politica-datos.html', 'URL de la politica de tratamiento de datos.'],
     ['terms_url', 'https://miguelgamer77721-ui.github.io/el-bunker/terminos.html', 'URL de los terminos y condiciones.'],
-    ['whatsapp_grupo_enlace', 'PENDIENTE DE COMPLETAR', 'Enlace de invitacion al grupo de WhatsApp de personas aptas (lo crea la organizacion).'],
+    ['whatsapp_grupo_enlace', '', 'Enlace de invitacion al grupo de WhatsApp de personas aptas (lo crea la organizacion). Vacio = la invitacion no se ofrece.'],
     ['restaurar_desde', '', 'Solo para recuperacion: ID del archivo JSON de respaldo (ver MANUAL-RECUPERACION).'],
     ['restaurar_confirmacion', '', 'Solo para recuperacion: escribir SI-RESTAURAR y ejecutar RESTAURAR.'],
     ['whatsapp_oficial', '3239836182', 'Numero oficial desde el que se envian codigos y horarios.'],
@@ -364,8 +364,8 @@ var CONFIG_ITERATION1_VALUES = {
   cierre_cambios: ['2026-10-01T18:00:00-05:00'],
   cierre_audiciones: ['21:30', '1899-12-30T21:30:00'],
   contingencia_inicio: ['21:00', '1899-12-30T21:00:00'],
-  top_seleccionados: ['7'],
-  consent_version: ['v1-PENDIENTE']
+  consent_version: ['v1-PENDIENTE'],
+  datos_legales_verificados: ['NO']
 };
 
 /** Reads CONFIG into a plain object, cached per execution. */
@@ -442,5 +442,5 @@ function opcionesValidacion() {
 
 /** The legal identity stamped on every consent, frozen at the moment it is given. */
 function dataControllerStamp() {
-  return cfg('legal_name', 'PENDIENTE DE COMPLETAR') + ' · NIT ' + cfg('nit', 'PENDIENTE');
+  return cfg('legal_name', '') + ' · NIT ' + cfg('nit', '');
 }

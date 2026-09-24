@@ -154,7 +154,7 @@ function registerProject(datos, video) {
   if (groupMatch.match) notes.push('GRUPO_POSIBLE_REPETIDO:' + groupMatch.ref);
 
   var now = ahoraISO();
-  var termsVersion = cfg('terms_version', 'PENDIENTE-DOCUMENTO-FUENTE');
+  var termsVersion = cfg('terms_version', '');
   var policyVersion = cfg('policy_version', 'v2');
   var controller = dataControllerStamp();
   var usesTrack = esVerdadero(datos.track_uses);
@@ -392,7 +392,7 @@ function accionRegistrarIntegrante(datos) {
   });
 
   var norm = normalizarCedula(datos.id_number);
-  var before = groupSummary(code).list.filter(function (m) { return m.normalized_id_number === norm; })[0];
+  var before = groupSummary(code).list.filter(function (m) { return normalizarCedula(m.normalized_id_number) === norm; })[0];
   var memberId = before ? before.member_id : nuevoId('M');
 
   var signature = null;
@@ -407,11 +407,11 @@ function accionRegistrarIntegrante(datos) {
     if (!project) return { ok: false, error: 'No encontramos esa agrupacion.' };
     var allMembers = leerHoja(HOJA.INTEGRANTES);
     var summary = groupSummary(code, allMembers);
-    var existing = summary.list.filter(function (m) { return m.normalized_id_number === norm; })[0];
+    var existing = summary.list.filter(function (m) { return normalizarCedula(m.normalized_id_number) === norm; })[0];
 
     var alerts = [];
     allMembers.forEach(function (m) {
-      if (m.normalized_id_number === norm && normalizarComparable(m.group_code) !== code) {
+      if (normalizarCedula(m.normalized_id_number) === norm && normalizarComparable(m.group_code) !== code) {
         alerts.push('TAMBIEN_EN_' + m.group_code);
       }
     });
@@ -434,7 +434,7 @@ function accionRegistrarIntegrante(datos) {
       adult_confirmation: esVerdadero(datos.adult_confirmation), artistic_role: normalizarTexto(datos.artistic_role),
       consent_terms: esVerdadero(datos.accept_terms), consent_data: esVerdadero(datos.accept_data_processing),
       consent_image: esVerdadero(datos.accept_image_voice), consent_at: now,
-      terms_version: cfg('terms_version', 'PENDIENTE-DOCUMENTO-FUENTE'), policy_version: cfg('policy_version', 'v2'),
+      terms_version: cfg('terms_version', ''), policy_version: cfg('policy_version', 'v2'),
       data_controller: dataControllerStamp(), capture_source: 'web:formulario-integrantes',
       member_status: validation.status, member_alert: alerts.join(' | ')
     };
@@ -659,7 +659,7 @@ function accionSolicitarCambio(datos) {
     agregarFila(HOJA.CAMBIOS, {
       solicitud_id: solicitudId, at: ahoraISO(), code: registro.code, full_name: registro.full_name,
       original_block: registro.original_block || (horario ? horario.block_id : ''),
-      original_time: registro.original_time || (horario ? horario.audition_time : ''),
+      original_time: clockText(registro.original_time) || (horario ? horario.audition_time : ''),
       can_attend_original: 'FALSE', reason_short: String(datos.reason_short || '').slice(0, 400),
       contact: normalizarTexto(datos.contact), acceptance: esVerdadero(datos.acceptance) ? 'TRUE' : 'FALSE',
       estado: ESTADO_CAMBIO.PENDIENTE, nuevo_bloque: '', nueva_hora: '', resuelto_at: '', resuelto_by: '', observacion: ''
@@ -687,8 +687,8 @@ function accionConsultarEstado(datos) {
     code: registro.code || '',
     eligibility_status: registro.eligibility_status,
     bloque: registro.final_block || registro.original_block || '',
-    hora_llegada: registro.arrival_time || '',
-    hora_audicion: registro.final_time || registro.original_time || '',
+    hora_llegada: registro.arrival_time ? humanTime(registro.arrival_time) : '',
+    hora_audicion: (registro.final_time || registro.original_time) ? humanTime(registro.final_time || registro.original_time) : '',
     change_status: registro.change_status || ESTADO_CAMBIO.SIN_SOLICITUD,
     attendance_status: registro.attendance_status || ''
   };
@@ -712,26 +712,26 @@ function accionConfigPublica() {
       hora_fin: fin,
       hora_inicio_texto: humanTime(inicio),
       hora_fin_texto: humanTime(fin),
-      sede: cfg('evento_sede', 'PENDIENTE DE COMPLETAR'),
+      sede: cfg('evento_sede', ''),
       municipio_sede: cfg('evento_municipio_sede', 'Sabaneta, Antioquia'),
       municipio: cfg('municipio', 'Sabaneta'),
       edad_minima: cfgNumero('edad_minima', 18),
       edad_maxima: cfgNumero('edad_maxima', 30),
       duracion_audicion: cfgNumero('duracion_audicion_min', 3),
       cupo: cfgNumero('cupo_total', 100),
-      top: cfgNumero('top_seleccionados', 8),
+      top: cfgNumero('top_seleccionados', 7),
       jurados: cfgNumero('jurados', 3),
       integrantes_max: cfgNumero('integrantes_max', 15)
     },
     legal: {
-      legal_name: cfg('legal_name', 'PENDIENTE DE COMPLETAR'),
-      nit: cfg('nit', 'PENDIENTE DE COMPLETAR'),
-      legal_address: cfg('legal_address', 'PENDIENTE DE COMPLETAR'),
-      data_protection_email: cfg('data_protection_email', 'PENDIENTE DE COMPLETAR'),
-      institutional_phone: cfg('institutional_phone', 'PENDIENTE DE COMPLETAR'),
+      legal_name: cfg('legal_name', ''),
+      nit: cfg('nit', ''),
+      legal_address: cfg('legal_address', ''),
+      data_protection_email: cfg('data_protection_email', ''),
+      institutional_phone: cfg('institutional_phone', ''),
       terms_url: cfg('terms_url', ''),
       privacy_policy_url: cfg('privacy_policy_url', ''),
-      terms_version: cfg('terms_version', 'PENDIENTE-DOCUMENTO-FUENTE'),
+      terms_version: cfg('terms_version', ''),
       policy_version: cfg('policy_version', 'v2'),
       consent_version: cfg('consent_version', 'v2')
     },
@@ -750,6 +750,7 @@ function accionConfigPublica() {
     entorno: entorno(),
     abierto: cfgBool('inscripciones_abiertas', true),
     cambios_abiertos: cfgBool('cambios_abiertos', true),
+    cierre_cambios_texto: deadlineText(cfg('cierre_cambios', '')),
     integrantes_abierto: cfgBool('integrantes_abierto', true),
     pistas_abiertas: cfgBool('pistas_abiertas', true)
   };

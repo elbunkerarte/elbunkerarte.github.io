@@ -81,12 +81,97 @@ function marcarEntorno() {
   if (window.ENTORNO !== 'PRUEBAS') return;
   var b = document.createElement('div');
   b.className = 'banner-pruebas';
-  b.innerHTML = '<span>⚠ ENTORNO DE <b>PRUEBAS</b> — los datos son ficticios ' +
+  b.innerHTML = '<span>[PRUEBAS] · ENTORNO DE <b>PRUEBAS</b> — los datos son ficticios ' +
                 'y se pueden borrar. Esto NO es la convocatoria real.</span>';
   document.body.insertBefore(b, document.body.firstChild);
   document.title = '[PRUEBAS] ' + document.title;
 }
 document.addEventListener('DOMContentLoaded', marcarEntorno);
+
+/** Milliseconds since the page loaded: the server treats instant submissions as automated. */
+var PAGE_LOADED_AT = Date.now();
+function formElapsedMs() { return Date.now() - PAGE_LOADED_AT; }
+
+/** Value of a radio group, '' when unanswered (silence is never an answer). */
+function radioValue(nombre) {
+  var el = document.querySelector('input[name="' + nombre + '"]:checked');
+  return el ? el.value : '';
+}
+
+/** Values of a checkbox group joined with commas. */
+function checkedValues(nombre) {
+  return $$('input[name="' + nombre + '"]:checked').map(function (x) { return x.value; }).join(',');
+}
+
+/** Marks a field (or a group of options) as wrong with a message. */
+function markError(id, mensaje) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var container = el.closest('.campo') || el.closest('.check') || el;
+  container.classList.add('malo');
+  var err = container.querySelector('.error');
+  if (err && mensaje) err.textContent = mensaje;
+}
+
+/** Reads a File as base64 (no data: prefix). */
+function fileToBase64(file) {
+  return new Promise(function (resolve, reject) {
+    var r = new FileReader();
+    r.onload = function () { resolve(String(r.result).split(',')[1] || ''); };
+    r.onerror = function () { reject(new Error('No se pudo leer el archivo.')); };
+    r.readAsDataURL(file);
+  });
+}
+
+/**
+ * Signature pad on a canvas: pointer events (finger, pen or mouse), white
+ * background so the stored PNG looks like ink on paper. `vacia()` is true
+ * until at least a few points were drawn.
+ */
+function createSignaturePad(canvas) {
+  var ctx = canvas.getContext('2d');
+  var strokes = 0, drawing = false, lastPoint = null;
+  function resetCanvas() {
+    var ratio = Math.max(window.devicePixelRatio || 1, 1);
+    var w = canvas.offsetWidth, h = canvas.offsetHeight;
+    canvas.width = w * ratio; canvas.height = h * ratio;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
+    ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1D1D1B';
+    strokes = 0;
+  }
+  function pointerPos(e) { var b = canvas.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; }
+  canvas.addEventListener('pointerdown', function (e) { drawing = true; lastPoint = pointerPos(e); canvas.setPointerCapture(e.pointerId); e.preventDefault(); });
+  canvas.addEventListener('pointermove', function (e) {
+    if (!drawing) return;
+    var p = pointerPos(e);
+    ctx.beginPath(); ctx.moveTo(lastPoint.x, lastPoint.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    lastPoint = p; strokes++; e.preventDefault();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) { canvas.addEventListener(t, function () { drawing = false; }); });
+  resetCanvas();
+  window.addEventListener('resize', function () { if (!strokes) resetCanvas(); });
+  return {
+    clear: resetCanvas,
+    isEmpty: function () { return strokes < 8; },
+    png: function () { return canvas.toDataURL('image/png'); }
+  };
+}
+
+/** Saves the official number as a contact (vCard): the step that makes WhatsApp broadcasts reach the person. */
+function downloadContact(numero, nombre) {
+  var vcf = ['BEGIN:VCARD', 'VERSION:3.0', 'FN:' + nombre, 'N:' + nombre + ';;;;', 'TEL;TYPE=CELL:+57' + numero, 'END:VCARD'].join('\r\n');
+  var url = URL.createObjectURL(new Blob([vcf], { type: 'text/vcard' }));
+  var a = document.createElement('a');
+  a.href = url; a.download = 'EL-BUNKER.vcf'; document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1000);
+}
+
+function copyText(texto, boton) {
+  function done() { if (boton) { var t = boton.textContent; boton.textContent = 'Copiado'; setTimeout(function () { boton.textContent = t; }, 1500); } }
+  if (navigator.clipboard) navigator.clipboard.writeText(texto).then(done).catch(function () {});
+  else { var ta = document.createElement('textarea'); ta.value = texto; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); }
+}
 
 /** Online/offline banner, shared by every panel. */
 function vigilarConexion(alRecuperar) {

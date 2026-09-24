@@ -125,7 +125,7 @@ function consolidarArtista(tarjetas, rubrica) {
  */
 function seleccionarTop(artistas, opciones) {
   opciones = opciones || {};
-  var n = opciones.top || 8;
+  var n = opciones.top || 7;
   var minimoJurados = opciones.minimo_jurados === undefined ? 2 : opciones.minimo_jurados;
   var rubrica = opciones.rubrica || RUBRICA;
 

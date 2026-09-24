@@ -169,7 +169,7 @@ describe('Dataset de prueba: asignacion de los 100 codigos', () => {
   });
 });
 
-describe('Dataset de prueba: jornada completa y Top 8', () => {
+describe('Dataset de prueba: jornada completa y Top 7', () => {
   const asignacion = C.asignarCodigos(R.almacenadas, { cupo: 100 });
   const conCodigo = asignacion.asignados.map(a => a.code);
 
@@ -197,10 +197,10 @@ describe('Dataset de prueba: jornada completa y Top 8', () => {
     };
   });
 
-  const seleccion = C.seleccionarTop(artistas, { top: 8, minimo_jurados: 2 });
+  const seleccion = C.seleccionarTop(artistas, { top: 7, minimo_jurados: 2 });
 
-  it('selects exactly 8 projects', () => {
-    expect(seleccion.top).toHaveLength(8);
+  it('selects exactly 7 projects', () => {
+    expect(seleccion.top).toHaveLength(7);
   });
   it('los 7 salen SOLO de audiciones REALIZADA', () => {
     const realizadas = new Set(artistas.filter(a => a.audition_status === 'REALIZADA').map(a => a.code));
