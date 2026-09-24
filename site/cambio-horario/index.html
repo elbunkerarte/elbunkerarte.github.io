@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1D1D1B">
+<title>Cambio de horario — {{evento.nombre}}</title>
+<script>
+  // Branded short path: forwards to the form and keeps any query string
+  // (e.g. ?g=GRP-001&k=ABC123) so personal links keep working.
+  (function () {
+    var target = "{{enlaces.cambio_horario}}";
+    var query = window.location.search;
+    if (query.length > 1) target += (target.indexOf('?') === -1 ? '?' : '&') + query.slice(1);
+    window.__bunkerTarget = target;
+    window.location.replace(target);
+  }());
+</script>
+<noscript><meta http-equiv="refresh" content="0; url={{enlaces.cambio_horario}}"></noscript>
+<link rel="icon" href="../assets/brand/favicon.ico" sizes="48x48">
+<link rel="stylesheet" href="../assets/estilos.css">
+</head>
+<body>
+<main class="redirect-page surface-dark">
+  <div>
+    <img src="../assets/brand/logo-badge-256.png" width="96" height="96" alt="Logo de la {{legal.razon_social}}">
+    <h1>Cambio de horario</h1>
+    <p>Te estamos llevando al formulario de cambio de horario. Si no avanza en unos segundos, usa este botón.</p>
+    <a id="destino" class="btn btn-primary" href="{{enlaces.cambio_horario}}">Abrir el formulario de cambio de horario</a>
+  </div>
+</main>
+<script>
+  // Keeps the fallback button in sync with the forwarded query string.
+  document.getElementById('destino').href = window.__bunkerTarget || document.getElementById('destino').href;
+</script>
+</body>
+</html>

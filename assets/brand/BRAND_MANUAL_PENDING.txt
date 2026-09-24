@@ -1,0 +1,27 @@
+EL BÚNKER by Arte es la Solución — estado del material de marca
+Fecha: 2026-09-24
+
+ENTREGADO POR LA ORGANIZACIÓN (originales en esta carpeta, sin modificar)
+- logo-arte-es-la-solucion.png  Logo de la Corporación Socio cultural El Arte es la Solución (PNG 5000x5000, fondo transparente).
+- wordmark-bunker.png           Palabra "BUNKER" dibujada a mano + "@aesproducciones_" (PNG 1072x592, negro sobre blanco).
+- referencia-paleta.png         Hoja de colores: #F7A705 · #1D1D1B · #FFFFFF (con RGB y CMYK).
+- referencia-tipografia.png     Hoja de tipografías: Títulos = Dopestyle · Subtítulos = Bebas KAI · Textos = Futura Medium BT (+ itálica).
+
+PENDIENTE DE ENTREGAR
+1. Archivos de fuente oficiales y su licencia de uso web:
+   - Dopestyle (títulos)
+   - Bebas KAI (subtítulos)
+   - Futura Medium BT y Futura Medium Italic (textos)
+   Mientras no lleguen, el sitio usa sustitutas libres (SIL OFL) autoalojadas: Kaushan Script, Bebas Neue y Jost.
+   Ver docs/BRAND_GUIDE.md, sección Tipografía.
+2. Texturas.
+3. Banners y piezas de referencia de estilo.
+4. Fotografías (artistas, espacios, ediciones anteriores) con su autorización de uso.
+5. Lineamientos propios de la sub-identidad EL BÚNKER: versiones del wordmark (positivo/negativo, con y sin
+   "@aesproducciones_"), área de seguridad, tamaños mínimos, usos incorrectos y relación con el logo de la Corporación.
+6. Versión vectorial (SVG/AI/PDF) del logo y del wordmark. Hoy sólo hay PNG.
+
+REGLA
+Cuando llegue el manual de marca completo, prevalece sobre docs/BRAND_GUIDE.md y sobre cualquier decisión tomada
+con este material parcial. Los derivados web se regeneran con:
+    python3 assets/build_brand_assets.py   (requiere Pillow y numpy)

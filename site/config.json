@@ -1,34 +1,59 @@
 {
-  "_instrucciones": "Copia este archivo como site/config.json y reemplaza CADA 'PENDIENTE DE COMPLETAR' con el dato real aprobado por la organizacion. NO se inventa ningun dato legal. Los mismos valores deben quedar en la hoja CONFIG de la base maestra.",
+  "_instrucciones": "Fuente ÚNICA de los datos públicos del sitio. tools/construir-sitio.js reemplaza cada {{ruta.al.valor}} de las páginas con estos valores al publicar. Un valor que empiece por PENDIENTE se muestra como 'PENDIENTE DE COMPLETAR'. No se inventa ningún dato: los datos legales se publican tal como los informó la organización. Si cambias fecha, hora o lugar, vuelve a generar la imagen social con assets/build_brand_assets.py.",
+  "sitio": {
+    "url_publica": "https://miguelgamer77721-ui.github.io/el-bunker/",
+    "dominio_propio": ""
+  },
   "evento": {
-    "nombre": "EL BÚNKER by Arte es la Solución",
-    "fecha_texto": "viernes 2 de octubre de 2026",
-    "fecha_iso": "2026-10-02",
-    "hora_inicio": "4:00 p. m.",
-    "hora_fin": "10:00 p. m.",
-    "municipio": "Sabaneta, Antioquia",
+    "nombre": "EL BÚNKER",
+    "marca": "by Arte es la Solución",
+    "lema": "Creemos en tu talento.",
+    "fecha_dia": "Viernes",
+    "fecha_texto": "23 de octubre",
+    "fecha_iso": "2026-10-23",
+    "anio": "2026",
+    "hora_inicio": "3:00 p. m.",
+    "hora_fin": "9:00 p. m.",
+    "lugar": "Centro Comercial Mayorca",
+    "municipio": "Sabaneta",
+    "departamento": "Antioquia",
     "edad_minima": 18,
-    "edad_maxima": 28,
+    "edad_maxima": 30,
     "cupos": 100,
-    "seleccionados": 7,
+    "seleccionados": 8,
+    "jurados": 3,
     "duracion_audicion_min": 3,
-    "sede": "PENDIENTE DE COMPLETAR",
-    "direccion": "PENDIENTE DE COMPLETAR"
+    "antelacion_llegada_min": 15,
+    "tolerancia_min": 5,
+    "bloques_inicio": "15:00",
+    "bloques": 10,
+    "bloque_min": 30,
+    "margen": "8:00–8:30 p. m.",
+    "contingencia": "8:30–9:00 p. m.",
+    "cierre": "9:00 p. m."
   },
   "legal": {
-    "legal_name": "PENDIENTE DE COMPLETAR",
-    "nit": "PENDIENTE DE COMPLETAR",
-    "legal_address": "PENDIENTE DE COMPLETAR",
-    "data_protection_email": "PENDIENTE DE COMPLETAR",
-    "institutional_phone": "PENDIENTE DE COMPLETAR",
-    "domain": "PENDIENTE DE COMPLETAR",
-    "consent_version": "v1-PENDIENTE"
+    "razon_social": "Corporación Socio cultural El Arte es la Solución",
+    "nit": "901292696",
+    "representante_legal": "Jeison Duval Mazo Castañeda",
+    "direccion": "Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia",
+    "correo_datos": "El.arterslasolucion@gmail.com",
+    "telefono": "3042328502",
+    "canal_fisico": "PENDIENTE DE COMPLETAR",
+    "terminos_version": "PENDIENTE-DOCUMENTO-FUENTE",
+    "politica_version": "v2-2026-09-24",
+    "datos_verificados": false
+  },
+  "contacto": {
+    "whatsapp_oficial": "3239836182",
+    "whatsapp_oficial_texto": "323 983 6182",
+    "whatsapp_nombre_contacto": "EL BÚNKER — Arte es la Solución",
+    "instagram": "aesproducciones_"
   },
   "enlaces": {
     "inscripcion": "https://script.google.com/macros/s/AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW/exec?p=inscripcion",
-    "cambio_horario": "https://script.google.com/macros/s/AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW/exec?p=cambio-horario",
-    "instagram": "PENDIENTE DE COMPLETAR",
-    "tiktok": "PENDIENTE DE COMPLETAR",
-    "whatsapp_contacto": "PENDIENTE DE COMPLETAR"
+    "mi_inscripcion": "https://script.google.com/macros/s/AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW/exec?p=mi-inscripcion",
+    "integrantes": "https://script.google.com/macros/s/AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW/exec?p=integrantes",
+    "cambio_horario": "https://script.google.com/macros/s/AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW/exec?p=cambio-horario"
   }
 }

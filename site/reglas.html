@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reglas de la convocatoria — {{evento.nombre}} {{evento.marca}}</title>
+<meta name="description" content="Reglas operativas de {{evento.nombre}}: cupos, códigos y horarios, cambio de horario, puntualidad y contingencia, audición y rúbrica, pistas, video y agrupaciones.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="{{pagina.url}}">
+<meta property="og:url" content="{{pagina.url}}">
+<meta property="og:title" content="Reglas de la convocatoria — {{evento.nombre}}">
+<meta property="og:description" content="Cupos, horarios, puntualidad, audición, pistas y agrupaciones: cómo funciona {{evento.nombre}} el {{calc.fecha_larga}} en el {{evento.lugar}}.">
+{{> head}}
+</head>
+<body>
+{{> header}}
+
+<main id="contenido">
+  <header class="page-hero surface-dark">
+    <div class="wrap">
+      <p class="kicker">Cómo funciona</p>
+      <h1>Reglas de la convocatoria</h1>
+      <p class="page-meta">{{evento.fecha_dia}} {{evento.fecha_texto}} de {{evento.anio}} · {{evento.hora_inicio}} a {{evento.hora_fin}} ·
+        {{evento.lugar}}, {{evento.municipio}}</p>
+    </div>
+  </header>
+
+  <div class="page-body surface-light">
+    <div class="wrap page-layout">
+      <article class="prose">
+        <p>Estas son las reglas operativas de la convocatoria. El texto legal está en
+          <a href="terminos.html">Términos y condiciones</a> y el uso de tus datos en la
+          <a href="politica-datos.html">Política de tratamiento de datos</a>.</p>
+
+        <h2 id="inscripcion">1. Inscripción y cupos</h2>
+        <ul>
+          <li>Te inscribes <b>una sola vez por proyecto</b>, con el formulario oficial.</li>
+          <li>Hay <b>{{evento.cupos}} cupos</b> para proyectos únicos que cumplan los requisitos: tener entre
+            {{evento.edad_minima}} y {{evento.edad_maxima}} años cumplidos el día de la audición y vivir en {{evento.municipio}}.</li>
+          <li>La organización revisa cada inscripción —datos, requisitos y muestra artística— y asigna los cupos
+            <b>en orden de inscripción</b> entre quienes cumplen. Por eso conviene inscribirse cuanto antes.</li>
+          <li>Si hay dos o más inscripciones con el mismo documento, <b>se conserva la primera válida</b>; las siguientes
+            quedan marcadas como duplicadas, no consumen cupo y se conservan para trazabilidad.</li>
+          <li>Una inscripción incompleta, fuera del rango de edad o de otro municipio no recibe cupo.</li>
+        </ul>
+
+        <h2 id="agrupaciones">2. Solistas, dúos y agrupaciones</h2>
+        <ul>
+          <li>Pueden participar solistas, dúos y agrupaciones.</li>
+          <li><b>Una agrupación cuenta como una sola inscripción</b> y ocupa <b>un solo cupo</b>, sin importar cuántos integrantes tenga.
+            El código del proyecto no se multiplica por integrante.</li>
+          <li>La inscripción la hace el líder o vocero. Al terminar recibe un <b>enlace de integrantes</b> para compartir con su grupo.</li>
+          <li><b>Cada integrante debe ser mayor de edad</b> y dar <b>su propia autorización</b> desde ese enlace. El líder no puede
+            autorizar por los demás.</li>
+        </ul>
+
+        <h2 id="codigo-horario">3. Código y horario</h2>
+        <ul>
+          <li>Cada proyecto admitido recibe un <b>código</b> (<span class="nowrap">{{calc.codigo_primero}}</span> a <span class="nowrap">{{calc.codigo_ultimo}}</span>) y un horario.</li>
+          <li>El código es <b>estable</b>: no cambia por un cambio de horario ni se reasigna a otra persona.</li>
+          <li>El código y el horario llegan por WhatsApp desde el número oficial <b>{{contacto.whatsapp_oficial_texto}}</b>.
+            Guárdalo como «{{contacto.whatsapp_nombre_contacto}}». No existe un formulario de confirmación:
+            si no respondes, tu turno sigue vigente.</li>
+          <li>Al inscribirte declaras disponibilidad para <b>toda la jornada</b> y aceptas el horario que te asigne la organización.
+            No se eligen franjas.</li>
+        </ul>
+
+        <h3>Bloques de la jornada</h3>
+        <p>Son {{evento.bloques}} bloques de {{evento.bloque_min}} minutos desde las {{calc.bloques_hora_inicio}},
+          con {{calc.bloques_por_bloque}} códigos cada uno.</p>
+        <div class="table-wrap" role="region" aria-label="Bloques de la jornada" tabindex="0">
+          <table class="blocks-table">
+            <thead><tr><th scope="col">Bloque</th><th scope="col">Horario</th><th scope="col">Códigos</th></tr></thead>
+            <tbody>
+{{calc.bloques_tabla}}
+            </tbody>
+          </table>
+        </div>
+        <ul class="data-list schedule-notes">
+          <li><span>Margen operativo</span>{{evento.margen}}</li>
+          <li><span>Contingencia</span>{{evento.contingencia}} · para quienes perdieron su turno</li>
+          <li><span>Cierre</span>{{evento.cierre}} · se cierran las audiciones</li>
+        </ul>
+
+        <h2 id="cambio-horario">4. Cambio de horario</h2>
+        <ul>
+          <li>Solo después de recibir tu horario y solo si tienes un <b>impedimento real</b> para asistir.</li>
+          <li><b>Una sola solicitud</b> por proyecto, desde el <a href="cambio-horario/">formulario de cambio de horario</a>.</li>
+          <li><b>No eliges la nueva hora</b>: la asigna la organización según disponibilidad. Tu código no cambia.</li>
+          <li>La solicitud puede ser aprobada o no aprobada. Si no se aprueba, se mantiene tu horario original.</li>
+          <li>El día del evento no se hacen cambios de horario; solo aplica la contingencia.</li>
+        </ul>
+
+        <h2 id="puntualidad">5. Puntualidad, contingencia y cierre</h2>
+        <ul>
+          <li>Llega <b>{{evento.antelacion_llegada_min}} minutos antes</b> de tu bloque para el check-in, con tu documento de identidad original.</li>
+          <li>Hay una tolerancia de <b>{{evento.tolerancia_min}} minutos</b>. Con más retraso <b>pierdes tu turno</b> y pasas a contingencia.
+            Nunca se desplaza a quien llegó puntual.</li>
+          <li>Si no te presentas, tu turno queda libre.</li>
+          <li>La <b>contingencia</b> ({{evento.contingencia}}) no es un grupo adicional: son participantes de los {{evento.cupos}}
+            que perdieron su turno. Solo audiciona quien alcance en el tiempo disponible.</li>
+          <li>A las <b>{{evento.cierre}}</b> se cierran las audiciones. Quien no haya audicionado no entra a la selección.</li>
+        </ul>
+
+        <h2 id="audicion">6. La audición y la rúbrica</h2>
+        <ul>
+          <li>Recorrido: check-in con tu documento, precola y escenario.</li>
+          <li>Duración máxima: <b>{{evento.duracion_audicion_min}} minutos</b>, cronometrados.</li>
+          <li><b>{{evento.jurados}} jurados</b> califican de forma independiente con una rúbrica común.</li>
+        </ul>
+        <div class="table-wrap" role="region" aria-label="Rúbrica de evaluación" tabindex="0">
+          <table>
+            <thead><tr><th scope="col">Criterio</th><th scope="col">Peso</th></tr></thead>
+            <tbody>
+              <tr><td>Talento / ejecución</td><td>20 %</td></tr>
+              <tr><td>Performance</td><td>20 %</td></tr>
+              <tr><td>Identidad artística</td><td>15 %</td></tr>
+              <tr><td>Repertorio</td><td>10 %</td></tr>
+              <tr><td>Profesionalismo</td><td>10 %</td></tr>
+              <tr><td>Presencia escénica</td><td>10 %</td></tr>
+              <tr><td>Comunidad digital</td><td>5 %</td></tr>
+              <tr><td>Proyecto</td><td>10 %</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li>Cada criterio se califica de 1 a 10 y se pondera por su peso. El resultado de cada jurado es sobre 100 y el
+            resultado final es el <b>promedio de los {{evento.jurados}} jurados</b>.</li>
+          <li>Se seleccionan <b>{{evento.seleccionados}} artistas o proyectos</b> entre las audiciones realizadas.</li>
+          <li>Desempate, en orden: performance, talento / ejecución, identidad artística y, si persiste, deliberación documentada del jurado.</li>
+          <li>No se publica el ranking completo.</li>
+        </ul>
+
+        <h2 id="pistas">7. Pistas</h2>
+        <ul>
+          <li>Si usas pista, envíala <b>antes del evento</b> desde <a href="mi-inscripcion/">«Mi inscripción»</a>.
+            La entrega de la pista no bloquea tu inscripción: puedes completarla después.</li>
+          <li>Tu archivo se guarda con tu código, así: <b class="filename">B-XXX_NOMBREARTISTICO_NOMBRECANCION</b> (más la extensión del archivo).</li>
+          <li>Estado de tu pista: <b>pendiente</b>, <b>recibida</b>, <b>validada</b> o <b>con problema</b>.</li>
+          <li>El día del evento lleva una <b>copia en USB</b> como respaldo. El Bluetooth no es el método principal.</li>
+          <li>Si necesitas instrumento o equipo, lleva el tuyo: la organización no garantiza equipos que no estén confirmados.</li>
+        </ul>
+
+        <h2 id="video">8. Video o muestra artística</h2>
+        <ul>
+          <li>En la inscripción compartes un enlace a video o muestra artística: YouTube no listado, Drive con acceso, Vimeo u otra URL.</li>
+          <li>El enlace debe poder verse sin pedir permisos: se revisa que sea accesible para la evaluación.</li>
+        </ul>
+
+        <h2 id="conducta">9. Conducta y causales de exclusión</h2>
+        <ul>
+          <li>Suministrar información falsa o suplantar a otra persona.</li>
+          <li>Inscribirse varias veces para obtener más de un cupo.</li>
+          <li>Conductas que afecten la seguridad, la integridad o el desarrollo de la jornada.</li>
+          <li>Incumplir las instrucciones del coordinador logístico o del personal del escenario.</li>
+        </ul>
+
+        <div class="callout callout--strong">
+          <p><b>Aviso.</b> Los artistas finalistas podrán tener la posibilidad de presentarse en el Daviarena.
+            Ser seleccionado no garantiza una presentación en el Daviarena ni una contratación.</p>
+        </div>
+
+        <p>¿Dudas operativas? Escribe al WhatsApp oficial
+          <a class="nowrap" href="https://wa.me/57{{contacto.whatsapp_oficial}}" rel="noopener">{{contacto.whatsapp_oficial_texto}}</a>.
+          Para datos personales y reclamos usa el <a href="contacto.html">canal de derechos y reclamos</a>.</p>
+      </article>
+      <nav class="toc" aria-label="Secciones de las reglas">
+        <p class="toc-title">En esta página</p>
+        <ol>
+          <li><a href="#inscripcion">1. Inscripción y cupos</a></li>
+          <li><a href="#agrupaciones">2. Solistas, dúos y agrupaciones</a></li>
+          <li><a href="#codigo-horario">3. Código y horario</a></li>
+          <li><a href="#cambio-horario">4. Cambio de horario</a></li>
+          <li><a href="#puntualidad">5. Puntualidad, contingencia y cierre</a></li>
+          <li><a href="#audicion">6. La audición y la rúbrica</a></li>
+          <li><a href="#pistas">7. Pistas</a></li>
+          <li><a href="#video">8. Video o muestra artística</a></li>
+          <li><a href="#conducta">9. Conducta y causales de exclusión</a></li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+</main>
+
+{{> footer}}
+</body>
+</html>

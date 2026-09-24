@@ -1,163 +1,196 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Política de tratamiento de datos — EL BÚNKER</title>
-<link rel="stylesheet" href="assets/estilos.css">
+<meta charset="utf-8">
+<title>Política de tratamiento de datos — {{evento.nombre}} {{evento.marca}}</title>
+<meta name="description" content="Qué datos recoge {{evento.nombre}}, para qué, dónde se guardan, quién los ve y cómo ejerces tus derechos. Responsable: {{legal.razon_social}}.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="{{pagina.url}}">
+<meta property="og:url" content="{{pagina.url}}">
+<meta property="og:title" content="Política de tratamiento de datos — {{evento.nombre}}">
+<meta property="og:description" content="Qué datos recoge {{evento.nombre}}, para qué, dónde se guardan, quién los ve y cómo ejerces tus derechos.">
+{{> head}}
 </head>
 <body>
-<div class="envoltura">
-  <nav class="migas"><a href="index.html">← Volver a EL BÚNKER</a></nav>
+{{> header}}
 
-  <header class="hero" style="padding:14px 0 24px">
-    <h1 style="font-size:clamp(26px,7vw,40px)">POLÍTICA DE <span>DATOS</span></h1>
-    <div class="lema">Versión <span data-cfg="legal.consent_version"></span></div>
+<main id="contenido">
+  <header class="page-hero surface-dark">
+    <div class="wrap">
+      <p class="kicker">Documento legal</p>
+      <h1>Política de tratamiento de datos</h1>
+      <p class="page-meta">Versión <b>{{legal.politica_version}}</b></p>
+    </div>
   </header>
 
-  <div class="nota" style="border-color:var(--alerta);background:rgba(245,158,11,.1)">
-    <b>Aviso para la organización (borrar antes de publicar):</b> este documento describe con
-    exactitud <b>lo que el sistema hace realmente</b> con los datos — qué recoge, dónde lo guarda,
-    quién lo ve y cuánto dura. Las secciones marcadas
-    <span class="pendiente">PENDIENTE DE COMPLETAR</span> exigen una decisión de la organización
-    o del área legal (identificación del responsable, finalidades declaradas, plazos de
-    conservación, encargados). <b>No abras inscripciones sin completarlas.</b>
+  <div class="page-body surface-light">
+    <div class="wrap page-layout">
+      <article class="prose">
+        <p>Esta política describe lo que el sistema de {{evento.nombre}} hace realmente con tus datos: qué recoge,
+          para qué, dónde se guarda, quién lo ve y cómo ejerces tus derechos. Los apartados marcados
+          <span class="pendiente">PENDIENTE DE COMPLETAR</span> todavía no han sido definidos por la organización.</p>
+
+        <h2 id="marco">1. Marco legal</h2>
+        <p>Constitución Política de Colombia, Ley 1581 de 2012, Decreto 1074 de 2015 y las directrices de la
+          Superintendencia de Industria y Comercio (SIC).</p>
+
+        <h2 id="responsable">2. Responsable del tratamiento</h2>
+        <ul class="data-list">
+          <li><span>Razón social</span>{{legal.razon_social}}</li>
+          <li><span>NIT</span>{{legal.nit}}</li>
+          <li><span>Representante legal</span>{{legal.representante_legal}}</li>
+          <li><span>Dirección</span>{{legal.direccion}}</li>
+          <li><span>Correo para datos personales</span><a href="mailto:{{legal.correo_datos}}">{{legal.correo_datos}}</a></li>
+          <li><span>Teléfono</span><a href="tel:+57{{legal.telefono}}">{{legal.telefono}}</a></li>
+          <li><span>Canal físico</span>{{legal.canal_fisico}}</li>
+        </ul>
+
+        <h2 id="datos">3. Qué datos recogemos</h2>
+        <p>Solo los que piden los formularios de la convocatoria:</p>
+        <div class="table-wrap" role="region" aria-label="Datos que se recogen" tabindex="0">
+          <table>
+            <thead><tr><th scope="col">Categoría</th><th scope="col">Datos</th></tr></thead>
+            <tbody>
+              <tr><td>Identificación</td><td>Nombre completo, número de documento y fecha de nacimiento.</td></tr>
+              <tr><td>Residencia</td><td>Barrio, sector o vereda; declaración de residencia en {{evento.municipio}}.</td></tr>
+              <tr><td>Contacto</td><td>Correo electrónico y número de WhatsApp.</td></tr>
+              <tr><td>Propuesta artística</td><td>Nombre artístico, modalidad (solista, dúo o agrupación), género o propuesta,
+                descripción, cómo será la presentación y sus necesidades técnicas, y la canción o repertorio.</td></tr>
+              <tr><td>Pista</td><td>El archivo de audio de tu pista, si la envías, y su estado.</td></tr>
+              <tr><td>Muestra artística</td><td>El enlace de video o muestra y el resultado de la verificación de su accesibilidad.</td></tr>
+              <tr><td>Integrantes de agrupaciones</td><td>De cada integrante: nombre completo, documento, fecha de nacimiento, rol artístico,
+                sus autorizaciones y su firma dibujada (imagen), que se usa como evidencia de aceptación.</td></tr>
+              <tr><td>Operación</td><td>Código asignado, bloque y horario, cambios de horario, asistencia, estado de la audición e incidentes.</td></tr>
+              <tr><td>Evaluación</td><td>Calificaciones del jurado y observaciones.</td></tr>
+              <tr><td>Registro técnico</td><td>Fecha y hora de cada envío, identificador de la inscripción y versión del texto legal aceptado.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <p><b>No pedimos foto ni copia del documento.</b> La identidad se verifica presencialmente el día del evento
+            contra el documento físico, que no se fotografía ni se archiva.</p>
+          <p>La firma dibujada de los integrantes se conserva como evidencia de su aceptación individual; no se presenta
+            como una firma electrónica certificada.</p>
+        </div>
+
+        <h2 id="finalidades">4. Para qué los usamos</h2>
+        <ol>
+          <li><b>Validar</b> que cumples los requisitos de edad y residencia.</li>
+          <li><b>Detectar duplicados</b> para que una persona o un proyecto no ocupe dos cupos.</li>
+          <li><b>Asignarte</b> un código y un horario, y gestionar cambios.</li>
+          <li><b>Comunicarnos contigo</b> sobre tu inscripción, tu horario, cambios y novedades operativas.</li>
+          <li><b>Registrar las autorizaciones individuales</b> de cada integrante de una agrupación.</li>
+          <li><b>Recibir y organizar tu pista</b> y verificar que tu muestra artística sea accesible para la evaluación.</li>
+          <li><b>Operar la jornada</b>: check-in, asistencia, contingencia e incidentes.</li>
+          <li><b>Evaluar</b> tu audición y consolidar el resultado de la convocatoria.</li>
+        </ol>
+        <p>Finalidades adicionales (difusión, convocatorias futuras, bases de datos de artistas):
+          <span class="pendiente">PENDIENTE DE COMPLETAR</span></p>
+
+        <h2 id="autorizaciones">5. Autorizaciones separadas</h2>
+        <div class="table-wrap" role="region" aria-label="Autorizaciones" tabindex="0">
+          <table class="stack-table">
+            <thead><tr><th scope="col">Autorización</th><th scope="col">Carácter</th><th scope="col">Si no la marcas</th></tr></thead>
+            <tbody>
+              <tr><td>Términos y condiciones</td><td data-label="Carácter"><b>Obligatoria</b></td><td data-label="Si no la marcas">No se puede tramitar la inscripción.</td></tr>
+              <tr><td>Tratamiento de datos personales</td><td data-label="Carácter"><b>Obligatoria</b></td><td data-label="Si no la marcas">No se puede tramitar la inscripción.</td></tr>
+              <tr><td>Comunicaciones operativas por WhatsApp</td><td data-label="Carácter">Opcional</td><td data-label="Si no la marcas">No te escribimos por WhatsApp; usamos tu correo.</td></tr>
+              <tr><td>Uso de imagen, voz y registros audiovisuales</td><td data-label="Carácter">Opcional</td><td data-label="Si no la marcas">Participas igual; no usamos tu imagen.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li>Cada autorización se guarda por separado, con su fecha y hora y la versión del texto vigente cuando la diste.
+            El silencio no se toma como autorización.</li>
+          <li>En una agrupación, <b>cada integrante da sus propias autorizaciones</b>; el líder o vocero no puede darlas por los demás.</li>
+          <li><b>La autorización de uso de imagen no es una autorización de transferencia internacional de datos personales.</b></li>
+        </ul>
+
+        <h2 id="acceso">6. Quién ve tus datos</h2>
+        <p>El acceso está separado por rol:</p>
+        <div class="table-wrap" role="region" aria-label="Acceso por rol" tabindex="0">
+          <table>
+            <thead><tr><th scope="col">Rol</th><th scope="col">Qué ve</th></tr></thead>
+            <tbody>
+              <tr><td>Administración</td><td>Todo.</td></tr>
+              <tr><td>Coordinación logística</td><td>Registro, agenda, cambios de horario e incidentes.</td></tr>
+              <tr><td>Dirección</td><td>Indicadores y resultados consolidados. Los datos personales aparecen enmascarados.</td></tr>
+              <tr><td>Mesa de check-in</td><td>Código, nombre, documento, horario y estado de asistencia.</td></tr>
+              <tr><td>Jurado</td><td><b>Solo</b> código, nombre artístico y la información de la propuesta. No ve tu documento ni tu contacto.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Los cambios de horario y las calificaciones quedan registrados con el responsable y la fecha.</p>
+
+        <h2 id="almacenamiento">7. Dónde se almacenan</h2>
+        <ul>
+          <li>Los formularios y la base de datos funcionan sobre servicios de <b>Google LLC</b> (Google Apps Script, Google Sheets,
+            Google Drive y Gmail), cuya infraestructura puede estar ubicada fuera de Colombia.</li>
+          <li>El sitio informativo se aloja en <b>GitHub Pages</b> (GitHub, Inc., Estados Unidos) y <b>no recibe</b> los datos de los formularios.</li>
+          <li><b>WhatsApp</b> (Meta) se usa solo para mensajes operativos a quienes lo autorizan.</li>
+        </ul>
+        <p>Análisis de transmisión o transferencia internacional de datos:
+          <span class="pendiente">PENDIENTE DE REVISIÓN JURÍDICA</span></p>
+
+        <h2 id="conservacion">8. Cuánto tiempo los conservamos</h2>
+        <p>Plazo de conservación de inscripciones, evaluaciones, pistas, firmas y respaldos:
+          <span class="pendiente">PENDIENTE DE COMPLETAR</span></p>
+        <p>El sistema genera respaldos en Google Drive. Al definir el plazo, se incluye también el borrado de esos respaldos.</p>
+
+        <h2 id="derechos">9. Tus derechos</h2>
+        <p>Como titular de los datos, según el artículo 8 de la Ley 1581 de 2012, puedes:</p>
+        <ul>
+          <li><b>Conocer, actualizar y rectificar</b> tus datos.</li>
+          <li><b>Solicitar prueba</b> de la autorización que diste.</li>
+          <li><b>Ser informado</b> del uso que se ha dado a tus datos.</li>
+          <li><b>Presentar quejas</b> ante la Superintendencia de Industria y Comercio.</li>
+          <li><b>Revocar</b> la autorización y/o <b>solicitar la supresión</b> de tus datos, cuando proceda.</li>
+          <li><b>Acceder gratuitamente</b> a tus datos.</li>
+        </ul>
+        <p>Escríbenos a <a href="mailto:{{legal.correo_datos}}">{{legal.correo_datos}}</a>. El detalle de cómo hacerlo está
+          en <a href="contacto.html">Derechos y reclamos</a>.</p>
+        <div class="callout">
+          <p>Revocar la autorización obligatoria de tratamiento durante la convocatoria implica que no podemos gestionar tu participación.</p>
+        </div>
+
+        <h2 id="seguridad">10. Seguridad</h2>
+        <ul>
+          <li>Acceso del equipo por enlaces personales firmados, con caducidad y revocables.</li>
+          <li>Permisos por rol: cada persona ve únicamente lo que necesita.</li>
+          <li>Registro de auditoría de cambios de horario, estados y evaluaciones.</li>
+          <li>Respaldos periódicos y copia previa al evento.</li>
+          <li>Los registros de auditoría <b>no contienen datos personales</b>: solo códigos y acciones.</li>
+        </ul>
+
+        <h2 id="menores">11. Menores de edad</h2>
+        <p>La convocatoria es exclusivamente para personas de {{evento.edad_minima}} a {{evento.edad_maxima}} años cumplidos.
+          No se tratan datos de menores de edad: una inscripción fuera de ese rango queda marcada como no elegible y no recibe cupo.</p>
+
+        <h2 id="cambios">12. Cambios a esta política</h2>
+        <p>Si la política cambia, se publica una versión nueva con su identificador. El sistema conserva la versión que aceptó cada
+          participante, de modo que siempre es posible saber qué texto exacto aceptó cada persona.</p>
+      </article>
+      <nav class="toc" aria-label="Secciones de la política">
+        <p class="toc-title">En esta página</p>
+        <ol>
+          <li><a href="#marco">1. Marco legal</a></li>
+          <li><a href="#responsable">2. Responsable del tratamiento</a></li>
+          <li><a href="#datos">3. Qué datos recogemos</a></li>
+          <li><a href="#finalidades">4. Para qué los usamos</a></li>
+          <li><a href="#autorizaciones">5. Autorizaciones separadas</a></li>
+          <li><a href="#acceso">6. Quién ve tus datos</a></li>
+          <li><a href="#almacenamiento">7. Dónde se almacenan</a></li>
+          <li><a href="#conservacion">8. Cuánto tiempo los conservamos</a></li>
+          <li><a href="#derechos">9. Tus derechos</a></li>
+          <li><a href="#seguridad">10. Seguridad</a></li>
+          <li><a href="#menores">11. Menores de edad</a></li>
+          <li><a href="#cambios">12. Cambios a esta política</a></li>
+        </ol>
+      </nav>
+    </div>
   </div>
+</main>
 
-  <section class="bloque">
-    <h2>1. Responsable del tratamiento</h2>
-    <p>Razón social: <span data-cfg="legal.legal_name"></span><br>
-       NIT: <span data-cfg="legal.nit"></span><br>
-       Domicilio: <span data-cfg="legal.legal_address"></span><br>
-       Correo para asuntos de datos personales: <span data-cfg="legal.data_protection_email"></span><br>
-       Teléfono: <span data-cfg="legal.institutional_phone"></span></p>
-  </section>
-
-  <section class="bloque">
-    <h2>2. Qué datos recogemos</h2>
-    <p>Solo los que pide el formulario de inscripción:</p>
-    <table>
-      <thead><tr><th>Categoría</th><th>Datos</th></tr></thead>
-      <tbody>
-        <tr><td>Identificación</td><td>Nombre completo, número de documento, fecha de nacimiento.</td></tr>
-        <tr><td>Residencia</td><td>Barrio, sector o vereda; declaración de residencia en el municipio.</td></tr>
-        <tr><td>Contacto</td><td>Correo electrónico y número de WhatsApp.</td></tr>
-        <tr><td>Propuesta artística</td><td>Nombre artístico, disciplina, género, descripción, enlace de video, necesidades técnicas.</td></tr>
-        <tr><td>Operación</td><td>Código asignado, bloque y horario, asistencia, estado de la audición, incidentes.</td></tr>
-        <tr><td>Evaluación</td><td>Calificaciones del jurado y observaciones.</td></tr>
-        <tr><td>Registro técnico</td><td>Fecha y hora del envío, identificador de la inscripción y versión del texto legal aceptado.</td></tr>
-      </tbody>
-    </table>
-    <div class="nota"><b>No pedimos foto ni copia del documento.</b> La identidad se verifica
-      presencialmente el día del evento contra el documento físico, que no se fotografía ni se archiva.</div>
-  </section>
-
-  <section class="bloque">
-    <h2>3. Para qué los usamos</h2>
-    <ol>
-      <li><b>Validar</b> que cumples los requisitos de edad y residencia.</li>
-      <li><b>Detectar duplicados</b> para que una persona no ocupe dos cupos.</li>
-      <li><b>Asignarte</b> un código y un horario, y gestionar cambios.</li>
-      <li><b>Comunicarnos contigo</b> por correo y/o WhatsApp sobre tu inscripción, tu horario,
-        cambios y novedades operativas.</li>
-      <li><b>Operar la jornada</b>: check-in, asistencia, contingencia e incidentes.</li>
-      <li><b>Evaluar</b> tu audición y consolidar el resultado de la convocatoria.</li>
-    </ol>
-    <p class="pendiente">PENDIENTE DE COMPLETAR — cualquier finalidad adicional (difusión,
-      convocatorias futuras, bases de datos de artistas) debe declararse aquí de forma expresa
-      antes de abrir inscripciones.</p>
-  </section>
-
-  <section class="bloque">
-    <h2>4. Autorizaciones separadas</h2>
-    <table>
-      <thead><tr><th>Casilla</th><th>Carácter</th><th>Qué pasa si no la marcas</th></tr></thead>
-      <tbody>
-        <tr><td>Términos y condiciones</td><td><b>Obligatoria</b></td><td>No se puede tramitar la inscripción.</td></tr>
-        <tr><td>Tratamiento de datos</td><td><b>Obligatoria</b></td><td>No se puede tramitar la inscripción.</td></tr>
-        <tr><td>Comunicaciones por WhatsApp</td><td>Opcional</td><td>Te escribimos solo por correo.</td></tr>
-        <tr><td>Imagen, voz y audiovisuales</td><td>Opcional</td><td>Participas igual; no usamos tu imagen.</td></tr>
-      </tbody>
-    </table>
-    <p>Cada autorización se guarda por separado, con su fecha y con la <b>versión del texto</b>
-      que estaba publicado cuando la aceptaste.</p>
-  </section>
-
-  <section class="bloque">
-    <h2>5. Dónde se guardan y quién los ve</h2>
-    <p>Los datos se almacenan en una base de datos alojada en Google Workspace / Google Drive,
-      bajo la cuenta institucional de la organización. El acceso está segmentado por rol:</p>
-    <table>
-      <thead><tr><th>Rol</th><th>Qué ve</th></tr></thead>
-      <tbody>
-        <tr><td>Administración</td><td>Todo.</td></tr>
-        <tr><td>Coordinación logística</td><td>Registro, agenda, cambios de horario e incidentes.</td></tr>
-        <tr><td>Dirección</td><td>Indicadores y resultados consolidados.</td></tr>
-        <tr><td>Mesa de check-in</td><td>Código, nombre, documento, horario y estado de asistencia.</td></tr>
-        <tr><td>Jurado</td><td><b>Solo</b> código, nombre artístico y disciplina. No ve tu documento ni tu contacto.</td></tr>
-      </tbody>
-    </table>
-    <p>Todas las modificaciones de horario y las calificaciones quedan registradas con el
-      responsable y la fecha.</p>
-    <p class="pendiente">PENDIENTE DE COMPLETAR — identificar a los encargados del tratamiento
-      (proveedor de nube y cualquier tercero) y su ubicación, si la organización debe declararlo.</p>
-  </section>
-
-  <section class="bloque">
-    <h2>6. Cuánto tiempo los conservamos</h2>
-    <p class="pendiente">PENDIENTE DE COMPLETAR — plazo de conservación de las inscripciones, de
-      las evaluaciones y de los respaldos, a definir por la organización y el área legal.</p>
-    <p>El sistema genera respaldos automáticos en Drive. Al definir el plazo, debe incluirse
-      también el borrado de esos respaldos.</p>
-  </section>
-
-  <section class="bloque">
-    <h2>7. Tus derechos</h2>
-    <p>Puedes solicitar en cualquier momento:</p>
-    <ul>
-      <li><b>Conocer</b> qué datos tuyos tenemos.</li>
-      <li><b>Actualizar</b> o <b>rectificar</b> datos incorrectos.</li>
-      <li><b>Revocar</b> una autorización opcional (WhatsApp, imagen).</li>
-      <li><b>Suprimir</b> tus datos, cuando proceda.</li>
-      <li><b>Presentar un reclamo</b> ante la autoridad competente.</li>
-    </ul>
-    <p>Escríbenos a <b data-cfg="legal.data_protection_email"></b> indicando tu nombre,
-      tu documento y la solicitud concreta. Ver <a href="contacto.html">canal de contacto</a>.</p>
-    <div class="nota">Revocar la autorización obligatoria de tratamiento durante la convocatoria
-      implica que no podemos gestionar tu participación.</div>
-  </section>
-
-  <section class="bloque">
-    <h2>8. Seguridad</h2>
-    <ul>
-      <li>Acceso por enlaces personales firmados, con caducidad y revocables.</li>
-      <li>Permisos por rol: cada persona ve únicamente lo que necesita.</li>
-      <li>Registro de auditoría de cambios de horario, estados y evaluaciones.</li>
-      <li>Respaldos periódicos y copia previa al evento.</li>
-      <li>Los registros de auditoría <b>no contienen datos personales</b>: solo códigos y acciones.</li>
-    </ul>
-  </section>
-
-  <section class="bloque">
-    <h2>9. Menores de edad</h2>
-    <p>La convocatoria es exclusivamente para personas de
-      <b data-cfg="evento.edad_minima"></b> a <b data-cfg="evento.edad_maxima"></b> años cumplidos.
-      No se tratan datos de menores de edad. Una inscripción fuera de ese rango queda marcada como
-      no elegible y no recibe cupo.</p>
-  </section>
-
-  <section class="bloque">
-    <h2>10. Cambios a esta política</h2>
-    <p>Si la política cambia, se publica una versión nueva con su identificador. El sistema conserva
-      la versión que cada participante aceptó, de modo que siempre es posible saber qué texto
-      exacto aceptó cada persona.</p>
-  </section>
-
-  <footer class="pie">
-    <div><b data-cfg="legal.legal_name"></b> · NIT <span data-cfg="legal.nit"></span></div>
-    <div style="margin-top:8px"><a href="index.html">Inicio</a> ·
-      <a href="terminos.html">Términos</a> · <a href="contacto.html">Contacto</a></div>
-  </footer>
-</div>
-<script src="assets/sitio.js"></script>
+{{> footer}}
 </body>
 </html>

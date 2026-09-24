@@ -1,0 +1,16 @@
+{
+  "name": "{{evento.nombre}} {{evento.marca}}",
+  "short_name": "{{evento.nombre}}",
+  "description": "Convocatoria para artistas de {{evento.edad_minima}} a {{evento.edad_maxima}} años de {{evento.municipio}}. {{evento.fecha_dia}} {{evento.fecha_texto}}, {{evento.lugar}}.",
+  "lang": "es-CO",
+  "start_url": "{{sitio.url_publica}}",
+  "scope": "{{sitio.url_publica}}",
+  "display": "browser",
+  "background_color": "#1D1D1B",
+  "theme_color": "#1D1D1B",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

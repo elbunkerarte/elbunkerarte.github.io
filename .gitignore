@@ -8,3 +8,4 @@
 node_modules/
 .DS_Store
 # build/ se publica a proposito: es el artefacto que se pega en el editor de Apps Script
+_site/

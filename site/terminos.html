@@ -1,191 +1,71 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Términos y condiciones — EL BÚNKER</title>
-<link rel="stylesheet" href="assets/estilos.css">
+<meta charset="utf-8">
+<title>Términos y condiciones — {{evento.nombre}} {{evento.marca}}</title>
+<meta name="description" content="Términos y Condiciones Audiciones Artistas de {{evento.nombre}} {{evento.marca}}, documento de la {{legal.razon_social}}.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="{{pagina.url}}">
+<meta property="og:url" content="{{pagina.url}}">
+<meta property="og:title" content="Términos y condiciones — {{evento.nombre}}">
+<meta property="og:description" content="Términos y Condiciones Audiciones Artistas de {{evento.nombre}} {{evento.marca}}.">
+{{> head}}
 </head>
 <body>
-<div class="envoltura">
-  <nav class="migas"><a href="index.html">← Volver a EL BÚNKER</a></nav>
+{{> header}}
 
-  <header class="hero" style="padding:14px 0 24px">
-    <h1 style="font-size:clamp(28px,8vw,44px)">TÉRMINOS Y <span>CONDICIONES</span></h1>
-    <div class="lema">Versión <span data-cfg="legal.consent_version"></span></div>
+<main id="contenido">
+  <header class="page-hero surface-dark">
+    <div class="wrap">
+      <p class="kicker">Documento legal</p>
+      <h1>Términos y condiciones</h1>
+      <p class="page-meta">Términos y Condiciones Audiciones Artistas · Versión {{legal.terminos_version}}</p>
+    </div>
   </header>
 
-  <div class="nota" style="border-color:var(--alerta);background:rgba(245,158,11,.1)">
-    <b>Aviso para la organización (borrar antes de publicar):</b> las reglas operativas de abajo
-    provienen del plan aprobado de la convocatoria y son correctas. Las secciones marcadas
-    <span class="pendiente">PENDIENTE DE COMPLETAR</span> contienen definiciones jurídicas que
-    <b>deben ser redactadas y aprobadas por el área legal</b> antes de abrir inscripciones.
-    Este sistema no inventa cláusulas jurídicas.
+  <div class="page-body surface-light">
+    <div class="wrap">
+      <article class="prose">
+        <div class="callout callout--strong" role="note">
+          <p><b>Documento en carga:</b> el texto íntegro de los Términos y Condiciones será publicado tal como lo aprobó la organización.</p>
+        </div>
+
+        <p>Mientras tanto, esta es la estructura del documento. Las reglas operativas de la convocatoria (cupos, horarios,
+          puntualidad, audición, pistas y agrupaciones) están en <a href="reglas.html">Reglas de la convocatoria</a>, y el
+          tratamiento de tus datos en la <a href="politica-datos.html">Política de tratamiento de datos</a>.</p>
+
+        <h2 id="responsable">Responsable</h2>
+        <ul class="data-list">
+          <li><span>Razón social</span>{{legal.razon_social}}</li>
+          <li><span>NIT</span>{{legal.nit}}</li>
+          <li><span>Representante legal</span>{{legal.representante_legal}}</li>
+          <li><span>Dirección</span>{{legal.direccion}}</li>
+          <li><span>Correo</span><a href="mailto:{{legal.correo_datos}}">{{legal.correo_datos}}</a></li>
+          <li><span>Teléfono</span><a href="tel:+57{{legal.telefono}}">{{legal.telefono}}</a></li>
+        </ul>
+
+        <h2 id="estructura">Estructura del documento</h2>
+        <ol class="clauses">
+          <li><h3>Objeto</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Aceptación</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Definiciones</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Datos personales</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Imagen, voz y grabaciones</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Solistas y agrupaciones</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Propiedad intelectual</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Condiciones generales</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Confidencialidad y seguridad</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Limitación de responsabilidad</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Modificaciones</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Legislación y controversias</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li><h3>Vigencia</h3><p>Texto pendiente del documento fuente.</p></li>
+          <li class="no-number"><h3>Constancia de aceptación</h3><p>Texto pendiente del documento fuente.</p></li>
+        </ol>
+      </article>
+    </div>
   </div>
+</main>
 
-  <section class="bloque">
-    <h2>1. Responsable de la convocatoria</h2>
-    <p>Razón social: <span data-cfg="legal.legal_name"></span><br>
-       NIT: <span data-cfg="legal.nit"></span><br>
-       Domicilio: <span data-cfg="legal.legal_address"></span><br>
-       Contacto: <span data-cfg="legal.data_protection_email"></span> ·
-       <span data-cfg="legal.institutional_phone"></span></p>
-  </section>
-
-  <section class="bloque">
-    <h2>2. Objeto</h2>
-    <p><b data-cfg="evento.nombre"></b> es una convocatoria artística que realiza audiciones
-      presenciales el <b data-cfg="evento.fecha_texto"></b> entre las
-      <b data-cfg="evento.hora_inicio"></b> y las <b data-cfg="evento.hora_fin"></b>, con el
-      objetivo de seleccionar <b data-cfg="evento.seleccionados"></b> artistas.</p>
-    <div class="nota">La inscripción y la participación <b>no garantizan</b> selección,
-      contratación, remuneración ni presentación en ningún escenario.</div>
-  </section>
-
-  <section class="bloque">
-    <h2>3. Quién puede participar</h2>
-    <ul>
-      <li>Personas de <b data-cfg="evento.edad_minima"></b> a <b data-cfg="evento.edad_maxima"></b>
-        años cumplidos el día de las audiciones.</li>
-      <li>Residentes en <b data-cfg="evento.municipio"></b>.</li>
-      <li>Con documento de identidad vigente, que se verifica <b>físicamente</b> el día del evento.</li>
-    </ul>
-    <p>La organización puede solicitar verificación de estos requisitos. Si no se acreditan,
-      la participación queda sin efecto.</p>
-  </section>
-
-  <section class="bloque">
-    <h2>4. Inscripción y cupos</h2>
-    <ul>
-      <li>La inscripción se hace <b>una sola vez</b> por el formulario oficial.</li>
-      <li>Los cupos son <b data-cfg="evento.cupos"></b> participantes únicos y aptos.</li>
-      <li>Los cupos se asignan <b>por orden de inscripción válida y completa</b>.</li>
-      <li>Si se registran dos o más inscripciones con el mismo documento, <b>se conserva la
-        primera válida</b> y las siguientes quedan marcadas como duplicadas. Los duplicados
-        no consumen cupo y no se eliminan: se conservan para trazabilidad.</li>
-      <li>Una inscripción incompleta, fuera del rango de edad o fuera del municipio no recibe cupo.</li>
-    </ul>
-  </section>
-
-  <section class="bloque">
-    <h2>5. Código y horario</h2>
-    <ul>
-      <li>Cada participante admitido recibe un <b>código alfanumérico</b> y un horario.</li>
-      <li>El código es <b>estable</b>: no cambia por un cambio de horario ni se reasigna a otra persona.</li>
-      <li>El horario se comunica por WhatsApp y/o correo. <b>No existe un formulario general de
-        confirmación</b>: si no respondes, tu turno sigue vigente.</li>
-      <li>Al inscribirte declaras disponibilidad para <b>cualquier horario</b> dentro de la jornada
-        y aceptas el que te sea asignado.</li>
-    </ul>
-    <h3>Bloques de la jornada</h3>
-    <table>
-      <thead><tr><th>Bloque</th><th>Horario</th><th>Códigos</th></tr></thead>
-      <tbody>
-        <tr><td>1</td><td>4:00–4:30 p. m.</td><td>B-001 – B-010</td></tr>
-        <tr><td>2</td><td>4:30–5:00 p. m.</td><td>B-011 – B-020</td></tr>
-        <tr><td>3</td><td>5:00–5:30 p. m.</td><td>B-021 – B-030</td></tr>
-        <tr><td>4</td><td>5:30–6:00 p. m.</td><td>B-031 – B-040</td></tr>
-        <tr><td>5</td><td>6:00–6:30 p. m.</td><td>B-041 – B-050</td></tr>
-        <tr><td>6</td><td>6:30–7:00 p. m.</td><td>B-051 – B-060</td></tr>
-        <tr><td>7</td><td>7:00–7:30 p. m.</td><td>B-061 – B-070</td></tr>
-        <tr><td>8</td><td>7:30–8:00 p. m.</td><td>B-071 – B-080</td></tr>
-        <tr><td>9</td><td>8:00–8:30 p. m.</td><td>B-081 – B-090</td></tr>
-        <tr><td>10</td><td>8:30–9:00 p. m.</td><td>B-091 – B-100</td></tr>
-        <tr><td>Contingencia</td><td>9:00–9:30 p. m.</td><td>Quienes perdieron su turno</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <section class="bloque">
-    <h2>6. Cambio de horario</h2>
-    <ul>
-      <li>Solo para quien tenga un <b>impedimento real</b> y no pueda asistir en su horario.</li>
-      <li><b>Una sola solicitud</b> por participante, antes del cierre que establezca producción.</li>
-      <li>El participante <b>no elige</b> la nueva hora: la asigna la organización según disponibilidad.</li>
-      <li>La solicitud puede resultar <b>aprobada</b> o <b>no aprobada</b>. Si no es aprobada,
-        el horario original se mantiene.</li>
-      <li><b>El día del evento no se hacen cambios ordinarios</b>; solo aplica la contingencia.</li>
-    </ul>
-  </section>
-
-  <section class="bloque">
-    <h2>7. Puntualidad, contingencia y cierre</h2>
-    <ul>
-      <li>Debes llegar <b>15 minutos antes</b> de tu bloque para el check-in.</li>
-      <li>Hay una tolerancia de <b>5 minutos</b>. Dentro de ella se intenta conservar tu turno
-        <b>solo si no altera el flujo de la jornada</b>.</li>
-      <li>Con <b>más de 5 minutos</b> de retraso <b>pierdes tu turno</b> y pasas a contingencia.
-        En ningún caso se desplaza a quien llegó puntual.</li>
-      <li>La <b>contingencia</b> (9:00–9:30 p. m.) no es un grupo adicional: son participantes de
-        los <span data-cfg="evento.cupos"></span> que perdieron su turno. Solo audiciona quien
-        alcance en el tiempo disponible, en orden de llegada a la lista.</li>
-      <li>A las <b>9:30 p. m.</b> se cierran definitivamente las nuevas audiciones. Quien no haya
-        audicionado queda como <b>NO AUDICIONADO</b> y no entra a la selección.</li>
-    </ul>
-  </section>
-
-  <section class="bloque">
-    <h2>8. La audición</h2>
-    <ul>
-      <li>Duración máxima: <b data-cfg="evento.duracion_audicion_min"></b> minutos, cronometrados.</li>
-      <li>Tres jurados califican de forma <b>independiente</b> con una rúbrica común antes de deliberar.</li>
-      <li>Factores y pesos: Talento/ejecución 20%, Performance 20%, Identidad artística 15%,
-        Repertorio/originalidad 10%, Profesionalismo 10%, Presencia escénica 10%,
-        Presencia digital/comunidad 5%, Proyecto/compromiso 10%.</li>
-      <li>Cada factor se califica de 1 a 10. El resultado de cada jurado es sobre 100 y el
-        resultado final del artista es el <b>promedio de los jurados válidos</b>.</li>
-      <li>Se seleccionan los <b data-cfg="evento.seleccionados"></b> mejores entre las audiciones
-        efectivamente realizadas.</li>
-      <li>Desempate, en orden: 1) Performance, 2) Talento/ejecución, 3) Identidad artística,
-        4) deliberación documentada del comité.</li>
-      <li><b>No se publica el ranking completo.</b> El resultado se cierra mediante acta.</li>
-    </ul>
-  </section>
-
-  <section class="bloque">
-    <h2>9. Conducta y causales de exclusión</h2>
-    <ul>
-      <li>Suministrar información falsa o suplantar a otra persona.</li>
-      <li>Inscribirse varias veces para obtener más de un cupo.</li>
-      <li>Conductas que afecten la seguridad, la integridad o el desarrollo de la jornada.</li>
-      <li>Incumplir las instrucciones del coordinador logístico o del personal del escenario.</li>
-    </ul>
-  </section>
-
-  <section class="bloque">
-    <h2>10. Imagen y contenidos</h2>
-    <p>La autorización de uso de imagen, voz y registros audiovisuales es una casilla
-      <b>independiente y opcional</b> del formulario. Las finalidades específicas de ese uso,
-      su alcance territorial y su vigencia están descritas en la
-      <a href="politica-datos.html">política de tratamiento de datos</a>.</p>
-    <p class="pendiente">PENDIENTE DE COMPLETAR — alcance, vigencia y territorio del uso de imagen,
-      a definir por el área legal.</p>
-  </section>
-
-  <section class="bloque">
-    <h2>11. Modificaciones, cancelación y fuerza mayor</h2>
-    <p class="pendiente">PENDIENTE DE COMPLETAR — condiciones de modificación de fechas, cancelación
-      del evento, fuerza mayor y responsabilidad, a redactar por el área legal.</p>
-  </section>
-
-  <section class="bloque">
-    <h2>12. Ley aplicable y resolución de controversias</h2>
-    <p class="pendiente">PENDIENTE DE COMPLETAR — ley aplicable, jurisdicción y mecanismo de
-      resolución de controversias, a redactar por el área legal.</p>
-  </section>
-
-  <section class="bloque">
-    <h2>13. Aceptación</h2>
-    <p>Al marcar la casilla correspondiente en el formulario de inscripción declaras que leíste
-      y aceptas estos términos. El sistema registra la <b>versión exacta</b> del texto aceptado
-      (<span data-cfg="legal.consent_version"></span>), la fecha y la hora.</p>
-  </section>
-
-  <footer class="pie">
-    <div><b data-cfg="legal.legal_name"></b> · NIT <span data-cfg="legal.nit"></span></div>
-    <div style="margin-top:8px"><a href="index.html">Inicio</a> ·
-      <a href="politica-datos.html">Política de datos</a> · <a href="contacto.html">Contacto</a></div>
-  </footer>
-</div>
-<script src="assets/sitio.js"></script>
+{{> footer}}
 </body>
 </html>

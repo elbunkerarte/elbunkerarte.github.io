@@ -1,7 +1,8 @@
 name: Deploy public site to GitHub Pages
 
-# Only site/ is published. The Apps Script sources and the test suite stay in the
-# repository but never reach the public site.
+# Only the built site is published: tools/construir-sitio.js renders site/ into
+# _site/ with every placeholder resolved from site/config.json. The Apps Script
+# sources and the test suite stay in the repository but never reach the public site.
 on:
   push:
     branches: [main, feat/sistema-bunker]
@@ -36,9 +37,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build the public site from site/config.json
+        run: node tools/construir-sitio.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./site
+          path: ./_site
       - id: deployment
         uses: actions/deploy-pages@v4

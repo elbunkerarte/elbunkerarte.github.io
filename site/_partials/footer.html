@@ -1,0 +1,32 @@
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="footer-brand" href="./">
+          <img src="assets/brand/logo-badge-128.png" width="64" height="64" alt="Logo de la {{legal.razon_social}}">
+          <span>{{evento.nombre}}<br>{{evento.marca}}</span>
+        </a>
+        <p class="footer-social">Instagram:
+          <a href="https://www.instagram.com/{{contacto.instagram}}/" rel="noopener">@{{contacto.instagram}}</a></p>
+      </div>
+      <nav class="footer-nav" aria-label="Documentos de la convocatoria">
+        <p class="footer-title">La convocatoria</p>
+        <ul>
+          <li><a href="reglas.html">Reglas de la convocatoria</a></li>
+          <li><a href="terminos.html">Términos y condiciones</a></li>
+          <li><a href="politica-datos.html">Política de tratamiento de datos</a></li>
+          <li><a href="contacto.html">Derechos y reclamos</a></li>
+        </ul>
+      </nav>
+      <div class="footer-org">
+        <p class="footer-title">Organiza</p>
+        <p><b>{{legal.razon_social}}</b></p>
+        <p>NIT {{legal.nit}}</p>
+        <p>{{legal.direccion}}</p>
+        <p>Datos personales: <a href="mailto:{{legal.correo_datos}}">{{legal.correo_datos}}</a></p>
+        <p>Teléfono: <a href="tel:+57{{legal.telefono}}">{{legal.telefono}}</a></p>
+      </div>
+    </div>
+    <p class="footer-bottom">{{evento.nombre}} {{evento.marca}} · {{evento.fecha_dia}} {{evento.fecha_texto}} de {{evento.anio}} · {{evento.lugar}}, {{evento.municipio}}.</p>
+  </div>
+</footer>

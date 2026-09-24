@@ -2,105 +2,221 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EL BÚNKER by Arte es la Solución — Convocatoria</title>
-<meta name="description" content="Convocatoria de audiciones para jóvenes artistas de 18 a 28 años residentes en Sabaneta, Antioquia.">
-<meta name="robots" content="index,follow">
-<meta property="og:title" content="EL BÚNKER by Arte es la Solución">
-<meta property="og:description" content="Convocatoria para jóvenes artistas de 18 a 28 años residentes en Sabaneta. 100 cupos. Se seleccionan 7 artistas.">
-<meta property="og:type" content="website">
-<link rel="stylesheet" href="assets/estilos.css">
+<title>{{evento.nombre}} {{evento.marca}} — Convocatoria para artistas en {{evento.municipio}}</title>
+<meta name="description" content="Convocatoria abierta para artistas de {{evento.edad_minima}} a {{evento.edad_maxima}} años que viven en {{evento.municipio}}. Audiciones el {{calc.fecha_larga}}, de {{evento.hora_inicio}} a {{evento.hora_fin}}, en el {{evento.lugar}}. {{evento.cupos}} cupos, {{evento.jurados}} jurados, {{evento.seleccionados}} seleccionados.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="{{pagina.url}}">
+<meta property="og:url" content="{{pagina.url}}">
+<meta property="og:title" content="{{evento.nombre}} {{evento.marca}} — Convocatoria abierta">
+<meta property="og:description" content="{{evento.lema}} {{evento.fecha_dia}} {{evento.fecha_texto}} · {{evento.hora_inicio}} a {{evento.hora_fin}} · {{evento.lugar}}, {{evento.municipio}}. Para artistas de {{evento.edad_minima}} a {{evento.edad_maxima}} años.">
+{{> head}}
 </head>
 <body>
-<div class="envoltura">
+{{> header}}
 
-  <header class="hero">
-    <h1>EL <span>BÚNKER</span></h1>
-    <div class="lema">by Arte es la Solución</div>
-    <p class="bajada">Convocatoria abierta para jóvenes artistas de
-      <b data-cfg="evento.municipio"></b>. Audiciones en vivo, jurado profesional
-      y <b data-cfg="evento.seleccionados"></b> artistas seleccionados.</p>
-    <div class="datos">
-      <span class="dato">📅 <b data-cfg="evento.fecha_texto"></b></span>
-      <span class="dato">🕓 <b data-cfg="evento.hora_inicio"></b> a <b data-cfg="evento.hora_fin"></b></span>
-      <span class="dato">🎂 <b data-cfg="evento.edad_minima"></b> a <b data-cfg="evento.edad_maxima"></b> años</span>
-      <span class="dato">🎟️ <b data-cfg="evento.cupos"></b> cupos</span>
-      <span class="dato">⏱️ <b data-cfg="evento.duracion_audicion_min"></b> min por audición</span>
-    </div>
-  </header>
+<main id="contenido">
 
-  <nav class="acciones">
-    <a class="btn principal" data-enlace="enlaces.inscripcion">
-      <span><span class="t">INSCRÍBETE</span><span class="d">Formulario de inscripción · una sola vez</span></span>
-      <span class="flecha">→</span>
-    </a>
-    <a class="btn" href="terminos.html">
-      <span><span class="t">TÉRMINOS Y CONDICIONES</span><span class="d">Reglas completas de la convocatoria</span></span>
-      <span class="flecha">→</span>
-    </a>
-    <a class="btn" href="politica-datos.html">
-      <span><span class="t">POLÍTICA DE TRATAMIENTO DE DATOS</span><span class="d">Cómo usamos tus datos personales</span></span>
-      <span class="flecha">→</span>
-    </a>
-    <a class="btn" href="contacto.html">
-      <span><span class="t">CONTACTO / DERECHOS DE DATOS</span><span class="d">Canal para ejercer tus derechos</span></span>
-      <span class="flecha">→</span>
-    </a>
-  </nav>
+  <section class="hero surface-dark" aria-labelledby="titulo">
+    <div class="wrap hero-grid">
+      <div class="hero-brand">
+        <img class="hero-logo" src="assets/brand/logo-badge-256.png"
+             srcset="assets/brand/logo-badge-256.png 256w, assets/brand/logo-badge-512.png 512w"
+             sizes="(min-width: 980px) 136px, 104px" width="136" height="136"
+             alt="Logo de la {{legal.razon_social}}">
+        <h1 id="titulo" class="hero-title">
+          <span class="hero-el" aria-hidden="true">EL</span>
+          <img class="hero-wordmark" src="assets/brand/wordmark-white.png" width="962" height="324" alt="{{evento.nombre}}">
+        </h1>
+        <p class="hero-by">{{evento.marca}}</p>
+        <p class="hero-motto">{{evento.lema}}</p>
+        <p class="hero-lead">Una convocatoria para artistas jóvenes de {{evento.municipio}}: sube al escenario,
+          muestra tu propuesta en máximo {{evento.duracion_audicion_min}} minutos frente a {{evento.jurados}} jurados
+          y compite por uno de los {{evento.seleccionados}} lugares de la selección final.</p>
+      </div>
 
-  <section class="bloque">
-    <h2>Cómo funciona</h2>
-    <ol>
-      <li><b>Te inscribes</b> una sola vez con el formulario de arriba.</li>
-      <li><b>Validamos</b> edad, residencia y datos. Si hay dos inscripciones con el mismo documento, vale la primera.</li>
-      <li><b>Recibes tu código y tu horario</b> por WhatsApp y/o correo. Los cupos son
-        <b data-cfg="evento.cupos"></b> y se asignan por orden de inscripción válida.</li>
-      <li><b>Llegas 15 minutos antes</b> de tu hora, con tu documento de identidad físico.</li>
-      <li><b>Audicionas</b> máximo <b data-cfg="evento.duracion_audicion_min"></b> minutos ante tres jurados.</li>
-      <li><b>Se seleccionan <span data-cfg="evento.seleccionados"></span> artistas</b> con una rúbrica común.</li>
-    </ol>
-    <div class="nota">
-      <b>No hay confirmación adicional.</b> Cuando recibas tu horario, tu turno queda vigente.
-      Solo si tienes un impedimento real usas el formulario de cambio, y solo puedes pedirlo <b>una vez</b>.
-    </div>
-  </section>
+      <div class="hero-call">
+        <h2 class="call-title">Convocatorias abiertas <em>para artistas</em></h2>
+        <ul class="event-cards" role="list">
+          <li class="event-card event-card--date">
+            <span class="event-label">Fecha</span>
+            <span class="event-kicker">{{evento.fecha_dia}}</span>
+            <span class="event-value">{{evento.fecha_texto}}</span>
+          </li>
+          <li class="event-card event-card--time">
+            <span class="event-label">Horario</span>
+            <span class="event-value">{{evento.hora_inicio}} — {{evento.hora_fin}}</span>
+          </li>
+          <li class="event-card">
+            <span class="event-label">Lugar</span>
+            <span class="event-value">{{evento.lugar}}</span>
+            <span class="event-note">{{evento.municipio}}</span>
+          </li>
+          <li class="event-card event-card--length">
+            <span class="event-label">Tu audición</span>
+            <span class="event-value">{{evento.duracion_audicion_min}} minutos</span>
+            <span class="event-note">máximo, cronometrados</span>
+          </li>
+        </ul>
 
-  <section class="bloque">
-    <h2>¿Ya tienes tu código y no puedes asistir?</h2>
-    <p>Solicita un cambio de horario. Una sola solicitud por participante, antes del cierre que
-      establezca producción. <b>No eliges la hora</b>: la asigna la organización según disponibilidad.</p>
-    <a class="btn" data-enlace="enlaces.cambio_horario" style="margin-top:12px">
-      <span><span class="t">SOLICITAR CAMBIO DE HORARIO</span><span class="d">Solo si NO puedes asistir en tu horario</span></span>
-      <span class="flecha">→</span>
-    </a>
-  </section>
+        <ul class="facts" role="list" aria-label="La convocatoria en cifras">
+          <li><b>{{evento.cupos}}</b> cupos</li>
+          <li>de <b>{{evento.edad_minima}}</b> a <b>{{evento.edad_maxima}}</b> años</li>
+          <li><b>{{evento.jurados}}</b> jurados</li>
+          <li><b>{{evento.seleccionados}}</b> seleccionados</li>
+        </ul>
 
-  <section class="bloque">
-    <h2>Requisitos</h2>
-    <ul>
-      <li>Tener entre <b data-cfg="evento.edad_minima"></b> y <b data-cfg="evento.edad_maxima"></b>
-        años cumplidos el día de las audiciones.</li>
-      <li>Residir en <b data-cfg="evento.municipio"></b>.</li>
-      <li>Documento de identidad (lo verificamos físicamente el día del evento).</li>
-      <li>Disponibilidad dentro de toda la jornada: no se eligen horarios.</li>
-      <li>Una propuesta artística de máximo <b data-cfg="evento.duracion_audicion_min"></b> minutos.</li>
-    </ul>
-    <div class="nota">
-      Participar <b>no garantiza</b> selección, contratación ni presentación.
+        <div class="cta-row">
+          <a class="btn btn-primary" href="inscripcion/">Inscríbete</a>
+          <a class="btn btn-ghost" href="mi-inscripcion/">Ya me inscribí</a>
+        </div>
+      </div>
     </div>
   </section>
 
-  <footer class="pie">
-    <div><b data-cfg="legal.legal_name"></b></div>
-    <div>NIT <span data-cfg="legal.nit"></span> · <span data-cfg="legal.legal_address"></span></div>
-    <div>Datos personales: <span data-cfg="legal.data_protection_email"></span> ·
-      <span data-cfg="legal.institutional_phone"></span></div>
-    <div style="margin-top:10px">
-      <a href="terminos.html">Términos</a> · <a href="politica-datos.html">Política de datos</a> ·
-      <a href="contacto.html">Contacto</a>
+  <section class="section surface-light" id="requisitos" aria-labelledby="requisitos-titulo">
+    <div class="wrap section-grid">
+      <header class="section-head">
+        <p class="kicker">Antes de inscribirte</p>
+        <h2 id="requisitos-titulo" class="section-title">Requisitos</h2>
+      </header>
+      <ul class="checklist">
+        <li>Tener entre <b>{{evento.edad_minima}} y {{evento.edad_maxima}} años</b> cumplidos el día de la audición.</li>
+        <li>Vivir en <b>{{evento.municipio}}</b>.</li>
+        <li>Presentar tu <b>documento de identidad original</b> ese día.</li>
+        <li>Tener <b>disponibilidad durante toda la jornada</b>: la organización asigna tu horario.</li>
+        <li><b>Solistas, dúos y agrupaciones.</b> Una agrupación cuenta como una sola inscripción;
+          cada integrante debe ser mayor de edad y dar su propia autorización.</li>
+      </ul>
     </div>
-  </footer>
-</div>
-<script src="assets/sitio.js"></script>
+  </section>
+
+  <section class="section surface-dark" id="como-participar" aria-labelledby="participar-titulo">
+    <div class="wrap section-grid">
+      <header class="section-head">
+        <p class="kicker">Paso a paso</p>
+        <h2 id="participar-titulo" class="section-title">Cómo participar</h2>
+        <p class="section-intro">Los cupos se asignan en orden de inscripción entre quienes cumplen los requisitos: inscríbete cuanto antes.</p>
+      </header>
+      <ol class="steps">
+        <li><div><span class="step-title">Inscríbete una sola vez</span>
+          Una inscripción por proyecto, sea solista, dúo o agrupación.</div></li>
+        <li><div><span class="step-title">La organización revisa</span>
+          Cada inscripción —datos, requisitos y muestra artística— y asigna los {{evento.cupos}} cupos en orden
+          de inscripción entre quienes cumplen.</div></li>
+        <li><div><span class="step-title">Recibe tu código y tu horario</span>
+          Si quedas dentro de los {{evento.cupos}}, recibes tu código (<span class="nowrap">{{calc.codigo_primero}}</span> a <span class="nowrap">{{calc.codigo_ultimo}}</span>) y tu horario
+          por WhatsApp desde el número oficial <b>{{contacto.whatsapp_oficial_texto}}</b>. Guárdalo como
+          «{{contacto.whatsapp_nombre_contacto}}».</div></li>
+        <li><div><span class="step-title">Grupo de WhatsApp</span>
+          Con las personas aptas se crea un grupo de WhatsApp para las indicaciones finales.</div></li>
+        <li><div><span class="step-title">Si eres agrupación</span>
+          Comparte con tus integrantes el enlace que recibes al inscribirte para que cada uno dé su autorización.</div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section surface-raised" id="audicion" aria-labelledby="audicion-titulo">
+    <div class="wrap section-grid">
+      <header class="section-head">
+        <p class="kicker">El día del evento</p>
+        <h2 id="audicion-titulo" class="section-title">Cómo será la audición</h2>
+      </header>
+      <div>
+        <ol class="route" aria-label="Recorrido el día de la audición">
+          <li>Check-in<small>con tu documento</small></li>
+          <li>Precola<small>espera tu turno</small></li>
+          <li>Escenario<small>tu audición</small></li>
+        </ol>
+        <ul class="detail-list">
+          <li>
+            <h3>Llega {{evento.antelacion_llegada_min}} minutos antes</h3>
+            <p>de tu bloque, con tu documento de identidad original para el check-in.</p>
+          </li>
+          <li>
+            <h3>Máximo {{evento.duracion_audicion_min}} minutos</h3>
+            <p>cronometrados para mostrar tu propuesta.</p>
+          </li>
+          <li>
+            <h3>{{evento.jurados}} jurados, una rúbrica común</h3>
+            <p>Califican los mismos criterios para todas las propuestas:</p>
+            <ul class="tags" aria-label="Criterios de la rúbrica">
+              <li>Talento</li><li>Performance</li><li>Identidad</li><li>Repertorio</li>
+              <li>Profesionalismo</li><li>Presencia escénica</li><li>Comunidad digital</li><li>Proyecto</li>
+            </ul>
+          </li>
+          <li>
+            <h3>Puntualidad</h3>
+            <p>Si llegas <b>más de {{evento.tolerancia_min}} minutos tarde</b> pierdes tu turno y pasas a contingencia,
+              que solo alcanza si queda tiempo.</p>
+          </li>
+          <li>
+            <h3>Cierre a las {{evento.cierre}}</h3>
+            <p>A esa hora se cierran las audiciones.</p>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section surface-light" id="preparar" aria-labelledby="preparar-titulo">
+    <div class="wrap section-grid">
+      <header class="section-head">
+        <p class="kicker">Lleva todo listo</p>
+        <h2 id="preparar-titulo" class="section-title">Qué debes preparar</h2>
+      </header>
+      <ul class="prep-grid">
+        <li>
+          <h3>Tu propuesta</h3>
+          <p>Máximo {{evento.duracion_audicion_min}} minutos.</p>
+        </li>
+        <li>
+          <h3>Tu pista, si la usas</h3>
+          <p>Envíala antes del evento desde <a href="mi-inscripcion/">«Mi inscripción»</a> y lleva una copia en USB.
+            El Bluetooth no es el método principal.</p>
+        </li>
+        <li>
+          <h3>Tu instrumento o equipo</h3>
+          <p>Lleva el tuyo si lo necesitas: la organización no garantiza equipos que no estén confirmados.</p>
+        </li>
+        <li>
+          <h3>Tu documento</h3>
+          <p>Documento de identidad original.</p>
+        </li>
+        <li>
+          <h3>Tu muestra artística</h3>
+          <p>Un enlace a video o muestra: YouTube no listado, Drive con acceso, Vimeo u otra URL.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="section section--flush-top surface-light">
+    <div class="wrap">
+      <aside class="notice" aria-labelledby="aviso-titulo">
+        <p class="kicker" id="aviso-titulo">Aviso importante</p>
+        <p class="notice-text">Los artistas finalistas podrán tener la posibilidad de presentarse en el Daviarena.</p>
+        <p class="notice-text">Ser seleccionado no garantiza una presentación en el Daviarena ni una contratación.</p>
+      </aside>
+    </div>
+  </div>
+
+  <section class="section surface-amber closing" aria-labelledby="cierre-titulo">
+    <div class="wrap closing-grid">
+      <div>
+        <p class="kicker">Convocatoria abierta</p>
+        <h2 id="cierre-titulo" class="section-title">Inscríbete cuanto antes</h2>
+        <p>Los {{evento.cupos}} cupos se asignan en orden de inscripción entre quienes cumplen los requisitos.</p>
+        <div class="cta-row">
+          <a class="btn btn-dark" href="inscripcion/">Inscríbete</a>
+          <a class="btn btn-ghost-dark" href="mi-inscripcion/">Ya me inscribí</a>
+        </div>
+      </div>
+      <img class="closing-mark" src="assets/brand/wordmark-black.png" width="962" height="324" alt="">
+    </div>
+  </section>
+
+</main>
+
+{{> footer}}
 </body>
 </html>
