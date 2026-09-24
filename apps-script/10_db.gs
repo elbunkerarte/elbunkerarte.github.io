@@ -33,12 +33,80 @@ function conBloqueo(fn, esperaMs) {
   }
 }
 
-/** Header row of a sheet, as an array of column names. */
+/**
+ * Header row of a sheet, as an array of column names.
+ * Cached per execution: headers only change during setup/migration, which
+ * clears the cache, and re-reading them on every write doubled the calls.
+ */
+var _headerCache = {};
 function encabezados(nombreHoja) {
+  if (_headerCache[nombreHoja]) return _headerCache[nombreHoja];
   var h = hoja(nombreHoja);
   var ultima = h.getLastColumn();
   if (ultima === 0) return [];
-  return h.getRange(1, 1, 1, ultima).getValues()[0].map(function (c) { return String(c).trim(); });
+  var cols = h.getRange(1, 1, 1, ultima).getValues()[0].map(function (c) { return String(c).trim(); });
+  _headerCache[nombreHoja] = cols;
+  return cols;
+}
+
+function invalidateHeaderCache() { _headerCache = {}; }
+
+/**
+ * Columns whose content must stay exactly as typed. Without plain-text format
+ * Sheets turns "0012345" into 12345, "15:00" into a date and so on.
+ */
+var PLAIN_TEXT_COLUMNS = {
+  'REGISTRO': ['id_number', 'whatsapp', 'birth_date', 'group_code', 'code'],
+  '_INTEGRANTES': ['id_number', 'birth_date', 'group_code'],
+  'CONFIG': ['valor']
+};
+
+/**
+ * Creates missing sheets and appends missing columns at the END of existing
+ * ones. Existing data never moves, because every read and write addresses
+ * columns by header name. Safe to run on a live base: it only adds.
+ * Returns what it changed, for the migration report.
+ */
+function ensureSchema(book) {
+  var report = { hojas_creadas: [], columnas_agregadas: {} };
+  sheetDefinitions().forEach(function (def) {
+    var name = def[0], columns = def[1];
+    var sheet = book.getSheetByName(name);
+    if (!sheet) {
+      sheet = book.insertSheet(name);
+      report.hojas_creadas.push(name);
+    }
+    var lastCol = sheet.getLastColumn();
+    var current = lastCol ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (c) { return String(c).trim(); }) : [];
+    var hasHeader = current.some(function (c) { return c !== ''; });
+    if (!hasHeader) {
+      sheet.getRange(1, 1, 1, columns.length).setValues([columns]);
+    } else {
+      var missing = columns.filter(function (c) { return current.indexOf(c) === -1; });
+      if (missing.length) {
+        sheet.getRange(1, current.length + 1, 1, missing.length).setValues([missing]);
+        report.columnas_agregadas[name] = missing;
+      }
+    }
+    var width = Math.max(1, sheet.getLastColumn());
+    sheet.getRange(1, 1, 1, width).setFontWeight('bold').setBackground('#1D1D1B').setFontColor('#FFFFFF');
+    sheet.setFrozenRows(1);
+    applyPlainTextColumns(sheet, name);
+  });
+  invalidateHeaderCache();
+  return report;
+}
+
+function applyPlainTextColumns(sheet, name) {
+  var cols = PLAIN_TEXT_COLUMNS[name];
+  if (!cols) return;
+  var header = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0]
+    .map(function (c) { return String(c).trim(); });
+  var rows = Math.max(1, sheet.getMaxRows() - 1);
+  cols.forEach(function (c) {
+    var idx = header.indexOf(c);
+    if (idx !== -1) sheet.getRange(2, idx + 1, rows, 1).setNumberFormat('@');
+  });
 }
 
 /**

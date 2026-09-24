@@ -129,3 +129,19 @@ function urlPanel(rol, token) {
                  checkin: 'checkin', jurado: 'jurado' }[rol] || 'admin';
   return base + '?p=' + pagina + '&t=' + encodeURIComponent(token);
 }
+
+/**
+ * Six-character key that travels with a group code in the members link.
+ * GRP numbers are sequential and easy to guess; the key (an HMAC of the code)
+ * is what stops a stranger from adding people to someone else's group.
+ */
+function groupAccessKey(groupCode) {
+  var code = String(groupCode || '').trim().toUpperCase();
+  if (!code) return '';
+  return firmar('grp:' + code).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
+}
+
+function groupKeyMatches(groupCode, key) {
+  var expected = groupAccessKey(groupCode);
+  return !!expected && expected === String(key || '').trim().toUpperCase();
+}

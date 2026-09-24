@@ -445,7 +445,7 @@ function projectShapeErrors(datos, maxMembers) {
 function groupMatchKey(name) {
   return normalizarTexto(name)
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9ñ]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -583,4 +583,30 @@ function suggestEmailDomain(email) {
     if (d > 0 && d < bestDistance) { bestDistance = d; best = known[k]; }
   }
   return best ? m[1] + '@' + best : '';
+}
+
+// ---------------------------------------------------------------------------
+// Masking for roles that must not see personal data (direction)
+// ---------------------------------------------------------------------------
+
+/** "1036448960" -> "******8960". */
+function maskIdNumber(value) {
+  var digits = normalizarCedula(value);
+  if (!digits) return '';
+  return new Array(Math.max(0, digits.length - 4) + 1).join('*') + digits.slice(-4);
+}
+
+/** "maria.restrepo@gmail.com" -> "m***@gmail.com". */
+function maskEmail(value) {
+  var email = normalizarEmail(value);
+  var at = email.indexOf('@');
+  if (at < 1) return email ? '***' : '';
+  return email.charAt(0) + '***' + email.slice(at);
+}
+
+/** "3012345678" -> "*** *** 5678". */
+function maskPhone(value) {
+  var phone = normalizarTelefono(value);
+  if (!phone) return '';
+  return '*** *** ' + phone.slice(-4);
 }
