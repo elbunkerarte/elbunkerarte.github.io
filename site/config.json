@@ -1,5 +1,5 @@
 {
-  "_instrucciones": "Fuente ÚNICA de los datos públicos del sitio. tools/construir-sitio.js reemplaza cada {{ruta.al.valor}} de las páginas con estos valores al publicar. Un valor que empiece por PENDIENTE se muestra como 'PENDIENTE DE COMPLETAR'. No se inventa ningún dato: los datos legales se publican tal como los informó la organización. Si cambias fecha, hora o lugar, vuelve a generar la imagen social con assets/build_brand_assets.py.",
+  "_instrucciones": "Fuente ÚNICA de los datos públicos del sitio. tools/construir-sitio.js reemplaza cada {{ruta.al.valor}} de las páginas con estos valores al publicar. Un dato que no exista no se publica: se quita de la página, nunca se muestra un texto provisional. No se inventa ningún dato: los datos legales se publican tal como los informó la organización. Si cambias fecha, hora o lugar, vuelve a generar la imagen social con assets/build_brand_assets.py.",
   "sitio": {
     "url_publica": "https://miguelgamer77721-ui.github.io/el-bunker/",
     "dominio_propio": ""
@@ -20,7 +20,7 @@
     "edad_minima": 18,
     "edad_maxima": 30,
     "cupos": 100,
-    "seleccionados": 8,
+    "seleccionados": 7,
     "jurados": 3,
     "duracion_audicion_min": 3,
     "antelacion_llegada_min": 15,
@@ -39,10 +39,10 @@
     "direccion": "Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia",
     "correo_datos": "El.arterslasolucion@gmail.com",
     "telefono": "3042328502",
-    "canal_fisico": "PENDIENTE DE COMPLETAR",
-    "terminos_version": "PENDIENTE-DOCUMENTO-FUENTE",
+    "canal_fisico": "Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia",
+    "terminos_version": "v1-2026-09-24",
     "politica_version": "v2-2026-09-24",
-    "datos_verificados": false
+    "datos_verificados": true
   },
   "contacto": {
     "whatsapp_oficial": "3239836182",
