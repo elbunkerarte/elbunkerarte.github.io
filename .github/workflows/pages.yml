@@ -22,7 +22,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Full history: the migration tests rebuild the iteration-1 code from commit 2a6f706 (git archive).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
