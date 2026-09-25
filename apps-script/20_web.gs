@@ -206,7 +206,7 @@ function renderizar(plantilla, datos) {
     ? HtmlService.createTemplate(PLANTILLAS[plantilla])
     : HtmlService.createTemplateFromFile(plantilla);
   for (var k in datos) if (datos.hasOwnProperty(k)) t[k] = datos[k];
-  t.BASE_URL = ScriptApp.getService().getUrl();
+  t.BASE_URL = webAppUrl();
   t.ENTORNO = entorno();
   return t.evaluate()
     .setTitle(cfg('evento_nombre', 'EL BUNKER'))

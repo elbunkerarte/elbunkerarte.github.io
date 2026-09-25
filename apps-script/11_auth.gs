@@ -137,7 +137,7 @@ function provisionarUsuario(alias, rol, nota) {
 }
 
 function urlPanel(rol, token) {
-  var base = ScriptApp.getService().getUrl();
+  var base = webAppUrl();
   var pagina = { admin: 'admin', direccion: 'dashboard', logistica: 'admin',
                  checkin: 'checkin', jurado: 'jurado' }[rol] || 'admin';
   return base + '?p=' + pagina + '&t=' + encodeURIComponent(token);

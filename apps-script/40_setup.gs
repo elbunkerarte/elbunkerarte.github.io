@@ -56,8 +56,7 @@ function setupInicial() {
 }
 
 function urlSegura() {
-  try { return ScriptApp.getService().getUrl(); }
-  catch (e) { return '(despliega la app como Web App para obtener la URL)'; }
+  return webAppUrl() || '(despliega la app como Web App para obtener la URL)';
 }
 
 /** "1899-12-30T16:00:00"/Date -> "16:00"; "2026-10-02T00:00:00" -> "2026-10-02". */
@@ -278,6 +277,7 @@ function systemHealth() {
     llaves_coinciden: environmentName() === spreadsheetEnvironment(book),
     base: book.getName(),
     web_app: urlSegura(),
+    web_app_url_ok: /\/exec$/.test(webAppUrl()),
     esquema_completo: Object.keys(missingColumns).length === 0,
     columnas_faltantes: missingColumns,
     disparadores: triggers,

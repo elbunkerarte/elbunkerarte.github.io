@@ -586,10 +586,12 @@ function loadSystemHealth() {
   llamar('estado_sistema').then(function (r) {
     ocupado(b, false);
     var s = r.salud;
-    var ok = s.llaves_coinciden && s.esquema_completo && s.produccion_limpia;
+    var ok = s.llaves_coinciden && s.esquema_completo && s.produccion_limpia && s.web_app_url_ok;
     $('#salidaSistema').innerHTML = '<div class="aviso ' + (ok ? 'ok' : 'error') + '"><b>' + (ok ? 'Sistema consistente' : 'Revisar') + '</b>' +
       'Entorno ' + escaparHtml(s.entorno) + ' · hoja marcada ' + escaparHtml(s.marca_hoja) + ' · esquema ' + (s.esquema_completo ? 'completo' : 'INCOMPLETO') +
-      ' · datos de prueba: ' + s.datos_de_prueba.proyectos_de_prueba + '<br>Legal verificado: ' + (s.legal.datos_verificados ? 'SI' : 'NO') +
+      ' · datos de prueba: ' + s.datos_de_prueba.proyectos_de_prueba +
+      (s.web_app_url_ok ? '' : '<br><b>Falta web_app_url en CONFIG</b> (la URL /exec de la implementación): sin ella los enlaces no abren.') +
+      '<br>Legal verificado: ' + (s.legal.datos_verificados ? 'SI' : 'NO') +
       ' · pendientes: ' + escaparHtml(s.legal.pendientes.join(', ') || 'ninguno') + ' · términos ' + escaparHtml(s.legal.terms_version) + '</div>' +
       '<pre style="white-space:pre-wrap;font-size:12px;color:var(--tenue)">' + escaparHtml(JSON.stringify(s, null, 2)) + '</pre>';
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaSistema', 'error', 'Error', e.message); });

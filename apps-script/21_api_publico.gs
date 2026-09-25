@@ -83,7 +83,15 @@ function exactlyOnce(key, fn) {
   return conBloqueo(function () { return unaSolaVez(key, fn); });
 }
 
+/**
+ * The public /exec URL every link is built from. Run from the editor,
+ * ScriptApp.getService().getUrl() answers the owner-only /dev URL, so the
+ * deployed URL is kept in CONFIG (web_app_url) and Google's answer is only a
+ * fallback.
+ */
 function webAppUrl() {
+  var configured = normalizarTexto(cfg('web_app_url', ''));
+  if (/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(configured)) return configured;
   try { return ScriptApp.getService().getUrl() || ''; } catch (e) { return ''; }
 }
 

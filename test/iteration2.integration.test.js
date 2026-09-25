@@ -357,6 +357,15 @@ describe('Access links', () => {
     expect(prod.project.run('verificarToken', fresh).ok).toBe(true);
     expect(prod.project.get({ p: 'checkin', t: oldToken }).body).toContain('TOKEN_REEMPLAZADO');
   });
+  it('links are built from CONFIG web_app_url (the editor only knows the owner-only /dev URL)', () => {
+    const { prod } = env();
+    const exec = 'https://script.google.com/macros/s/AKfycbTESTdeployment123/exec';
+    F.setConfig(prod.project, 'web_app_url', exec);
+    const link = prod.project.run('provisionarUsuario', 'checkin-9', 'checkin', 'Mesa 9').url;
+    expect(link.indexOf(exec + '?p=checkin&t=')).toBe(0);
+    expect(prod.project.run('systemHealth').web_app_url_ok).toBe(true);
+    expect(prod.project.run('membersLink', 'GRP-001').indexOf(exec + '?p=integrantes&g=GRP-001&k=')).toBe(0);
+  });
   it('running INSTALAR again does not re-issue anyone\'s link', () => {
     const { prod } = env();
     const before = prod.project.records('_USUARIOS').map((u) => u.token);
