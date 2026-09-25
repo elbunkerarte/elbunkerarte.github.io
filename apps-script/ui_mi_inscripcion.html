@@ -77,7 +77,11 @@ function lookUp() {
   });
 }
 
-function factHtml(k, v) { return '<div class="hecho"><div class="k">' + k + '</div><div class="v" style="font-size:22px">' + escaparHtml(v) + '</div></div>'; }
+function factHtml(k, v) {
+  // a clock time ("9:00 p. m.") must never break across lines inside a card
+  var value = escaparHtml(v).replace(/(\d{1,2}:\d{2}) ([ap])\. m\./g, '<span class="nowrap">$1 $2. m.</span>');
+  return '<div class="hecho"><div class="k">' + k + '</div><div class="v" style="font-size:22px">' + value + '</div></div>';
+}
 
 function render(r) {
   $('#avisoGlobal').innerHTML = '';

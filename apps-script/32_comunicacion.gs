@@ -266,7 +266,7 @@ function accionMensajes(datos, sesion) {
     return { ok: false, error: 'Plantilla desconocida.', disponibles: Object.keys(todas) };
   }
   if (plantilla.disponible && !plantilla.disponible()) {
-    return { ok: false, error: 'Esta plantilla aun no se puede usar: falta el enlace del grupo de WhatsApp en CONFIG (whatsapp_grupo_enlace).' };
+    return { ok: false, error: 'Esta plantilla aún no se puede usar: falta el enlace del grupo de WhatsApp en CONFIG (whatsapp_grupo_enlace).' };
   }
 
   var base = webAppUrl();

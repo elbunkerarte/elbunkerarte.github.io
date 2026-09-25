@@ -26,7 +26,7 @@ function guardSubmission(datos, kind) {
   if (normalizarTexto(datos.hp_field)) {
     registrar('anonimo', '', 'BLOQUEO_CAMPO_TRAMPA', kind, '');
     return { ok: false, motivo: 'TRAMPA',
-             error: 'No pudimos procesar el envio. Si eres una persona, recarga la pagina e intentalo de nuevo.' };
+             error: 'No pudimos procesar el envío. Si eres una persona, recarga la página e inténtalo de nuevo.' };
   }
   var testData = isTestData(datos);
   if (testData && !esPruebas()) {
@@ -41,7 +41,7 @@ function guardSubmission(datos, kind) {
     if (!isFinite(elapsed) || elapsed < minMs) {
       registrar('anonimo', '', 'BLOQUEO_VELOCIDAD', kind, String(elapsed));
       return { ok: false, motivo: 'VELOCIDAD',
-               error: 'El envio fue demasiado rapido. Revisa tus datos y vuelve a enviarlo.' };
+               error: 'El envío fue demasiado rápido. Revisa tus datos y vuelve a enviarlo.' };
     }
   }
 
@@ -52,7 +52,7 @@ function guardSubmission(datos, kind) {
   if (perMinute > cfgNumero('limite_envios_minuto', 30)) {
     registrar('anonimo', '', 'BLOQUEO_LIMITE_GLOBAL', kind, String(perMinute));
     return { ok: false, motivo: 'LIMITE_GLOBAL',
-             error: 'Estamos recibiendo muchos envios en este momento. Espera un minuto y vuelve a intentarlo.' };
+             error: 'Estamos recibiendo muchos envíos en este momento. Espera un minuto y vuelve a intentarlo.' };
   }
   var doc = normalizarCedula(datos.id_number);
   if (doc) {
@@ -63,7 +63,7 @@ function guardSubmission(datos, kind) {
     if (perDoc > limit) {
       registrar('anonimo', '', 'BLOQUEO_LIMITE_DOCUMENTO', kind, '');
       return { ok: false, motivo: 'LIMITE_DOCUMENTO',
-               error: 'Hubo demasiados envios con este documento en la ultima hora. Si necesitas corregir algo, escribenos.' };
+               error: 'Hubo demasiados envíos con este documento en la última hora. Si necesitas corregir algo, escríbenos.' };
     }
   }
   return null;
@@ -112,7 +112,7 @@ function membersLink(groupCode) {
 function accionInscribir(datos) {
   datos = datos || {};
   if (!cfgBool('inscripciones_abiertas', true)) {
-    return { ok: false, error: 'Las inscripciones estan cerradas.', cerrado: true };
+    return { ok: false, error: 'Las inscripciones están cerradas.', cerrado: true };
   }
   var key = 'inscripcion:' + (datos.client_submission_id || Utilities.getUuid());
   var replay = replayIfRepeated(key);
@@ -282,25 +282,25 @@ function registerProject(datos, video) {
 function mensajeVeredicto(estado, veredicto, dup, groupMatch) {
   var numero = cfg('whatsapp_oficial', '');
   if (estado === ESTADO_ELEGIBILIDAD.APTO) {
-    return 'Recibimos tu inscripcion. La organizacion revisa cada inscripcion y asigna los ' +
-      cfgNumero('cupo_total', 100) + ' cupos en orden de inscripcion entre quienes cumplen los requisitos. ' +
-      'Si quedas dentro, recibiras tu codigo y tu horario por WhatsApp' + (numero ? ' desde el ' + numero : '') + '.';
+    return 'Recibimos tu inscripción. La organización revisa cada inscripción y asigna los ' +
+      cfgNumero('cupo_total', 100) + ' cupos en orden de inscripción entre quienes cumplen los requisitos. ' +
+      'Si quedas dentro, recibirás tu código y tu horario por WhatsApp' + (numero ? ' desde el ' + numero : '') + '.';
   }
   if (estado === ESTADO_ELEGIBILIDAD.DUPLICADO) {
-    return 'Ya tenemos una inscripcion registrada con este documento. Conservamos la primera; no necesitas volver a inscribirte.';
+    return 'Ya tenemos una inscripción registrada con este documento. Conservamos la primera; no necesitas volver a inscribirte.';
   }
   if (estado === ESTADO_ELEGIBILIDAD.NO_CUMPLE) {
     var reglas = veredicto.errores.filter(function (e) { return e.codigo === 'EDAD' || e.codigo === 'RESIDENCIA'; });
-    return reglas.length ? reglas[0].mensaje : 'Tu inscripcion no cumple los requisitos de la convocatoria.';
+    return reglas.length ? reglas[0].mensaje : 'Tu inscripción no cumple los requisitos de la convocatoria.';
   }
   if (estado === ESTADO_ELEGIBILIDAD.INCOMPLETO) {
     return 'Faltan datos obligatorios. Revisa los campos marcados y vuelve a enviar.';
   }
   if (groupMatch && groupMatch.match) {
-    return 'Recibimos tu inscripcion. Ya existe una agrupacion con un nombre muy parecido: la organizacion ' +
-      'verificara si es el mismo proyecto y te contactara.';
+    return 'Recibimos tu inscripción. Ya existe una agrupación con un nombre muy parecido: la organización ' +
+      'verificará si es el mismo proyecto y te contactará.';
   }
-  return 'Recibimos tu inscripcion y quedo en revision. Te contactaremos si necesitamos verificar algo.';
+  return 'Recibimos tu inscripción y quedó en revisión. Te contactaremos si necesitamos verificar algo.';
 }
 
 /**
@@ -357,10 +357,10 @@ function groupSummary(groupCode, members) {
 function accionConsultarAgrupacion(datos) {
   var code = normalizarComparable(datos.group_code);
   if (!code || !groupKeyMatches(code, datos.group_key)) {
-    return { ok: false, motivo: 'CLAVE', error: 'El codigo o la clave de la agrupacion no coinciden. Pidele el enlace completo a tu lider.' };
+    return { ok: false, motivo: 'CLAVE', error: 'El código o la clave de la agrupación no coinciden. Pídele el enlace completo a tu líder.' };
   }
   var project = findGroupProject(code);
-  if (!project) return { ok: false, error: 'No encontramos esa agrupacion.' };
+  if (!project) return { ok: false, error: 'No encontramos esa agrupación.' };
   var summary = groupSummary(code);
   return {
     group_code: code,
@@ -380,12 +380,12 @@ function accionConsultarAgrupacion(datos) {
 function accionRegistrarIntegrante(datos) {
   datos = datos || {};
   if (!cfgBool('integrantes_abierto', true)) {
-    return { ok: false, cerrado: true, error: 'El registro de integrantes esta cerrado.' };
+    return { ok: false, cerrado: true, error: 'El registro de integrantes está cerrado.' };
   }
   var code = normalizarComparable(datos.group_code);
   if (!code || !groupKeyMatches(code, datos.group_key)) {
     registrar('anonimo', '', 'INTEGRANTE_CLAVE_INVALIDA', code, '');
-    return { ok: false, motivo: 'CLAVE', error: 'El codigo o la clave de la agrupacion no coinciden. Pidele el enlace completo a tu lider.' };
+    return { ok: false, motivo: 'CLAVE', error: 'El código o la clave de la agrupación no coinciden. Pídele el enlace completo a tu líder.' };
   }
   var key = 'integrante:' + (datos.client_submission_id || Utilities.getUuid());
   var replay = replayIfRepeated(key);
@@ -412,7 +412,7 @@ function accionRegistrarIntegrante(datos) {
   return exactlyOnce(key, function () {
     var projects = leerHoja(HOJA.REGISTRO);
     var project = findGroupProject(code, projects);
-    if (!project) return { ok: false, error: 'No encontramos esa agrupacion.' };
+    if (!project) return { ok: false, error: 'No encontramos esa agrupación.' };
     var allMembers = leerHoja(HOJA.INTEGRANTES);
     var summary = groupSummary(code, allMembers);
     var existing = summary.list.filter(function (m) { return normalizarCedula(m.normalized_id_number) === norm; })[0];
@@ -476,10 +476,10 @@ function accionRegistrarIntegrante(datos) {
         authorized: after.authorized
       },
       mensaje: validation.status === MEMBER_STATUS.AUTORIZADO
-        ? 'Tu autorizacion quedo registrada. Ya van ' + after.authorized + ' de ' + (declared || after.registered) + ' integrantes autorizados.'
+        ? 'Tu autorización quedó registrada. Ya van ' + after.authorized + ' de ' + (declared || after.registered) + ' integrantes autorizados.'
         : (validation.status === MEMBER_STATUS.NO_CUMPLE
-            ? 'Cada integrante debe ser mayor de edad el dia del evento. Tu registro quedo guardado y la organizacion lo revisara.'
-            : 'Faltan datos o autorizaciones. Corrige lo marcado y envia de nuevo.')
+            ? 'Cada integrante debe ser mayor de edad el día del evento. Tu registro quedó guardado y la organización lo revisará.'
+            : 'Faltan datos o autorizaciones. Corrige lo marcado y envía de nuevo.')
     };
   });
 }
@@ -506,12 +506,12 @@ function findOwnProject(datos) {
 
 function friendlyStatus(r) {
   var e = normalizarComparable(r.eligibility_status);
-  if (normalizarTexto(r.code)) return 'Tienes cupo. Este es tu codigo y tu horario.';
-  if (e === 'APTO') return 'Tu inscripcion cumple los requisitos y esta en espera de la asignacion de cupos.';
-  if (e === 'REVISION') return 'Tu inscripcion esta en revision por la organizacion.';
-  if (e === 'INCOMPLETO') return 'A tu inscripcion le faltan datos obligatorios: inscribete de nuevo con los datos completos.';
-  if (e === 'NO_CUMPLE') return 'Tu inscripcion no cumple los requisitos de la convocatoria.';
-  if (e === 'DUPLICADO') return 'Esta inscripcion esta duplicada: vale la primera que enviaste.';
+  if (normalizarTexto(r.code)) return 'Tienes cupo. Este es tu código y tu horario.';
+  if (e === 'APTO') return 'Tu inscripción cumple los requisitos y está en espera de la asignación de cupos.';
+  if (e === 'REVISION') return 'Tu inscripción está en revisión por la organización.';
+  if (e === 'INCOMPLETO') return 'A tu inscripción le faltan datos obligatorios: inscríbete de nuevo con los datos completos.';
+  if (e === 'NO_CUMPLE') return 'Tu inscripción no cumple los requisitos de la convocatoria.';
+  if (e === 'DUPLICADO') return 'Esta inscripción está duplicada: vale la primera que enviaste.';
   return 'Inscripcion recibida.';
 }
 
@@ -519,7 +519,7 @@ function accionMiInscripcion(datos) {
   var blocked = guardSubmission(datos, 'consulta');
   if (blocked) return blocked;
   var r = findOwnProject(datos);
-  if (!r) return { ok: false, error: 'No encontramos una inscripcion con esos datos. Revisa tu documento y tu codigo o comprobante.' };
+  if (!r) return { ok: false, error: 'No encontramos una inscripción con esos datos. Revisa tu documento y tu código o comprobante.' };
 
   var group = null;
   if (r.group_code) {
@@ -579,7 +579,7 @@ function accionMiInscripcion(datos) {
  */
 function accionSubirPista(datos) {
   datos = datos || {};
-  if (!cfgBool('pistas_abiertas', true)) return { ok: false, cerrado: true, error: 'La recepcion de pistas esta cerrada.' };
+  if (!cfgBool('pistas_abiertas', true)) return { ok: false, cerrado: true, error: 'La recepción de pistas está cerrada.' };
   var key = 'pista:' + (datos.client_submission_id || Utilities.getUuid());
   var replay = replayIfRepeated(key);
   if (replay) return replay;
@@ -587,9 +587,9 @@ function accionSubirPista(datos) {
   if (blocked) return blocked;
 
   var row = findOwnProject({ id_number: datos.id_number, code: datos.code });
-  if (!row) return { ok: false, error: 'El codigo y el documento no coinciden con una inscripcion.' };
+  if (!row) return { ok: false, error: 'El código y el documento no coinciden con una inscripción.' };
   if (!normalizarTexto(row.code)) {
-    return { ok: false, error: 'La pista se envia despues de recibir tu codigo B-XXX.' };
+    return { ok: false, error: 'La pista se envía después de recibir tu código B-XXX.' };
   }
   var stored = storeTrack(row, datos.file_name, datos.file_base64, datos.song_name);   // Drive, outside the lock
   if (!stored.ok) {
@@ -614,7 +614,7 @@ function recordTrack(code, stored, songName, method, actor) {
   });
   registrar(actor, '', 'PISTA_RECIBIDA', code, stored.file_name + ' (' + stored.bytes + ' bytes)');
   return { code: code, track_status: TRACK_STATUS.RECIBIDA, track_file_name: stored.file_name, bytes: stored.bytes,
-           mensaje: 'Recibimos tu pista como ' + stored.file_name + '. El dia del evento lleva tambien una copia en USB.' };
+           mensaje: 'Recibimos tu pista como ' + stored.file_name + '. El día del evento lleva también una copia en USB.' };
 }
 
 // ---------------------------------------------------------------------------
@@ -624,12 +624,12 @@ function recordTrack(code, stored, songName, method, actor) {
 function accionVerificarVideo(datos) {
   var url = normalizarTexto(datos.video_url);
   if (!url) return { status: VIDEO_STATUS.SIN_VIDEO, detail: '' };
-  if (!cfgBool('verificar_videos', true)) return { status: VIDEO_STATUS.PENDIENTE, detail: 'Se revisara despues.' };
+  if (!cfgBool('verificar_videos', true)) return { status: VIDEO_STATUS.PENDIENTE, detail: 'Se revisará después.' };
   var cache = CacheService.getScriptCache();
   var minuteKey = 'rl:video:' + Math.floor(Date.now() / 60000);
   var n = Number(cache.get(minuteKey) || 0) + 1;
   cache.put(minuteKey, String(n), 120);
-  if (n > 60) return { status: VIDEO_STATUS.PENDIENTE, detail: 'Lo revisaremos despues de tu envio.' };
+  if (n > 60) return { status: VIDEO_STATUS.PENDIENTE, detail: 'Lo revisaremos después de tu envío.' };
   return checkVideoUrl(url);
 }
 
@@ -640,7 +640,7 @@ function accionVerificarVideo(datos) {
 /** Records the request only; the new slot is decided by production, never chosen by the participant. */
 function accionSolicitarCambio(datos) {
   if (!cfgBool('cambios_abiertos', true)) {
-    return { ok: false, error: 'El plazo para solicitar cambios de horario ya cerro.', cerrado: true };
+    return { ok: false, error: 'El plazo para solicitar cambios de horario ya cerró.', cerrado: true };
   }
   var key = 'cambio:' + normalizarComparable(datos.participant_code) + ':' + (datos.client_submission_id || '');
   var replay = replayIfRepeated(key);
@@ -659,7 +659,7 @@ function accionSolicitarCambio(datos) {
     // Guard against someone else guessing a code: the name must match.
     if (normalizarComparable(datos.full_name) !== normalizarComparable(registro.full_name)) {
       registrar('participante', '', 'CAMBIO_NOMBRE_NO_COINCIDE', datos.participant_code, '');
-      return { ok: false, error: 'El nombre no coincide con el registrado para ese codigo.', motivo: 'NOMBRE_NO_COINCIDE' };
+      return { ok: false, error: 'El nombre no coincide con el registrado para ese código.', motivo: 'NOMBRE_NO_COINCIDE' };
     }
 
     var solicitudId = nuevoId('CB');
@@ -689,7 +689,7 @@ function accionConsultarEstado(datos) {
   else if (datos.id_number) registro = buscarPorCedula(datos.id_number);
   if (!registro) return { ok: false, error: 'No encontramos un registro con esos datos.' };
   if (normalizarCedula(datos.id_number) !== normalizarCedula(registro.id_number)) {
-    return { ok: false, error: 'Los datos no coinciden. Verifica tu documento y tu codigo.' };
+    return { ok: false, error: 'Los datos no coinciden. Verifica tu documento y tu código.' };
   }
   return {
     code: registro.code || '',

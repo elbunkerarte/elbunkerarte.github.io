@@ -82,10 +82,10 @@ function interpretVideoProbe(provider, code, location, body) {
   }
   if (provider === 'drive' || provider === 'drive_folder') {
     if ((code === 301 || code === 302 || code === 303) && loginWall.test(loc)) {
-      return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: pide iniciar sesion. Comparte como "Cualquier persona con el enlace".' };
+      return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: pide iniciar sesión. Comparte como "Cualquier persona con el enlace".' };
     }
     if (code === 200 && loginWall.test(text) && !/drive-viewer|docs-title|og:title/i.test(text)) {
-      return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: pide iniciar sesion. Comparte como "Cualquier persona con el enlace".' };
+      return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: pide iniciar sesión. Comparte como "Cualquier persona con el enlace".' };
     }
     if (code === 200) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'Drive: abierto a cualquier persona con el enlace.' };
     if (code === 404) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: el archivo no existe.' };
@@ -106,7 +106,7 @@ function videoStatusWithoutProbe(url) {
   var u = normalizarTexto(url);
   if (!u) return { status: VIDEO_STATUS.SIN_VIDEO, detail: '' };
   var c = classifyVideoUrl(u);
-  if (c.provider === 'invalid') return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'No es un enlace valido (debe empezar por https://).' };
+  if (c.provider === 'invalid') return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'No es un enlace válido (debe empezar por https://).' };
   if (!videoProbeRequest(u)) return interpretVideoProbe(c.provider, 0, '', '');
   return null;
 }
@@ -175,13 +175,13 @@ function validateTrackUpload(fileName, byteLength, headBytes, options) {
   if (!ext || allowed.indexOf(ext) === -1) {
     return { ok: false, error: 'Formato no permitido. Usa: ' + allowed.join(', ') + '.' };
   }
-  if (!byteLength) return { ok: false, error: 'El archivo esta vacio.' };
+  if (!byteLength) return { ok: false, error: 'El archivo está vacío.' };
   if (byteLength > maxMb * 1024 * 1024) {
     return { ok: false, error: 'El archivo supera ' + maxMb + ' MB. Comprimelo (MP3 a 192 kbps) o entregalo en USB.' };
   }
   var type = detectAudioType(headBytes);
   if (!audioTypeMatchesExtension(type, ext)) {
-    return { ok: false, error: 'El archivo no parece un audio ' + ext.toUpperCase() + ' valido.' };
+    return { ok: false, error: 'El archivo no parece un audio ' + ext.toUpperCase() + ' válido.' };
   }
   return { ok: true, extension: ext, type: type };
 }
@@ -193,7 +193,7 @@ function validateTrackUpload(fileName, byteLength, headBytes, options) {
 /** Splits "data:image/png;base64,...." and checks it really is a PNG. */
 function parsePngDataUrl(dataUrl) {
   var m = String(dataUrl || '').match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
-  if (!m) return { ok: false, error: 'La firma no llego en formato PNG.' };
+  if (!m) return { ok: false, error: 'La firma no llegó en formato PNG.' };
   return { ok: true, base64: m[1] };
 }
 

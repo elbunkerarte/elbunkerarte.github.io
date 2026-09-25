@@ -229,7 +229,7 @@ function validarInscripcion(datos, opciones) {
     var consent = CONSENTIMIENTOS_OBLIGATORIOS[c];
     var yaFalta = errores.some(function (e) { return e.campo === consent; });
     if (!yaFalta && !esVerdadero(datos[consent])) {
-      errores.push({ campo: consent, codigo: 'CONSENTIMIENTO', mensaje: 'Declaracion o autorizacion obligatoria no otorgada.' });
+      errores.push({ campo: consent, codigo: 'CONSENTIMIENTO', mensaje: 'Declaración o autorización obligatoria no otorgada.' });
     }
   }
 
@@ -240,13 +240,13 @@ function validarInscripcion(datos, opciones) {
 
   // 3. Format ---------------------------------------------------------------
   if (normalizarTexto(datos.id_number) && !esCedulaValida(datos.id_number)) {
-    errores.push({ campo: 'id_number', codigo: 'FORMATO', mensaje: 'El documento debe tener entre 6 y 10 digitos.' });
+    errores.push({ campo: 'id_number', codigo: 'FORMATO', mensaje: 'El documento debe tener entre 6 y 10 dígitos.' });
   }
   if (normalizarTexto(datos.email) && !esEmailValido(datos.email)) {
-    errores.push({ campo: 'email', codigo: 'FORMATO', mensaje: 'Correo electronico invalido.' });
+    errores.push({ campo: 'email', codigo: 'FORMATO', mensaje: 'Correo electrónico inválido.' });
   }
   if (normalizarTexto(datos.whatsapp) && !esTelefonoValido(datos.whatsapp)) {
-    errores.push({ campo: 'whatsapp', codigo: 'FORMATO', mensaje: 'Numero celular colombiano invalido (10 digitos, inicia en 3).' });
+    errores.push({ campo: 'whatsapp', codigo: 'FORMATO', mensaje: 'Número celular colombiano inválido (10 dígitos, inicia en 3).' });
   }
   if (normalizarTexto(datos.full_name) && normalizarTexto(datos.full_name).length < 5) {
     errores.push({ campo: 'full_name', codigo: 'FORMATO', mensaje: 'Escribe tu nombre completo.' });
@@ -256,7 +256,7 @@ function validarInscripcion(datos, opciones) {
   var video = normalizarTexto(datos.video_url);
   if (video && !esUrlValida(video)) {
     if (exigirVideo) {
-      errores.push({ campo: 'video_url', codigo: 'FORMATO', mensaje: 'Enlace de video invalido.' });
+      errores.push({ campo: 'video_url', codigo: 'FORMATO', mensaje: 'Enlace de video inválido.' });
     } else {
       avisos.push({ campo: 'video_url', codigo: 'REVISION', mensaje: 'Enlace de video con formato dudoso: revisar manualmente.' });
     }
@@ -268,7 +268,7 @@ function validarInscripcion(datos, opciones) {
   var edad = null;
   var fechaOk = !!parsearFecha(datos.birth_date);
   if (normalizarTexto(datos.birth_date) && !fechaOk) {
-    errores.push({ campo: 'birth_date', codigo: 'FORMATO', mensaje: 'Fecha de nacimiento invalida.' });
+    errores.push({ campo: 'birth_date', codigo: 'FORMATO', mensaje: 'Fecha de nacimiento inválida.' });
   } else if (fechaOk) {
     edad = calcularEdad(datos.birth_date, fechaEvento);
     if (!edadEnRango(edad, edadMinima, edadMaxima)) {
@@ -396,42 +396,42 @@ function projectShapeErrors(datos, maxMembers) {
   var mode = normalizeParticipationMode(modeRaw);
 
   if (modeRaw && !mode) {
-    errors.push({ campo: 'participation_mode', codigo: 'FORMATO', mensaje: 'Modalidad invalida: elige Solista, Duo o Agrupacion.' });
+    errors.push({ campo: 'participation_mode', codigo: 'FORMATO', mensaje: 'Modalidad inválida: elige Solista, Dúo o Agrupación.' });
   }
   if (isGroupMode(mode)) {
     if (!normalizarTexto(datos.artistic_name)) {
-      errors.push({ campo: 'artistic_name', codigo: 'FALTANTE', mensaje: 'Escribe el nombre artistico de la agrupacion.' });
+      errors.push({ campo: 'artistic_name', codigo: 'FALTANTE', mensaje: 'Escribe el nombre artístico de la agrupación.' });
     }
     var declared = parseInt(datos.members_declared, 10);
     if (!normalizarTexto(datos.members_declared)) {
-      errors.push({ campo: 'members_declared', codigo: 'FALTANTE', mensaje: 'Indica cuantos integrantes estaran en escena.' });
+      errors.push({ campo: 'members_declared', codigo: 'FALTANTE', mensaje: 'Indica cuántos integrantes estarán en escena.' });
     } else if (mode === PARTICIPATION_MODE.DUO && declared !== 2) {
-      errors.push({ campo: 'members_declared', codigo: 'FORMATO', mensaje: 'Un duo tiene exactamente 2 integrantes.' });
+      errors.push({ campo: 'members_declared', codigo: 'FORMATO', mensaje: 'Un dúo tiene exactamente 2 integrantes.' });
     } else if (mode === PARTICIPATION_MODE.AGRUPACION && !(declared >= 3 && declared <= maxMembers)) {
-      errors.push({ campo: 'members_declared', codigo: 'FORMATO', mensaje: 'Una agrupacion tiene entre 3 y ' + maxMembers + ' integrantes en escena.' });
+      errors.push({ campo: 'members_declared', codigo: 'FORMATO', mensaje: 'Una agrupación tiene entre 3 y ' + maxMembers + ' integrantes en escena.' });
     }
   }
 
   var format = normalizarComparable(datos.presentation_format).replace(/[\s-]+/g, '_');
   if (format && PRESENTATION_FORMATS.indexOf(format) === -1) {
-    errors.push({ campo: 'presentation_format', codigo: 'FORMATO', mensaje: 'Forma de presentacion invalida.' });
+    errors.push({ campo: 'presentation_format', codigo: 'FORMATO', mensaje: 'Forma de presentación inválida.' });
   }
   if (format === 'OTRA' && !normalizarTexto(datos.presentation_other)) {
-    errors.push({ campo: 'presentation_other', codigo: 'FALTANTE', mensaje: 'Describe brevemente como sera tu presentacion.' });
+    errors.push({ campo: 'presentation_other', codigo: 'FALTANTE', mensaje: 'Describe brevemente cómo será tu presentación.' });
   }
 
   if (esVerdadero(datos.own_equipment) && !normalizarTexto(datos.own_equipment_detail)) {
-    errors.push({ campo: 'own_equipment_detail', codigo: 'FALTANTE', mensaje: 'Cuentanos que instrumento o equipo llevaras.' });
+    errors.push({ campo: 'own_equipment_detail', codigo: 'FALTANTE', mensaje: 'Cuéntanos qué instrumento o equipo llevarás.' });
   }
 
   if (esVerdadero(datos.track_uses)) {
     var method = normalizarComparable(datos.track_method);
     if (!method) {
-      errors.push({ campo: 'track_method', codigo: 'FALTANTE', mensaje: 'Indica como entregaras la pista.' });
+      errors.push({ campo: 'track_method', codigo: 'FALTANTE', mensaje: 'Indica cómo entregarás la pista.' });
     } else if (TRACK_METHODS.indexOf(method) === -1) {
-      errors.push({ campo: 'track_method', codigo: 'FORMATO', mensaje: 'Metodo de entrega de pista invalido.' });
+      errors.push({ campo: 'track_method', codigo: 'FORMATO', mensaje: 'Método de entrega de pista inválido.' });
     } else if (method === 'OTRO' && !normalizarTexto(datos.track_method_other)) {
-      errors.push({ campo: 'track_method_other', codigo: 'FALTANTE', mensaje: 'Describe el metodo de entrega de la pista.' });
+      errors.push({ campo: 'track_method_other', codigo: 'FALTANTE', mensaje: 'Describe el método de entrega de la pista.' });
     }
   }
   return errors;
@@ -511,23 +511,23 @@ function validateMember(datos, options) {
     if (!normalizarTexto(datos[field])) errors.push({ campo: field, codigo: 'FALTANTE', mensaje: 'Campo obligatorio.' });
   });
   ['adult_confirmation', 'accept_terms', 'accept_data_processing'].forEach(function (field) {
-    if (!esVerdadero(datos[field])) errors.push({ campo: field, codigo: 'CONSENTIMIENTO', mensaje: 'Declaracion o autorizacion obligatoria.' });
+    if (!esVerdadero(datos[field])) errors.push({ campo: field, codigo: 'CONSENTIMIENTO', mensaje: 'Declaración o autorización obligatoria.' });
   });
   if (requireSignature && !normalizarTexto(datos.signature_png)) {
     errors.push({ campo: 'signature_png', codigo: 'FALTANTE', mensaje: 'Falta la firma.' });
   }
   if (normalizarTexto(datos.id_number) && !esCedulaValida(datos.id_number)) {
-    errors.push({ campo: 'id_number', codigo: 'FORMATO', mensaje: 'El documento debe tener entre 6 y 10 digitos.' });
+    errors.push({ campo: 'id_number', codigo: 'FORMATO', mensaje: 'El documento debe tener entre 6 y 10 dígitos.' });
   }
 
   var age = null;
   if (normalizarTexto(datos.birth_date)) {
     if (!parsearFecha(datos.birth_date)) {
-      errors.push({ campo: 'birth_date', codigo: 'FORMATO', mensaje: 'Fecha de nacimiento invalida.' });
+      errors.push({ campo: 'birth_date', codigo: 'FORMATO', mensaje: 'Fecha de nacimiento inválida.' });
     } else {
       age = calcularEdad(datos.birth_date, eventDate);
       if (age < minAge) {
-        errors.push({ campo: 'birth_date', codigo: 'EDAD', mensaje: 'Cada integrante debe ser mayor de ' + minAge + ' anos el dia del evento.' });
+        errors.push({ campo: 'birth_date', codigo: 'EDAD', mensaje: 'Cada integrante debe ser mayor de ' + minAge + ' años el día del evento.' });
       }
     }
   }

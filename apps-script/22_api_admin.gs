@@ -318,7 +318,7 @@ function accionResolverCambio(datos, sesion) {
     var destino = libres.filter(function (b) { return String(b.block_id) === String(datos.nuevo_bloque); })[0];
     if (!destino) return { ok: false, error: 'Bloque destino invalido.' };
     if (destino.disponibles <= 0) {
-      return { ok: false, error: 'El bloque ' + destino.block_id + ' ya esta lleno (' + destino.ocupados + '/' + destino.cupo + ').' };
+      return { ok: false, error: 'El bloque ' + destino.block_id + ' ya está lleno (' + destino.ocupados + '/' + destino.cupo + ').' };
     }
 
     var aplicado = aplicarCambio(registro, datos.nuevo_bloque, {
@@ -341,7 +341,7 @@ function accionResolverCambio(datos, sesion) {
       nuevo_bloque: aplicado.horario.block_id,
       nueva_hora: aplicado.horario.audition_time,
       hora_llegada: aplicado.horario.arrival_time,
-      mensaje: 'Cambio aprobado. El codigo ' + solicitud.code + ' NO cambia; solo su horario.'
+      mensaje: 'Cambio aprobado. El código ' + solicitud.code + ' NO cambia; solo su horario.'
     };
   });
 }
@@ -409,7 +409,7 @@ function accionResolverCoincidenciaGrupo(datos, sesion) {
     var row = rows.filter(function (r) { return r.submission_id === datos.submission_id; })[0];
     if (!row) return { ok: false, error: 'Registro no encontrado.' };
     if (normalizarComparable(row.group_match_status) !== 'POSIBLE_REPETIDA') {
-      return { ok: false, error: 'Esta inscripcion no tiene una coincidencia pendiente.' };
+      return { ok: false, error: 'Esta inscripción no tiene una coincidencia pendiente.' };
     }
     var decision = normalizarComparable(datos.decision);
     if (decision !== 'MISMO' && decision !== 'DISTINTO') return { ok: false, error: 'Decision invalida (MISMO o DISTINTO).' };
@@ -451,7 +451,7 @@ function accionActualizarIntegrantesDeclarados(datos, sesion) {
     var mode = normalizeParticipationMode(row.participation_mode);
     var max = cfgNumero('integrantes_max', 15);
     if (mode === 'DUO' && n !== 2) return { ok: false, error: 'Un duo tiene exactamente 2 integrantes.' };
-    if (mode === 'AGRUPACION' && !(n >= 3 && n <= max)) return { ok: false, error: 'Una agrupacion tiene entre 3 y ' + max + ' integrantes.' };
+    if (mode === 'AGRUPACION' && !(n >= 3 && n <= max)) return { ok: false, error: 'Una agrupación tiene entre 3 y ' + max + ' integrantes.' };
     actualizarFila(HOJA.REGISTRO, row._fila, {
       members_declared: n,
       notes: [row.notes, '[' + ahoraISO() + ' ' + sesion.alias + '] integrantes declarados ' + row.members_declared + ' -> ' + n +
@@ -631,7 +631,7 @@ function constanciaData(groupCode) {
   var declared = Number(project.members_declared) || summary.registered;
   return {
     group_code: code,
-    project_code: project.code || '(sin codigo aun)',
+    project_code: project.code || '(sin código aún)',
     group_display_name: project.group_display_name || project.artistic_name,
     participation_mode: project.participation_mode,
     leader_name: project.full_name,

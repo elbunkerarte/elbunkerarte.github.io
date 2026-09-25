@@ -236,21 +236,21 @@ function reconstruirDashboard(filas) {
   var bloque = [
     ['INDICADOR', 'VALOR'],
     ['Inscripciones recibidas (filas)', m.inscritos],
-    ['Validas (aptas + en revision)', m.validos],
+    ['Válidas (aptas + en revisión)', m.validos],
     ['Personas unicas (por documento)', m.unicos],
     ['Duplicados marcados', m.duplicados],
     ['Aptos', m.aptos],
     ['Incompletos', m.incompletos],
     ['No cumplen requisitos', m.no_cumplen],
-    ['En revision', m.revision],
+    ['En revisión', m.revision],
     ['Solistas / duos / agrupaciones', m.solistas + ' / ' + m.duos + ' / ' + m.agrupaciones],
-    ['Con codigo definitivo', m.con_codigo],
+    ['Con código definitivo', m.con_codigo],
     ['Con horario asignado', m.horarios],
     ['Cupos libres', m.cupos_libres],
     ['', ''],
     ['Cambios solicitados / aprobados / rechazados / pendientes',
       m.cambios.solicitados + ' / ' + m.cambios.aprobados + ' / ' + m.cambios.rechazados + ' / ' + m.cambios.pendientes],
-    ['Integrantes autorizados / registrados / declarados (con codigo)',
+    ['Integrantes autorizados / registrados / declarados (con código)',
       m.integrantes.autorizados + ' / ' + m.integrantes.registrados + ' / ' + m.integrantes.declarados],
     ['Agrupaciones con autorizaciones completas', m.integrantes.grupos_completos + ' de ' + m.integrantes.grupos_con_codigo],
     ['Pistas pendientes / recibidas / validadas / con problema',
@@ -261,7 +261,7 @@ function reconstruirDashboard(filas) {
       ((m.videos['NO VERIFICABLE'] || 0) + (m.videos['PENDIENTE'] || 0))],
     ['', ''],
     ['Confirmados (con turno, sin llegar)', m.confirmados],
-    ['Check-in / precola / en audicion', m.check_ins + ' / ' + m.precola + ' / ' + m.en_audicion],
+    ['Check-in / precola / en audición', m.check_ins + ' / ' + m.precola + ' / ' + m.en_audicion],
     ['Audiciones realizadas', m.realizadas],
     ['No show', m.no_show],
     ['En contingencia', m.contingencia],
@@ -286,10 +286,10 @@ function reconstruirDashboard(filas) {
   ]);
   seccion('DISTRIBUCION DE PUNTAJES', [['Rango', 'Artistas']].concat(m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; })));
   var top = [['Artista', 'Puntaje']].concat(m.top.map(function (t) { return [(t.artistic_name || t.code), t.artist_final]; }));
-  if (top.length === 1) top.push(['(sin resultados aun)', 0]);
+  if (top.length === 1) top.push(['(sin resultados aún)', 0]);
   seccion('TOP ' + cfgNumero('top_seleccionados', 7), top);
   seccion('ESTADO DE PARTICIPANTES', [['Estado', 'Cantidad'],
-    ['Confirmados', m.confirmados], ['Check-in', m.check_ins], ['Precola', m.precola], ['En audicion', m.en_audicion],
+    ['Confirmados', m.confirmados], ['Check-in', m.check_ins], ['Precola', m.precola], ['En audición', m.en_audicion],
     ['Realizadas', m.realizadas], ['No show', m.no_show], ['Contingencia', m.contingencia], ['No audicionados', m.no_audicionados]]);
   seccion('AVANCE POR BLOQUE', [['Bloque', 'Realizadas', 'Asignados']].concat(m.por_bloque.map(function (b) {
     return ['Bloque ' + b.block_id + ' (' + b.ventana + ')', b.realizadas, b.asignados];

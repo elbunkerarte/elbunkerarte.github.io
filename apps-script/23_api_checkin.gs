@@ -96,7 +96,7 @@ function findForDesk(datos) {
 
 function accionBuscarParticipante(datos) {
   var found = findForDesk(datos);
-  if (!found || !normalizarTexto(found.row.code)) return { ok: false, error: 'No encontramos ese codigo ni ese documento entre quienes tienen cupo.' };
+  if (!found || !normalizarTexto(found.row.code)) return { ok: false, error: 'No encontramos ese código ni ese documento entre quienes tienen cupo.' };
   var registro = found.row;
 
   var horaAudicion = registro.final_time || registro.original_time || '';

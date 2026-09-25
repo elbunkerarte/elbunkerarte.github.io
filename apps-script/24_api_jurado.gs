@@ -38,7 +38,7 @@ function accionListaEvaluacion(datos, sesion) {
       var previo = yaEvaluados[normalizarComparable(r.code)];
       return {
         code: r.code,
-        artistic_name: r.artistic_name || '(sin nombre artistico)',
+        artistic_name: r.artistic_name || '(sin nombre artístico)',
         discipline: projectGenre(r),
         participation_mode: r.participation_mode || 'SOLISTA',
         members_declared: Number(r.members_declared) || 1,
@@ -70,7 +70,7 @@ function accionGuardarEvaluacion(datos, sesion) {
     if (normalizarEstado(registro.audition_status) !== ESTADO.REALIZADA &&
         normalizarEstado(registro.attendance_status) !== ESTADO.REALIZADA &&
         !esVerdadero(datos.forzar)) {
-      return { ok: false, error: 'Este participante aun no tiene la audicion marcada como REALIZADA.' };
+      return { ok: false, error: 'Este participante aún no tiene la audición marcada como REALIZADA.' };
     }
 
     var puntajes = {};

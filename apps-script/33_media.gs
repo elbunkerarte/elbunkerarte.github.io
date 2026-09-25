@@ -61,7 +61,7 @@ function timestampForNames() {
 function storeTrack(row, originalName, base64, songName) {
   var bytes;
   try { bytes = Utilities.base64Decode(String(base64 || '')); }
-  catch (e) { return { ok: false, error: 'El archivo llego danado. Intenta de nuevo.' }; }
+  catch (e) { return { ok: false, error: 'El archivo llegó dañado. Intenta de nuevo.' }; }
 
   var check = validateTrackUpload(originalName, bytes.length, bytes.slice(0, 12), {
     max_mb: cfgNumero('pista_max_mb', 15),

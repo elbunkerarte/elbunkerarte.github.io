@@ -132,11 +132,11 @@ function puedeSolicitarCambio(registro, solicitud, opciones) {
 
   if (!registro) {
     return { permitido: false, motivo: 'CODIGO_NO_ENCONTRADO',
-             mensaje: 'No encontramos ese codigo. Verifica el mensaje que recibiste.' };
+             mensaje: 'No encontramos ese código. Verifica el mensaje que recibiste.' };
   }
   if (!normalizarTexto(registro.code)) {
     return { permitido: false, motivo: 'SIN_CODIGO',
-             mensaje: 'Este registro aun no tiene codigo asignado.' };
+             mensaje: 'Este registro aún no tiene código asignado.' };
   }
   if (esVerdadero(solicitud.can_attend_original)) {
     return { permitido: false, motivo: 'SI_PUEDE_ASISTIR',
@@ -145,11 +145,11 @@ function puedeSolicitarCambio(registro, solicitud, opciones) {
   var estadoActual = normalizarComparable(registro.change_status || ESTADO_CAMBIO.SIN_SOLICITUD);
   if (estadoActual !== ESTADO_CAMBIO.SIN_SOLICITUD && estadoActual !== '') {
     return { permitido: false, motivo: 'YA_SOLICITO',
-             mensaje: 'Ya registramos una solicitud de cambio para este codigo. Solo se permite una.' };
+             mensaje: 'Ya registramos una solicitud de cambio para este código. Solo se permite una.' };
   }
   if (cierre && ahora.getTime() > cierre.getTime()) {
     return { permitido: false, motivo: 'FUERA_DE_PLAZO',
-             mensaje: 'El plazo para solicitar cambios ya cerro. El dia del evento no hay cambios ordinarios.' };
+             mensaje: 'El plazo para solicitar cambios ya cerró. El día del evento no hay cambios ordinarios.' };
   }
   return { permitido: true, motivo: '', mensaje: '' };
 }
@@ -189,7 +189,7 @@ function aplicarCambio(registro, nuevoBloque, opciones) {
   opciones = opciones || {};
   var cfg = opciones.agenda || AGENDA_DEFECTO;
   var h = horarioDeBloque(parseInt(nuevoBloque, 10), cfg);
-  if (!h) return { ok: false, mensaje: 'Bloque destino invalido.' };
+  if (!h) return { ok: false, mensaje: 'Bloque destino inválido.' };
 
   return {
     ok: true,

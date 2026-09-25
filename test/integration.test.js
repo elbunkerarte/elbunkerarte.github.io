@@ -830,7 +830,7 @@ describe('Schedule change (Form 2)', () => {
       participant_code: 'B-021', full_name: other.full_name, acceptance: true, client_submission_id: 'change-3', form_elapsed_ms: 60000 });
     const res = test.project.run('accionResolverCambio', { solicitud_id: req.solicitud_id, aprobar: true, nuevo_bloque: 2 }, F.ADMIN_SESSION);
     expect(res.ok).toBe(false);
-    expect(res.error).toMatch('ya esta lleno');
+    expect(res.error).toMatch('ya está lleno');
     expect(test.project.records('_CAMBIOS').find((c) => c.solicitud_id === req.solicitud_id).estado).toBe('PENDIENTE');
   });
   it('refuses a request whose name does not match the code', () => {

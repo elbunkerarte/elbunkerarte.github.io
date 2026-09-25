@@ -113,7 +113,7 @@ function evaluarPuntualidad(horaAudicion, horaLlegada, cfg) {
   }
   return { ok: true, retraso: retraso, puntual: false, dentro_tolerancia: false,
            recomendacion: ESTADO.CONTINGENCIA,
-           mensaje: 'Llego ' + retraso + ' min tarde (mas de ' + c.tolerancia_minutos +
+           mensaje: 'Llegó ' + retraso + ' min tarde (más de ' + c.tolerancia_minutos +
                     '). Pierde el turno y pasa a CONTINGENCIA. Nunca se desplaza al puntual.' };
 }
 

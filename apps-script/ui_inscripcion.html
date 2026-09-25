@@ -15,7 +15,7 @@
   <h2 class="titulo-pagina">Inscripción a la convocatoria</h2>
   <div class="hechos" aria-label="Datos del evento">
     <div class="hecho"><div class="k">Fecha</div><div class="v"><?= E.fecha_texto.replace(/ de \d{4}$/, '') ?></div></div>
-    <div class="hecho"><div class="k">Horario</div><div class="v"><?= E.hora_inicio_texto ?> — <?= E.hora_fin_texto ?></div></div>
+    <div class="hecho"><div class="k">Horario</div><div class="v"><span class="nowrap"><?= E.hora_inicio_texto ?></span> — <span class="nowrap"><?= E.hora_fin_texto ?></span></div></div>
     <div class="hecho"><div class="k">Lugar</div><div class="v"><?= E.sede ?></div></div>
     <div class="hecho"><div class="k">Audición</div><div class="v"><?= E.duracion_audicion ?> minutos máximo</div></div>
   </div>
@@ -534,7 +534,7 @@ function mostrarResultado(r) {
       '<section class="tarjeta"><h2>¿Y ahora qué?</h2><p class="pista" style="margin:0">' +
       '1. La organización revisa las inscripciones y asigna los ' + CONFIG.evento.cupo + ' cupos en orden de inscripción entre quienes cumplen.<br>' +
       '2. Si quedas dentro recibes tu <b>código B-XXX</b> y tu <b>horario</b> por WhatsApp.<br>' +
-      '3. Con las personas aptas se crea un grupo de WhatsApp para las indicaciones finales.<br>' +
+      '3. Los recordatorios y las indicaciones del día te llegan por WhatsApp desde el número oficial de la convocatoria.<br>' +
       '4. Si usas pista, la envías desde "Mi inscripción" cuando tengas tu código.<br>' +
       '5. El día del evento llega 15 minutos antes de tu bloque con tu <b>documento original</b>.</p></section>';
   }

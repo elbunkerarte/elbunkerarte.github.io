@@ -239,7 +239,7 @@ describe('Video links: accessible, private, not verifiable', () => {
   it('a Drive file that redirects to the login page is NO ACCESIBLE and says why', () => {
     const { check, detail } = env();
     expect(check('https://drive.google.com/file/d/PRIVATEFILE123/view?usp=sharing')).toBe('NO ACCESIBLE');
-    expect(detail('https://drive.google.com/file/d/PRIVATEFILE123/view?usp=sharing')).toContain('iniciar sesion');
+    expect(detail('https://drive.google.com/file/d/PRIVATEFILE123/view?usp=sharing')).toContain('iniciar sesión');
   });
   it('a Drive file shared with anyone who has the link is ACCESIBLE', () => {
     expect(env().check('https://drive.google.com/file/d/PUBLICFILE1234/view')).toBe('ACCESIBLE');
@@ -393,7 +393,7 @@ describe('Every page renders, its scripts parse, and public pages show nothing d
     };
     const rendered = {};
     for (const [name, q] of Object.entries(pages)) rendered[name] = test.project.get(q);
-    return { account, test, rendered };
+    return { account, test, rendered, band };
   });
 
   it('renders all 13 page/role combinations without an error page', () => {
@@ -428,6 +428,21 @@ describe('Every page renders, its scripts parse, and public pages show nothing d
       }
     }
     expect(hits).toEqual([]);
+  });
+  it('no public page promises a WhatsApp group while no invite link is configured', () => {
+    const { rendered } = env();
+    const hits = ['inscripcion', 'cambio-horario', 'gracias', 'integrantes', 'mi-inscripcion']
+      .filter((name) => /grupo de WhatsApp/i.test(rendered[name].body));
+    expect(hits).toEqual([]);
+  });
+  it('clock times in the event fact cards never break across lines', () => {
+    const body = env().rendered.inscripcion.body;
+    expect(body).toContain('<span class="nowrap">3:00 p. m.</span>');
+    expect(body).toContain('<span class="nowrap">9:00 p. m.</span>');
+  });
+  it('the messages a participant reads are written with their accents', () => {
+    const { band } = env();
+    expect(band.mensaje).not.toMatch(/\b(inscripcion|codigo|organizacion|recibiras|agrupacion|autorizacion|quedo|revision)\b/);
   });
   it('the registration page states the confirmed event facts', () => {
     const text = visibleText(env().rendered.inscripcion.body).replace(/\s+/g, ' ');
