@@ -639,7 +639,7 @@ function constanciaData(groupCode) {
     group_code: code,
     project_code: project.code || '(sin código aún)',
     group_display_name: project.group_display_name || project.artistic_name,
-    participation_mode: project.participation_mode,
+    participation_mode: ({ SOLISTA: 'Solista', DUO: 'Dúo', AGRUPACION: 'Agrupación' })[project.participation_mode] || project.participation_mode,
     leader_name: project.full_name,
     leader_id_number: project.id_number,
     genre: projectGenre(project),
@@ -647,7 +647,7 @@ function constanciaData(groupCode) {
     terms_version: cfg('terms_version', ''),
     policy_version: cfg('policy_version', 'v2'),
     legal_name: cfg('legal_name', ''),
-    generated_at: ahoraISO(),
+    generated_at: Utilities.formatDate(new Date(), zonaHoraria(), 'yyyy-MM-dd HH:mm'),
     members: summary.list.map(function (m) {
       return {
         full_name: m.full_name, id_number: m.id_number, artistic_role: m.artistic_role,

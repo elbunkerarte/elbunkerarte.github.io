@@ -8,7 +8,8 @@
  *
  * Contextual escaping mirrors what Google does: HTML-escaped in markup,
  * JS-string-escaped inside a quoted string in a <script>, emitted as a JSON
- * literal in bare script code. The context is decided at compile time from the
+ * literal in bare script code, and a URL attribute value (src, href...) that is
+ * not http(s)/mailto/ftp/relative becomes '#ZautoescZ'. The context is decided at compile time from the
  * template's static text, like Google's compiler does.
  *
  * Templates are compiled into the project's realm, so project globals (such as
@@ -55,11 +56,17 @@ function jsLiteral(v) {
 
 const REGEX_PRECEDERS = '(,=:[!&|?{};+-*%~^<>';
 
+// Measured on a live web app (2026-09-25): <?= ?> inside src/href replaces any URL whose scheme is
+// not http, https, mailto or ftp - a data: image included - with this marker. Relative URLs pass.
+const SAFE_URL = /^(?:(?:https?|mailto|ftp):|[^&:\/?#]*(?:[\/?#]|$))/i;
+const UNSAFE_URL_MARKER = '#ZautoescZ';
+
 class ContextTracker {
   constructor() {
     this.mode = 'html';          // html | tag-script | tag-style | script | style
     this.js = 'code';            // code | sq | dq | tpl | line | block | regex | regex-class
     this.lastSignificant = '';
+    this.htmlTail = '';          // recent markup, to tell a URL attribute value from plain markup
   }
 
   feed(text) {
@@ -67,6 +74,7 @@ class ContextTracker {
     while (i < text.length) {
       const ch = text[i];
       if (this.mode === 'html') {
+        this.htmlTail = (this.htmlTail + ch).slice(-40);
         const rest = text.slice(i, i + 7).toLowerCase();
         if (rest.startsWith('<script') && /[\s>]/.test(text[i + 7] || ' ')) { this.mode = 'tag-script'; i += 7; continue; }
         if (rest.startsWith('<style') && /[\s>]/.test(text[i + 6] || ' ')) { this.mode = 'tag-style'; i += 6; continue; }
@@ -130,6 +138,7 @@ class ContextTracker {
       if (this.js === 'code') return 'js-code';
       return 'js-string';
     }
+    if (/\b(?:src|href|action|formaction|poster)\s*=\s*["']?$/i.test(this.htmlTail)) return 'url';
     return 'html';
   }
 }
@@ -277,6 +286,7 @@ class HtmlTemplate {
       }
       if (context === 'js-code') { out.append(jsLiteral(v)); return; }
       const s = String(v);
+      if (context === 'url') { out.append(SAFE_URL.test(s) ? escapeHtml(s) : UNSAFE_URL_MARKER); return; }
       out.append(context === 'js-string' ? escapeJsString(s) : escapeHtml(s));
     };
 

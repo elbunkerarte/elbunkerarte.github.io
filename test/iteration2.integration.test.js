@@ -590,6 +590,22 @@ describe('Event-day screens show people with a seat, in words', () => {
 });
 
 // ===========================================================================
+describe('The printable acceptance record shows the drawn signatures', () => {
+  it('a member who signed on line appears with the signature image, not an escaped URL', () => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    const band = test.project.run('accionInscribir', groupSubmission(3, 'AGRUPACION', 'La Banda Firmas', 3));
+    test.project.run('accionAsignarCodigos', {}, F.ADMIN_SESSION);
+    const png = test.project.execute('png', (g) => g.TEST_SIGNATURE_PNG);
+    const member = test.project.run('accionRegistrarIntegrante', memberSubmission('GRP-001', band.group_key, 1, { signature_png: png }));
+    expect(member.member_status).toBe('AUTORIZADO');
+    const body = test.project.get({ p: 'constancia', g: 'GRP-001', t: test.tokens.admin }).body;
+    expect(body).not.toContain('#ZautoescZ');
+    expect((body.match(/<img alt="Firma" src="data:image\/png;base64,[A-Za-z0-9+\/=]+">/g) || []).length).toBe(1);
+  });
+});
+
+// ===========================================================================
 describe('Selection size', () => {
   it('seven projects are selected (confirmed by the organization)', () => {
     const account = F.newAccount();

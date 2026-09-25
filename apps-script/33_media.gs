@@ -104,6 +104,17 @@ function signatureDataUrl(fileId) {
   } catch (e) { return ''; }
 }
 
+/**
+ * The signature data URL, or '' when it is anything else. The printable record
+ * prints it raw (<?!= ?>) because HtmlService's contextual escaping replaces
+ * every data: URL in a src attribute with "#ZautoescZ" (measured live
+ * 2026-09-25); this check is what makes printing it raw safe.
+ */
+function safeSignatureSrc(value) {
+  var s = String(value || '');
+  return /^data:image\/png;base64,[A-Za-z0-9+\/]+=*$/.test(s) ? s : '';
+}
+
 // ---------------------------------------------------------------------------
 // Video links
 // ---------------------------------------------------------------------------

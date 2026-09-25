@@ -41,7 +41,7 @@
     <? for (var i = 0; i < D.members.length; i++) { var m = D.members[i]; ?>
       <tr><td><?= i + 1 ?></td><td><?= m.full_name ?><?= m.is_leader ? ' (líder)' : '' ?></td><td><?= m.id_number ?></td>
         <td><?= m.artistic_role ?></td><td><?= m.status ?><?= m.consent_image ? '' : ' · sin imagen' ?></td>
-        <td class="firma"><? if (m.signature) { ?><img alt="Firma" src="<?= m.signature ?>"><? } else if (m.is_leader) { ?>Aceptación digital (Formulario 1)<? } ?></td></tr>
+        <td class="firma"><? if (safeSignatureSrc(m.signature)) { ?><img alt="Firma" src="<?!= safeSignatureSrc(m.signature) ?>"><? } else if (m.is_leader) { ?>Aceptación digital (Formulario 1)<? } ?></td></tr>
     <? } ?>
     <? for (var j = 0; j < D.blank_lines; j++) { ?>
       <tr><td><?= D.members.length + j + 1 ?></td><td></td><td></td><td></td><td></td><td class="firma"></td></tr>

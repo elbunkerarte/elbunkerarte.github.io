@@ -5,12 +5,12 @@
 
 /** Weights sum to 100. Order matters: it is the tie-break order's source. */
 var RUBRICA = [
-  { id: 'talento',       etiqueta: 'Talento / ejecucion',        peso: 20 },
+  { id: 'talento',       etiqueta: 'Talento / ejecución',        peso: 20 },
   { id: 'performance',   etiqueta: 'Performance',                peso: 20 },
-  { id: 'identidad',     etiqueta: 'Identidad artistica',        peso: 15 },
+  { id: 'identidad',     etiqueta: 'Identidad artística',        peso: 15 },
   { id: 'repertorio',    etiqueta: 'Repertorio / originalidad',  peso: 10 },
   { id: 'profesionalismo', etiqueta: 'Profesionalismo',          peso: 10 },
-  { id: 'presencia',     etiqueta: 'Presencia escenica',         peso: 10 },
+  { id: 'presencia',     etiqueta: 'Presencia escénica',         peso: 10 },
   { id: 'digital',       etiqueta: 'Presencia digital / comunidad', peso: 5 },
   { id: 'proyecto',      etiqueta: 'Proyecto / compromiso',      peso: 10 }
 ];

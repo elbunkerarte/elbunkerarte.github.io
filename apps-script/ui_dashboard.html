@@ -324,6 +324,19 @@ function tabla(sel, cabeceras, filas) {
     }).join('') + '</tbody></table></div>';
 }
 
+/** Performed but not ranked yet (too few juror cards) by name; the ones still to perform only as a count. */
+function unrankedNote(r) {
+  var excluded = r.excluidos || [];
+  var missingCards = excluded.filter(function (x) { return x.observacion === 'JURADOS_INSUFICIENTES'; });
+  var toPerform = excluded.filter(function (x) { return x.observacion === 'AUDICION_NO_REALIZADA'; }).length;
+  var lines = missingCards.map(function (x) {
+    return escaparHtml(x.code + ' ' + (x.artistic_name || '')) + ': faltan calificaciones de jurado para entrar al ranking.';
+  });
+  if (toPerform) lines.push(toPerform + (toPerform === 1 ? ' audición todavía no realizada.' : ' audiciones todavía no realizadas.'));
+  if (!lines.length) return r.ranking.length ? '' : '<div class="aviso info" style="margin-top:12px"><b>Sin resultados todavía</b>Aún no hay audiciones calificadas.</div>';
+  return '<div class="aviso info" style="margin-top:12px"><b>Todavía fuera del ranking</b>' + lines.join('<br>') + '</div>';
+}
+
 function calcularResultados() {
   var b = $('#btnResultados'); ocupado(b, true, 'Calculando...');
   llamar('resultados').then(function (r) {
@@ -346,7 +359,9 @@ function calcularResultados() {
           '<td>' + escaparHtml(x.jurado_1) + '</td><td>' + escaparHtml(x.jurado_2) + '</td>' +
           '<td>' + escaparHtml(x.jurado_3) + '</td><td><b>' + escaparHtml(x.artist_final) + '</b></td>' +
           '<td>' + (String(x.seleccionado).toUpperCase() === 'SI' ? '★' : '') + '</td></tr>';
-      }).join('') + '</tbody></table></div>';
+      }).join('') + '</tbody></table></div>' +
+      // who is not ranked yet, and why (e.g. fewer juror cards than the minimum)
+      unrankedNote(r);
     if ($('#formComite')) {
       $('#formComite').classList.toggle('oculto', !r.requiere_comite);
       if (r.requiere_comite && !$('#ordenComite').value) $('#ordenComite').value = r.empatados.map(function (x) { return x.code; }).join(', ');
