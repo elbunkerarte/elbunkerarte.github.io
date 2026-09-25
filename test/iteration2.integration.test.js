@@ -565,6 +565,31 @@ describe('Schedule changes listed to staff read as clock times', () => {
 });
 
 // ===========================================================================
+describe('Event-day screens show people with a seat, in words', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    F.registerAndIssueCodes(test.project, 2);
+    const late = test.project.run('accionInscribir', F.uniqueSubmission(90, { track_uses: 'SI', track_method: 'ARCHIVO' }));
+    return { account, test, late };
+  });
+
+  it('the track lists only hold people with a code (a track cannot be sent without one)', () => {
+    const { test, late } = env();
+    expect(late.eligibility_status).toBe('APTO');
+    for (const fn of ['accionListarPistas', 'accionPistasEvento']) {
+      const r = test.project.run(fn, {}, F.ADMIN_SESSION);
+      expect([fn, r.total, r.pistas.every((p) => /^B-\d{3}$/.test(p.code))]).toEqual([fn, 2, true]);
+    }
+  });
+  it('the check-in card shows the presentation format as Form 1 words, not the stored value', () => {
+    const { test } = env();
+    const r = test.project.run('accionBuscarParticipante', { code: 'B-001' }, F.ADMIN_SESSION);
+    expect(r.participante.presentation_format_texto).toBe('Voz sobre pista / backing track');
+  });
+});
+
+// ===========================================================================
 describe('Selection size', () => {
   it('seven projects are selected (confirmed by the organization)', () => {
     const account = F.newAccount();

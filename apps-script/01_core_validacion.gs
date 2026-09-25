@@ -48,6 +48,17 @@ var CONSENTIMIENTOS_OBLIGATORIOS = ['accept_terms', 'accept_data_processing', 'a
 var PARTICIPATION_MODE = { SOLISTA: 'SOLISTA', DUO: 'DUO', AGRUPACION: 'AGRUPACION' };
 
 var PRESENTATION_FORMATS = ['VOZ_PISTA', 'VOZ_INSTRUMENTO', 'INSTRUMENTAL', 'DJ_SET', 'FREESTYLE_PERFORMANCE', 'OTRA'];
+/** The wording of Form 1, so staff screens never show the stored enum. */
+var PRESENTATION_FORMAT_LABELS = {
+  VOZ_PISTA: 'Voz sobre pista / backing track', VOZ_INSTRUMENTO: 'Voz + instrumento en vivo',
+  INSTRUMENTAL: 'Instrumento / instrumental', DJ_SET: 'DJ / set', FREESTYLE_PERFORMANCE: 'Freestyle / performance', OTRA: 'Otra'
+};
+
+function presentationFormatText(format, other) {
+  var f = normalizarTexto(format);
+  if (f === 'OTRA' && normalizarTexto(other)) return 'Otra: ' + normalizarTexto(other);
+  return PRESENTATION_FORMAT_LABELS[f] || f;
+}
 
 var TRACK_METHODS = ['ARCHIVO', 'USB', 'WHATSAPP', 'OTRO'];
 

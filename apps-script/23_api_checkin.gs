@@ -52,6 +52,7 @@ function deskView(r, members) {
     technical_needs: r.technical_needs || '',
     own_equipment_detail: r.own_equipment_detail || '',
     presentation_format: r.presentation_format || '',
+    presentation_format_texto: presentationFormatText(r.presentation_format, r.presentation_other),
     song_name: r.song_name || '',
     track_status: r.track_status || '',
     consent_image: esVerdadero(r.consent_image),
@@ -108,11 +109,11 @@ function accionBuscarParticipante(datos) {
   var warnings = [];
   if (view.group_code && view.members_authorized < (Number(view.members_declared) || 0)) {
     warnings.push('Autorizaciones de integrantes: ' + view.members_authorized + ' de ' + view.members_declared +
-                  '. Quien no haya autorizado debe firmar la constancia fisica antes de subir al escenario.');
+                  '. Quien no haya autorizado debe firmar la constancia física antes de subir al escenario.');
   }
-  if (!view.consent_image) warnings.push('NO autoriza uso de imagen/voz: no grabar ni publicar su presentacion.');
+  if (!view.consent_image) warnings.push('NO autoriza uso de imagen/voz: no grabar ni publicar su presentación.');
   if (normalizarComparable(view.track_status) === 'PISTA PENDIENTE') warnings.push('La pista no ha llegado: pedir la USB de respaldo.');
-  if (normalizarComparable(view.track_status) === 'PISTA CON PROBLEMA') warnings.push('La pista tiene un problema reportado: avisar al tecnico de audio.');
+  if (normalizarComparable(view.track_status) === 'PISTA CON PROBLEMA') warnings.push('La pista tiene un problema reportado: avisar al técnico de audio.');
 
   return {
     participante: view,
@@ -120,7 +121,7 @@ function accionBuscarParticipante(datos) {
     puntualidad: puntualidad,
     avisos: warnings,
     // The desk must always confirm against the physical document.
-    recordatorio: 'Valida la identidad con el documento fisico antes de confirmar' +
+    recordatorio: 'Valida la identidad con el documento físico antes de confirmar' +
                   (view.group_code ? ' (de cada integrante).' : '.')
   };
 }

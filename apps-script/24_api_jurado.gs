@@ -43,6 +43,7 @@ function accionListaEvaluacion(datos, sesion) {
         participation_mode: r.participation_mode || 'SOLISTA',
         members_declared: Number(r.members_declared) || 1,
         presentation_format: r.presentation_format || '',
+        presentation_format_texto: presentationFormatText(r.presentation_format, r.presentation_other),
         song_name: r.song_name || '',
         attendance_status: r.attendance_status,
         audition_status: r.audition_status || '',

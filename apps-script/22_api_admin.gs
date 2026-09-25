@@ -479,9 +479,8 @@ function driveFileUrl(id) {
 
 /** Tracks in agenda order: what the audio technician works from. */
 function accionListarPistas(datos) {
-  var rows = leerHoja(HOJA.REGISTRO).filter(function (r) {
-    return normalizarTexto(r.code) || esVerdadero(r.track_uses);
-  });
+  // A track can only be sent with a code, so only people with a seat are listed and counted.
+  var rows = leerHoja(HOJA.REGISTRO).filter(function (r) { return normalizarTexto(r.code); });
   rows.sort(function (a, b) {
     var ba = Number(a.final_block || a.original_block || 99), bb = Number(b.final_block || b.original_block || 99);
     if (ba !== bb) return ba - bb;
@@ -510,10 +509,10 @@ function accionListarPistas(datos) {
 function accionMarcarPista(datos, sesion) {
   var valid = [TRACK_STATUS.PENDIENTE, TRACK_STATUS.RECIBIDA, TRACK_STATUS.VALIDADA, TRACK_STATUS.PROBLEMA, TRACK_STATUS.NO_APLICA];
   var status = normalizarTexto(datos.track_status).toUpperCase();
-  if (valid.indexOf(status) === -1) return { ok: false, error: 'Estado de pista invalido.' };
+  if (valid.indexOf(status) === -1) return { ok: false, error: 'Estado de pista inválido.' };
   return conBloqueo(function () {
     var row = buscarPorCodigo(datos.code);
-    if (!row) return { ok: false, error: 'Codigo no encontrado.' };
+    if (!row) return { ok: false, error: 'Código no encontrado.' };
     actualizarFila(HOJA.REGISTRO, row._fila, {
       track_status: status,
       track_notes: [row.track_notes, '[' + ahoraISO() + ' ' + sesion.alias + '] ' + status +
@@ -527,7 +526,7 @@ function accionMarcarPista(datos, sesion) {
 /** Upload on behalf of a participant (e.g. a file received on the official WhatsApp). */
 function accionSubirPistaAdmin(datos, sesion) {
   var row = buscarPorCodigo(datos.code);
-  if (!row || !normalizarTexto(row.code)) return { ok: false, error: 'Codigo no encontrado.' };
+  if (!row || !normalizarTexto(row.code)) return { ok: false, error: 'Código no encontrado.' };
   var stored = storeTrack(row, datos.file_name, datos.file_base64, datos.song_name);
   if (!stored.ok) return stored;
   var method = normalizarComparable(datos.method) || 'WHATSAPP';

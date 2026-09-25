@@ -124,7 +124,7 @@ function abrir(code) {
     '<div class="tarjeta" style="border-color:var(--amarillo)">' +
       '<h2>' + escaparHtml(ACTUAL.code) + ' · ' + escaparHtml(ACTUAL.artistic_name) + '</h2>' +
       '<p class="pista">' + escaparHtml(modeLabel(ACTUAL)) + ' · ' + escaparHtml(ACTUAL.discipline) +
-        (ACTUAL.presentation_format ? ' · ' + escaparHtml(ACTUAL.presentation_format) : '') +
+        (ACTUAL.presentation_format ? ' · ' + escaparHtml(ACTUAL.presentation_format_texto || ACTUAL.presentation_format) : '') +
         (ACTUAL.song_name ? ' · Canción: ' + escaparHtml(ACTUAL.song_name) : '') +
         (ACTUAL.evaluado ? ' · <b style="color:var(--alerta)">Ya calificaste a este participante. Guardar sobrescribe y deja registro.</b>' : '') +
       '</p>' +

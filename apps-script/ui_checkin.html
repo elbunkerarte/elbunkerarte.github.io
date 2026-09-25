@@ -255,7 +255,7 @@ function pintarFicha(p, via, matchedMember) {
       '<div class="aviso info" style="margin-top:14px;font-size:13px"><b>Valida con el documento físico' + (p.group_code ? ' de cada integrante' : '') + '</b>' +
         'Líder / titular: ' + escaparHtml(p.full_name) + ' · <b>' + escaparHtml(p.id_number) + '</b>' +
         (matchedMember ? '<br>Buscaste a: <b>' + escaparHtml(matchedMember.full_name) + '</b> (' + escaparHtml(matchedMember.artistic_role || 'integrante') + ')' : '') +
-        (p.presentation_format ? '<br>Formato: ' + escaparHtml(p.presentation_format) : '') +
+        (p.presentation_format ? '<br>Formato: ' + escaparHtml(p.presentation_format_texto || p.presentation_format) : '') +
         (p.technical_needs ? '<br>Necesidades técnicas: ' + escaparHtml(p.technical_needs) : '') +
         (p.own_equipment_detail ? '<br>Equipo propio: ' + escaparHtml(p.own_equipment_detail) : '') +
         (p.song_name ? '<br>Canción: ' + escaparHtml(p.song_name) + ' · ' + escaparHtml(p.track_status || '') : '') +
