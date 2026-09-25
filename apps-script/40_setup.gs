@@ -34,7 +34,11 @@ function setupInicial() {
   instalarDisparadores();
   refrescarVistas();
 
-  var admin = provisionarUsuario('admin', ROL.ADMIN, 'Cuenta principal de administracion');
+  // An existing admin keeps its link: issuing a new one would revoke the one in use.
+  var currentAdmin = leerHoja(HOJA.USUARIOS).filter(function (u) { return normalizarComparable(u.email_o_alias) === 'ADMIN'; })[0];
+  var admin = currentAdmin && normalizarTexto(currentAdmin.token)
+    ? { url: urlPanel(currentAdmin.rol, currentAdmin.token) }
+    : provisionarUsuario('admin', ROL.ADMIN, 'Cuenta principal de administracion');
   registrar('sistema', 'admin', 'SETUP_INICIAL', book.getId(), VERSION_SISTEMA + ' ' + env);
 
   var resumen = {
@@ -196,14 +200,18 @@ function migrarBase() {
   var book = libro();
   var env = environmentName();
 
-  var countRows = function () {
+  // Data the migration must never change. _USUARIOS is compared by the users
+  // that existed before: the migration adds the new operating accounts on purpose.
+  var snapshot = function () {
     var out = {};
-    ['REGISTRO', '_CAMBIOS', '_USUARIOS', 'INCIDENTES', 'JURADO_1', 'JURADO_2', 'JURADO_3'].forEach(function (n) {
+    ['REGISTRO', '_CAMBIOS', 'INCIDENTES', 'JURADO_1', 'JURADO_2', 'JURADO_3'].forEach(function (n) {
       out[n] = leerHoja(n).length;
     });
+    out.REGISTRO_IDS = leerHoja(HOJA.REGISTRO).map(function (r) { return r.submission_id; }).sort().join(',');
+    out.USUARIOS = leerHoja(HOJA.USUARIOS).map(function (u) { return u.email_o_alias + '=' + u.token; }).sort().join(',');
     return out;
   };
-  var before = countRows();
+  var before = snapshot();
   var safety = rawBackup('PRE-MIGRACION');
 
   var marker = markSpreadsheetEnvironment(book, env);
@@ -211,19 +219,26 @@ function migrarBase() {
   var config = ensureConfig(book, true);
   invalidarCacheConfig();
   instalarDisparadores();
-  var accounts = ensureOperationalAccounts();
   refrescarVistas();
 
-  var after = countRows();
+  var after = snapshot();
   var intact = Object.keys(before).every(function (k) { return before[k] === after[k]; });
+  var accounts = ensureOperationalAccounts();
   var report = {
-    entorno: env, marca_hoja: marker, version: VERSION_SISTEMA, filas_antes: before, filas_despues: after,
+    entorno: env, marca_hoja: marker, version: VERSION_SISTEMA,
+    filas_antes: countsOnly(before), filas_despues: countsOnly(after),
     datos_intactos: intact, respaldo_previo: safety, esquema: schema, config: config,
     cuentas_nuevas: accounts.map(function (a) { return a.alias; })
   };
   registrar('sistema', 'admin', 'MIGRAR_V2', book.getId(), JSON.stringify({ intactos: intact, conflictos: config.conflictos.length }));
   if (!intact) throw new Error('ATENCION: cambio el numero de filas durante la migracion. Revisa el respaldo ' + safety.json);
   return report;
+}
+
+function countsOnly(snapshot) {
+  var out = {};
+  Object.keys(snapshot).forEach(function (k) { if (typeof snapshot[k] === 'number') out[k] = snapshot[k]; });
+  return out;
 }
 
 /** Backup of the sheets exactly as they are, without rebuilding views first (used before a migration). */

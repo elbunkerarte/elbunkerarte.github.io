@@ -9,22 +9,31 @@ const { createAccount } = require('./index');
 const DEFAULT_NOW = '2026-09-20T10:00:00-05:00';
 const ADMIN_SESSION = { ok: true, rol: 'admin', alias: 'integration-test' };
 
-/** A submission that is APTO under the default CONFIG (event 2026-10-02, ages 18-28). */
+/**
+ * A solo submission that is APTO under the default CONFIG (event 2026-10-23,
+ * ages 18-30). It carries every iteration-2 required field plus a realistic
+ * form_elapsed_ms so the anti-abuse guard treats it as a person.
+ */
 function validSubmission(overrides) {
   return Object.assign({
     client_submission_id: 'client-0001',
     full_name: 'Maria Camila Restrepo',
     id_number: '1036448960',
     birth_date: '2002-05-14',
+    adult_confirmation: true,
     neighborhood_sector: 'Aliadas del Sur',
     resides_in_sabaneta: true,
     email: 'maria.restrepo@example.com',
     whatsapp: '3012345678',
+    participation_mode: 'SOLISTA',
     artistic_name: 'MACA',
-    discipline: 'Canto',
-    genre_or_proposal: 'R&B',
-    artist_description: 'Singer with two years on stage.',
+    genre_primary: 'R&B',
     audition_description: 'A cappella original song.',
+    presentation_format: 'VOZ_PISTA',
+    own_equipment: 'NO',
+    track_uses: 'SI',
+    track_method: 'ARCHIVO',
+    song_name: 'Original song',
     video_url: 'https://www.youtube.com/watch?v=abc123',
     technical_needs: 'Microphone',
     availability_statement: true,
@@ -32,6 +41,7 @@ function validSubmission(overrides) {
     accept_data_processing: true,
     accept_whatsapp_operational: true,
     accept_image_voice: true,
+    form_elapsed_ms: 120000,
     source: 'web'
   }, overrides || {});
 }
@@ -109,6 +119,8 @@ function setConfig(project, key, value) {
 
 /** Registers `count` distinct participants and issues their codes. Returns the REGISTRO records. */
 function registerAndIssueCodes(project, count) {
+  // A bulk load arrives faster than the per-minute anti-abuse limit allows a real crowd to.
+  setConfig(project, 'limite_envios_minuto', '100000');
   for (let i = 1; i <= count; i++) project.run('accionInscribir', uniqueSubmission(i));
   project.run('accionAsignarCodigos', {}, ADMIN_SESSION);
   return project.records('REGISTRO');

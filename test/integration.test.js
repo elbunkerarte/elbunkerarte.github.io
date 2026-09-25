@@ -362,8 +362,9 @@ describe('Setup: production project', () => {
   });
   it('installs the daily backup and the view-refresh triggers', () => {
     const { project } = setup();
-    expect(project.triggers.map((t) => t.handler).sort()).toEqual(['refrescarVistas', 'respaldoAutomatico']);
+    expect(project.triggers.map((t) => t.handler).sort()).toEqual(['refrescarVistas', 'respaldoAutomatico', 'verificarVideosPendientes']);
     expect(project.triggers.find((t) => t.handler === 'respaldoAutomatico').spec).toEqual({ everyDays: 1, atHour: 23 });
+    expect(project.triggers.find((t) => t.handler === 'verificarVideosPendientes').spec).toEqual({ everyHours: 1 });
     expect(project.missingTriggerHandlers()).toEqual([]);
   });
   it('is idempotent: same spreadsheet, no duplicate CONFIG rows, users or triggers', () => {
@@ -508,8 +509,8 @@ describe('Isolation: PRUEBAS project in the same Google account', () => {
     const { prod, test } = timeline();
     expect(test.project.spreadsheetId).toBeDefined();
     expect(test.project.spreadsheetId).not.toBe(prod.project.spreadsheetId);
-    expect(test.project.scriptProperty('ENTORNO')).toBe('PRUEBAS');
-    expect(prod.project.scriptProperty('ENTORNO')).toBeNull();
+    expect(test.project.scriptProperty('ENVIRONMENT')).toBe('test');
+    expect(prod.project.scriptProperty('ENVIRONMENT')).toBeNull();
   });
   it('ENSAYO() in PRUEBAS issues exactly the 100 codes B-001..B-100', () => {
     const codes = timeline().afterEnsayo.testRows.map((r) => r.code).filter(Boolean);
@@ -553,8 +554,9 @@ describe('Isolation: PRUEBAS project in the same Google account', () => {
     expect(prodFolder).toBeDefined();
     expect(testFolder).not.toBe(prodFolder);
   });
-  it('documents the shared-account facts: two same-named master spreadsheets live in one Drive', () => {
-    expect(timeline().account.findSpreadsheetsByName('EL BUNKER - BASE MAESTRA')).toHaveLength(2);
+  it('names the PRUEBAS master spreadsheet apart from production in the shared Drive', () => {
+    expect(timeline().account.findSpreadsheetsByName('EL BUNKER - BASE MAESTRA')).toHaveLength(1);
+    expect(timeline().account.findSpreadsheetsByName('[PRUEBAS] EL BUNKER - BASE MAESTRA')).toHaveLength(1);
   });
 });
 
@@ -614,7 +616,7 @@ describe('Web app: doGet renders every page', () => {
   });
   it('sets the title from CONFIG and the allowed viewport meta tag', () => {
     const res = web().prod.project.get({ p: 'inscripcion' });
-    expect(res.title).toBe('EL BUNKER by Arte es la Solucion');
+    expect(res.title).toBe('EL BÚNKER by Arte es la Solución');
     expect(res.output._meta).toEqual([{ name: 'viewport', content: 'width=device-width, initial-scale=1' }]);
     expect(res.output._xframe).toBe('ALLOWALL');
   });
@@ -705,7 +707,7 @@ describe('Web app: doPost and google.script.run', () => {
     const body = res.json();
     expect(body.ok).toBe(true);
     expect(body.entorno).toBe('PRODUCCION');
-    expect(body.evento.nombre).toBe('EL BUNKER by Arte es la Solucion');
+    expect(body.evento.nombre).toBe('EL BÚNKER by Arte es la Solución');
   });
   it('accepts a form-urlencoded post too', () => {
     const res = env().prod.project.post('accion=config_publica', { contentType: 'application/x-www-form-urlencoded' });
@@ -753,7 +755,7 @@ describe('Backup and restore (PRUEBAS project)', () => {
     const xlsx = files.find((f) => f.id === backup.xlsx.id);
     const json = files.find((f) => f.id === backup.json.id);
     expect(xlsx.mimeType).toBe(XLSX_MIME);
-    expect(xlsx.name).toMatch(/^RESPALDO-\d{8}-\d{6}\.xlsx$/);
+    expect(xlsx.name).toMatch(/^RESPALDO-MANUAL-\d{8}-\d{6}\.xlsx$/);
     expect(xlsx.size).toBe(backup.xlsx.bytes);
     expect(xlsx.text.slice(0, 2)).toBe('PK');
     expect(json.mimeType).toBe('application/json');
@@ -770,15 +772,16 @@ describe('Backup and restore (PRUEBAS project)', () => {
     const ids = test.project.records('REGISTRO').map((r) => r.submission_id).sort();
     test.project.execute('delete a row', (g) => F.masterSheet(g, 'REGISTRO').deleteRow(3));
     expect(test.project.records('REGISTRO')).toHaveLength(ids.length - 1);
-    test.project.run('restaurarDesdeJson', backup.json.id);
+    test.project.run('restaurarDesdeJson', backup.json.id, 'SI-RESTAURAR');
     expect(test.project.records('REGISTRO').map((r) => r.submission_id).sort()).toEqual(ids);
   });
-  it('the daily trigger handler (respaldoAutomatico) stores an AUTO xlsx', () => {
+  it('the daily trigger handler (respaldoAutomatico) stores a DIARIO xlsx and json', () => {
     const { account, test } = env();
     account.advance(60 * 1000);
     test.project.fireTrigger('respaldoAutomatico');
     const folder = test.project.scriptProperty('CARPETA_BACKUPS');
-    expect(account.drive.list((i) => i.parents.has(folder) && /^AUTO-/.test(i.name))).toHaveLength(1);
+    expect(account.drive.list((i) => i.parents.has(folder) && /^RESPALDO-DIARIO-.*\.xlsx$/.test(i.name))).toHaveLength(1);
+    expect(account.drive.list((i) => i.parents.has(folder) && /^RESPALDO-DIARIO-.*\.json$/.test(i.name))).toHaveLength(1);
     account.setNow(F.DEFAULT_NOW);
   });
 });
@@ -792,7 +795,7 @@ describe('Schedule change (Form 2)', () => {
     const who = rows.find((r) => r.code === 'B-003');
     const request = test.project.run('accionSolicitarCambio', {
       participant_code: 'B-003', full_name: who.full_name, reason_short: 'Work shift',
-      contact: '3001112233', acceptance: true, client_submission_id: 'change-1'
+      contact: '3001112233', acceptance: true, client_submission_id: 'change-1', form_elapsed_ms: 60000
     });
     const pendingRow = test.project.records('REGISTRO').find((r) => r.code === 'B-003');
     const approval = test.project.run('accionResolverCambio',
@@ -807,7 +810,7 @@ describe('Schedule change (Form 2)', () => {
   });
   it('approves into a block with free seats and keeps the same code', () => {
     const { test, who, approval } = env();
-    expect([approval.estado, approval.code, approval.nuevo_bloque, approval.nueva_hora]).toEqual(['APROBADO', 'B-003', 4, '17:30']);
+    expect([approval.estado, approval.code, approval.nuevo_bloque, approval.nueva_hora]).toEqual(['APROBADO', 'B-003', 4, '16:30']);
     const row = test.project.records('REGISTRO').find((r) => r.submission_id === who.submission_id);
     expect([row.code, row.final_block, row.original_block, row.change_status]).toEqual(['B-003', 4, 1, 'APROBADO']);
     const change = test.project.records('_CAMBIOS')[0];
@@ -816,7 +819,7 @@ describe('Schedule change (Form 2)', () => {
   it('refuses a second request for the same code', () => {
     const { test, who } = env();
     const again = test.project.run('accionSolicitarCambio', {
-      participant_code: 'B-003', full_name: who.full_name, acceptance: true, client_submission_id: 'change-2' });
+      participant_code: 'B-003', full_name: who.full_name, acceptance: true, client_submission_id: 'change-2', form_elapsed_ms: 60000 });
     expect([again.ok, again.motivo]).toEqual([false, 'YA_SOLICITO']);
   });
   it('refuses to approve into a full block and leaves the request pending', () => {
@@ -824,7 +827,7 @@ describe('Schedule change (Form 2)', () => {
     // Block 2 holds B-011..B-020: 10 of 10 seats taken.
     const other = test.project.records('REGISTRO').find((r) => r.code === 'B-021');
     const req = test.project.run('accionSolicitarCambio', {
-      participant_code: 'B-021', full_name: other.full_name, acceptance: true, client_submission_id: 'change-3' });
+      participant_code: 'B-021', full_name: other.full_name, acceptance: true, client_submission_id: 'change-3', form_elapsed_ms: 60000 });
     const res = test.project.run('accionResolverCambio', { solicitud_id: req.solicitud_id, aprobar: true, nuevo_bloque: 2 }, F.ADMIN_SESSION);
     expect(res.ok).toBe(false);
     expect(res.error).toMatch('ya esta lleno');
@@ -832,15 +835,15 @@ describe('Schedule change (Form 2)', () => {
   });
   it('refuses a request whose name does not match the code', () => {
     const r = env().test.project.run('accionSolicitarCambio', {
-      participant_code: 'B-012', full_name: 'Somebody Else', acceptance: true, client_submission_id: 'change-4' });
+      participant_code: 'B-012', full_name: 'Somebody Else', acceptance: true, client_submission_id: 'change-4', form_elapsed_ms: 60000 });
     expect(r.motivo).toBe('NOMBRE_NO_COINCIDE');
   });
-  it('refuses requests after cierre_cambios (2026-10-01 18:00 -05:00)', () => {
+  it('refuses requests after cierre_cambios (2026-10-22 18:00 -05:00)', () => {
     const { account, test } = env();
     const other = test.project.records('REGISTRO').find((r) => r.code === 'B-013');
-    account.setNow('2026-10-01T18:00:01-05:00');
+    account.setNow('2026-10-22T18:00:01-05:00');
     const late = test.project.run('accionSolicitarCambio', {
-      participant_code: 'B-013', full_name: other.full_name, acceptance: true, client_submission_id: 'change-5' });
+      participant_code: 'B-013', full_name: other.full_name, acceptance: true, client_submission_id: 'change-5', form_elapsed_ms: 60000 });
     account.setNow(F.DEFAULT_NOW);
     expect(late.motivo).toBe('FUERA_DE_PLAZO');
   });
@@ -866,6 +869,166 @@ describe('Event day: check-in, jury and results through real tokens', () => {
     test.project.run('refrescarVistas');
     const row = test.project.records('RESULTADOS').find((r) => r.code === 'B-001');
     expect([row.posicion, row.jurado_1, row.jurado_2, row.jurados_validos, row.artist_final]).toEqual([1, 79.5, 100, 2, 89.75]);
+  });
+});
+
+// ===========================================================================
+describe('Regression: CONFIG values typed into the sheet stay as typed', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const project = account.createProject('prod');
+    project.run('setupInicial');
+    return { account, project };
+  });
+
+  it("CONFIG evento_hora_inicio = '15:00' moves the first block to 15:00 (agendaConfigurada().inicio_minutos === 900)", () => {
+    const { project } = env();
+    const stored = F.setConfig(project, 'evento_hora_inicio', '15:00');
+    // The CONFIG value column is plain text: the hour is never turned into a 1899-12-30 time.
+    expect(Object.prototype.toString.call(stored)).toBe('[object String]');
+    expect('inicio_minutos=' + project.run('agendaConfigurada').inicio_minutos).toBe('inicio_minutos=900');
+  });
+  it('config_publica returns the event date and start hour as typed (2026-10-02 / 16:00)', () => {
+    const { project } = env();
+    F.setConfig(project, 'evento_fecha', '2026-10-02');
+    F.setConfig(project, 'evento_hora_inicio', '16:00');
+    const evento = project.post({ accion: 'config_publica' }).json().evento;
+    expect([evento.fecha, evento.hora_inicio]).toEqual(['2026-10-02', '16:00']);
+  });
+});
+
+// ===========================================================================
+describe('Regression: duplicate detection at submission time', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const project = account.createProject('prod');
+    project.run('setupInicial');
+    project.run('accionInscribir', F.validSubmission({ client_submission_id: 'first' }));
+    return { account, project };
+  });
+
+  it('a second submission with the same document number is labelled DUPLICADO', () => {
+    // normalized_id_number used to read back as a Number and was compared to a String with ===.
+    const r = env().project.run('accionInscribir', F.validSubmission({
+      client_submission_id: 'same-document', email: 'other@example.com', whatsapp: '3019998877' }));
+    expect([r.eligibility_status, r.duplicado]).toEqual(['DUPLICADO', true]);
+  });
+  it('a submission that only shares the WhatsApp number raises the REVISION alert', () => {
+    const r = env().project.run('accionInscribir', F.validSubmission({
+      client_submission_id: 'same-phone', id_number: '55667788', email: 'third@example.com' }));
+    expect(r.eligibility_status).toBe('REVISION');
+  });
+});
+
+// ===========================================================================
+describe('Regression: schedule times shown to people never read "1899-12-30T..."', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    const rows = F.registerAndIssueCodes(test.project, 12);
+    return { account, test, rows };
+  });
+
+  it('the participant status lookup returns arrival and audition times as clock text', () => {
+    const { test, rows } = env();
+    const who = rows.find((r) => r.code === 'B-001');
+    const st = test.project.run('accionConsultarEstado', { code: 'B-001', id_number: String(who.id_number) });
+    expect([st.hora_llegada, st.hora_audicion]).toEqual(['2:45 p. m.', '3:00 p. m.']);
+  });
+  it('the ASIGNACION message tells the participant clock times', () => {
+    const { test } = env();
+    const m = test.project.run('accionMensajes', { plantilla: 'ASIGNACION', code: 'B-001' }, F.ADMIN_SESSION).mensajes[0];
+    expect(m.cuerpo).toContain('2:45 p. m.');
+    expect(m.cuerpo).toContain('3:00 p. m.');
+    expect(m.cuerpo.indexOf('1899')).toBe(-1);
+  });
+  it('the check-in desk can evaluate punctuality (5-minute rule) for a participant with a code', () => {
+    const r = env().test.project.run('accionBuscarParticipante', { code: 'B-001', hora_llegada: '15:07' });
+    expect(r.puntualidad && r.puntualidad.recomendacion).toBe('CONTINGENCIA');
+  });
+});
+
+// ===========================================================================
+describe('Regression: destructive helpers are guarded inside themselves (audit C11)', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const { project } = F.installProduction(account, 'prod');
+    project.run('accionInscribir', F.validSubmission());
+    return { account, project };
+  });
+
+  it('borrarDatosDePrueba("SI-BORRAR") run directly in production is BLOQUEADO and deletes nothing', () => {
+    const { project } = env();
+    expect(() => project.run('borrarDatosDePrueba', 'SI-BORRAR')).toThrow('BLOQUEADO');
+    expect(project.records('REGISTRO')).toHaveLength(1);
+  });
+  it('cargarDatosDePrueba() run directly in production is BLOQUEADO and loads no seed rows', () => {
+    const { project } = env();
+    let error = null;
+    try { project.run('cargarDatosDePrueba'); } catch (e) { error = e; }
+    const seeds = project.records('REGISTRO').filter((r) => r.source === 'seed').length;
+    expect('error=' + !!error + ' seedRows=' + seeds).toBe('error=true seedRows=0');
+  });
+});
+
+// ===========================================================================
+describe('Regression: participant free text is not re-interpreted by Sheets', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    test.project.run('accionInscribir', F.uniqueSubmission(1, { full_name: '=HYPERLINK("https://evil.test","Ana Gomez")' }));
+    test.project.run('accionInscribir', F.uniqueSubmission(2, { whatsapp: '+57 311 000 0002' }));
+    test.project.run('accionInscribir', F.uniqueSubmission(3, { audition_description: '- Sings a cappella and dances' }));
+    test.project.run('accionAsignarCodigos', {}, F.ADMIN_SESSION);
+    return { account, test };
+  });
+
+  it('a name starting with "=" is stored as text, not as a live formula (formula injection)', () => {
+    const { test } = env();
+    const injected = test.project.warningsOf('formula-from-string')
+      .filter((w) => w.detail && w.detail.sheet === 'REGISTRO' && w.message.indexOf('became a formula: "=') !== -1);
+    expect(injected.map((w) => w.message)).toEqual([]);
+  });
+  it('a description starting with "- " survives in REGISTRO [confidence ~70%: verify on a live sheet]', () => {
+    const row = env().test.project.records('REGISTRO').find((r) => r.email === 'participant0003@example.com');
+    expect(row.audition_description).toBe('- Sings a cappella and dances');
+  });
+});
+
+// ===========================================================================
+describe('Regression: service calls do not grow with the number of rows', () => {
+  it('one submission does not open the spreadsheet once per existing row', () => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas').project;
+    test.run('accionInscribir', F.uniqueSubmission(1));
+    const withOne = test.lastExecution.calls['SpreadsheetApp.openById'];
+    for (let i = 2; i <= 100; i++) test.run('accionInscribir', F.uniqueSubmission(i));
+    const withHundred = test.lastExecution.calls['SpreadsheetApp.openById'];
+    // zonaHoraria() used to call getProperty + openById for EVERY Date cell leerHoja read.
+    expect('extra openById calls with 99 more rows: ' + (withHundred - withOne)).toBe('extra openById calls with 99 more rows: 0');
+  });
+  it('a check-in lookup with 100 coded participants makes fewer than 20 openById calls', () => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas').project;
+    F.registerAndIssueCodes(test, 100);
+    test.run('accionBuscarParticipante', { code: 'B-050' });
+    expect(test.lastExecution.calls['SpreadsheetApp.openById']).toBeLessThan(20);
+  });
+});
+
+// ===========================================================================
+describe('Regression: a trashed backup folder does not receive backups', () => {
+  it('after the backup folder is moved to the trash, the next backup is not stored in the trash [confidence ~80%]', () => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas').project;
+    test.run('accionRespaldar', {}, F.ADMIN_SESSION);
+    const folderId = test.scriptProperty('CARPETA_BACKUPS');
+    test.execute('trash folder', (g) => g.DriveApp.getFolderById(folderId).setTrashed(true));
+    account.advance(60 * 1000);
+    const second = test.run('accionRespaldar', {}, F.ADMIN_SESSION);
+    const file = account.drive.get(second.xlsx.id);
+    const parentTrashed = Array.from(file.parents).every((id) => account.drive.get(id).trashed);
+    expect('backup parent trashed: ' + parentTrashed).toBe('backup parent trashed: false');
   });
 });
 

@@ -546,7 +546,8 @@ function isTestData(datos) {
   if (!datos) return false;
   if (normalizarComparable(datos.source) === 'SEED') return true;
   if (/^SEED-/i.test(String(datos.client_submission_id || ''))) return true;
-  return /@ejemplo-bunker\.test$/i.test(normalizarEmail(datos.email));
+  // .test is a reserved domain (RFC 2606): no real person has an address there.
+  return /\.test$/i.test(normalizarEmail(datos.email));
 }
 
 // ---------------------------------------------------------------------------

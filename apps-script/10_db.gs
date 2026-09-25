@@ -115,9 +115,21 @@ function applyPlainTextColumns(sheet, name) {
   var header = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0]
     .map(function (c) { return String(c).trim(); });
   var rows = Math.max(1, sheet.getMaxRows() - 1);
+  var dataRows = Math.max(0, sheet.getLastRow() - 1);
   cols.forEach(function (c) {
     var idx = header.indexOf(c);
-    if (idx !== -1) sheet.getRange(2, idx + 1, rows, 1).setNumberFormat('@');
+    if (idx === -1) return;
+    // Read what is there BEFORE the format changes: a date in a cell that turns
+    // into plain text would otherwise read back as its serial number (46297).
+    var existing = dataRows ? sheet.getRange(2, idx + 1, dataRows, 1).getValues() : [];
+    sheet.getRange(2, idx + 1, rows, 1).setNumberFormat('@');
+    var changed = false;
+    var asText = existing.map(function (r) {
+      var v = r[0];
+      if (v instanceof Date || typeof v === 'number' || typeof v === 'boolean') { changed = true; return [configValueAsText(v)]; }
+      return [v];
+    });
+    if (changed) sheet.getRange(2, idx + 1, dataRows, 1).setValues(asText);
   });
 }
 

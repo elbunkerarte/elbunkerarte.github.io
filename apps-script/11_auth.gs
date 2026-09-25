@@ -31,8 +31,9 @@ function emitirToken(alias, rol, diasValidez) {
   var expira = new Date();
   expira.setDate(expira.getDate() + (diasValidez || 45));
 
+  // n makes every issued link unique, so a re-issued link always differs from (and revokes) the old one.
   var payload = Utilities.base64EncodeWebSafe(JSON.stringify({
-    a: alias, r: rol, e: expira.getTime()
+    a: alias, r: rol, e: expira.getTime(), n: Utilities.getUuid().split('-')[0]
   })).replace(/=+$/, '');
 
   return payload + '.' + firmar(payload);

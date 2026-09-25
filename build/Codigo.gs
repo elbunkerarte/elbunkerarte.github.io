@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-24T23:42:13.722Z
+ * Generado: 2026-09-25T03:33:57.053Z
  * Modulos: 22 .gs + 14 .html
  */
 
@@ -1159,7 +1159,8 @@ function isTestData(datos) {
   if (!datos) return false;
   if (normalizarComparable(datos.source) === 'SEED') return true;
   if (/^SEED-/i.test(String(datos.client_submission_id || ''))) return true;
-  return /@ejemplo-bunker\.test$/i.test(normalizarEmail(datos.email));
+  // .test is a reserved domain (RFC 2606): no real person has an address there.
+  return /\.test$/i.test(normalizarEmail(datos.email));
 }
 
 // ---------------------------------------------------------------------------
@@ -2448,9 +2449,21 @@ function applyPlainTextColumns(sheet, name) {
   var header = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0]
     .map(function (c) { return String(c).trim(); });
   var rows = Math.max(1, sheet.getMaxRows() - 1);
+  var dataRows = Math.max(0, sheet.getLastRow() - 1);
   cols.forEach(function (c) {
     var idx = header.indexOf(c);
-    if (idx !== -1) sheet.getRange(2, idx + 1, rows, 1).setNumberFormat('@');
+    if (idx === -1) return;
+    // Read what is there BEFORE the format changes: a date in a cell that turns
+    // into plain text would otherwise read back as its serial number (46297).
+    var existing = dataRows ? sheet.getRange(2, idx + 1, dataRows, 1).getValues() : [];
+    sheet.getRange(2, idx + 1, rows, 1).setNumberFormat('@');
+    var changed = false;
+    var asText = existing.map(function (r) {
+      var v = r[0];
+      if (v instanceof Date || typeof v === 'number' || typeof v === 'boolean') { changed = true; return [configValueAsText(v)]; }
+      return [v];
+    });
+    if (changed) sheet.getRange(2, idx + 1, dataRows, 1).setValues(asText);
   });
 }
 
@@ -2685,8 +2698,9 @@ function emitirToken(alias, rol, diasValidez) {
   var expira = new Date();
   expira.setDate(expira.getDate() + (diasValidez || 45));
 
+  // n makes every issued link unique, so a re-issued link always differs from (and revokes) the old one.
   var payload = Utilities.base64EncodeWebSafe(JSON.stringify({
-    a: alias, r: rol, e: expira.getTime()
+    a: alias, r: rol, e: expira.getTime(), n: Utilities.getUuid().split('-')[0]
   })).replace(/=+$/, '');
 
   return payload + '.' + firmar(payload);
@@ -6163,7 +6177,11 @@ function setupInicial() {
   instalarDisparadores();
   refrescarVistas();
 
-  var admin = provisionarUsuario('admin', ROL.ADMIN, 'Cuenta principal de administracion');
+  // An existing admin keeps its link: issuing a new one would revoke the one in use.
+  var currentAdmin = leerHoja(HOJA.USUARIOS).filter(function (u) { return normalizarComparable(u.email_o_alias) === 'ADMIN'; })[0];
+  var admin = currentAdmin && normalizarTexto(currentAdmin.token)
+    ? { url: urlPanel(currentAdmin.rol, currentAdmin.token) }
+    : provisionarUsuario('admin', ROL.ADMIN, 'Cuenta principal de administracion');
   registrar('sistema', 'admin', 'SETUP_INICIAL', book.getId(), VERSION_SISTEMA + ' ' + env);
 
   var resumen = {
@@ -6325,14 +6343,18 @@ function migrarBase() {
   var book = libro();
   var env = environmentName();
 
-  var countRows = function () {
+  // Data the migration must never change. _USUARIOS is compared by the users
+  // that existed before: the migration adds the new operating accounts on purpose.
+  var snapshot = function () {
     var out = {};
-    ['REGISTRO', '_CAMBIOS', '_USUARIOS', 'INCIDENTES', 'JURADO_1', 'JURADO_2', 'JURADO_3'].forEach(function (n) {
+    ['REGISTRO', '_CAMBIOS', 'INCIDENTES', 'JURADO_1', 'JURADO_2', 'JURADO_3'].forEach(function (n) {
       out[n] = leerHoja(n).length;
     });
+    out.REGISTRO_IDS = leerHoja(HOJA.REGISTRO).map(function (r) { return r.submission_id; }).sort().join(',');
+    out.USUARIOS = leerHoja(HOJA.USUARIOS).map(function (u) { return u.email_o_alias + '=' + u.token; }).sort().join(',');
     return out;
   };
-  var before = countRows();
+  var before = snapshot();
   var safety = rawBackup('PRE-MIGRACION');
 
   var marker = markSpreadsheetEnvironment(book, env);
@@ -6340,19 +6362,26 @@ function migrarBase() {
   var config = ensureConfig(book, true);
   invalidarCacheConfig();
   instalarDisparadores();
-  var accounts = ensureOperationalAccounts();
   refrescarVistas();
 
-  var after = countRows();
+  var after = snapshot();
   var intact = Object.keys(before).every(function (k) { return before[k] === after[k]; });
+  var accounts = ensureOperationalAccounts();
   var report = {
-    entorno: env, marca_hoja: marker, version: VERSION_SISTEMA, filas_antes: before, filas_despues: after,
+    entorno: env, marca_hoja: marker, version: VERSION_SISTEMA,
+    filas_antes: countsOnly(before), filas_despues: countsOnly(after),
     datos_intactos: intact, respaldo_previo: safety, esquema: schema, config: config,
     cuentas_nuevas: accounts.map(function (a) { return a.alias; })
   };
   registrar('sistema', 'admin', 'MIGRAR_V2', book.getId(), JSON.stringify({ intactos: intact, conflictos: config.conflictos.length }));
   if (!intact) throw new Error('ATENCION: cambio el numero de filas durante la migracion. Revisa el respaldo ' + safety.json);
   return report;
+}
+
+function countsOnly(snapshot) {
+  var out = {};
+  Object.keys(snapshot).forEach(function (k) { if (typeof snapshot[k] === 'number') out[k] = snapshot[k]; });
+  return out;
 }
 
 /** Backup of the sheets exactly as they are, without rebuilding views first (used before a migration). */
