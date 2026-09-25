@@ -17,8 +17,32 @@ var AGENDA_DEFECTO = {
   margen_inicio: 20 * 60,         // 20:00 operational margin
   contingencia_inicio: 20 * 60 + 30, // 20:30
   contingencia_fin: 21 * 60,      // 21:00 - hard close
-  tolerancia_minutos: 5
+  tolerancia_minutos: 5,
+  cupo_margen: 10                 // seats in the 20:00 margin for approved schedule changes (0 = none)
 };
+
+/**
+ * With the 100 codes issued every block is full, so an approved schedule change
+ * needs somewhere to go: the operational margin (20:00-20:30) works as an extra
+ * block, numbered right after the last one. It only ever receives approved
+ * changes; codes are never assigned to it.
+ */
+function marginBlockId(cfg) {
+  var c = cfg || AGENDA_DEFECTO;
+  return c.bloques + 1;
+}
+
+function marginAvailable(cfg) {
+  var c = cfg || AGENDA_DEFECTO;
+  return (Number(c.cupo_margen) || 0) > 0 && c.margen_inicio !== undefined && c.margen_inicio < c.contingencia_inicio;
+}
+
+/** "Bloque 4" or "Margen operativo": how staff and participants read a block number. */
+function blockLabel(blockId, cfg) {
+  var n = parseInt(blockId, 10);
+  if (!n) return '';
+  return n === marginBlockId(cfg) && marginAvailable(cfg) ? 'Margen operativo' : 'Bloque ' + n;
+}
 
 function minutosAHora(minutos) {
   var h = Math.floor(minutos / 60);
@@ -50,6 +74,20 @@ function bloqueDeNumero(numero, cfg) {
 /** Full schedule for one block: id, window, arrival time and code range. */
 function horarioDeBloque(bloque, cfg) {
   var c = cfg || AGENDA_DEFECTO;
+  if (bloque === marginBlockId(c) && marginAvailable(c)) {
+    return {
+      block_id: bloque,
+      inicio: minutosAHora(c.margen_inicio),
+      fin: minutosAHora(c.contingencia_inicio),
+      ventana: minutosAHora(c.margen_inicio) + '-' + minutosAHora(c.contingencia_inicio),
+      arrival_time: minutosAHora(c.margen_inicio - c.antelacion_llegada),
+      audition_time: minutosAHora(c.margen_inicio),
+      limite_tolerancia: minutosAHora(c.margen_inicio + c.tolerancia_minutos),
+      codigo_desde: '',
+      codigo_hasta: '',
+      margen: true
+    };
+  }
   if (!bloque || bloque < 1 || bloque > c.bloques) return null;
 
   var inicio = c.inicio_minutos + (bloque - 1) * c.duracion_bloque;
@@ -77,12 +115,14 @@ function construirAgenda(cfg) {
   var filas = [];
   for (var b = 1; b <= c.bloques; b++) filas.push(horarioDeBloque(b, c));
   if (c.margen_inicio !== undefined && c.margen_inicio < c.contingencia_inicio) {
+    var margin = marginAvailable(c) ? horarioDeBloque(marginBlockId(c), c) : null;
     filas.push({
       block_id: 'MARGEN',
       inicio: minutosAHora(c.margen_inicio),
       fin: minutosAHora(c.contingencia_inicio),
       ventana: minutosAHora(c.margen_inicio) + '-' + minutosAHora(c.contingencia_inicio),
-      arrival_time: '', audition_time: '', limite_tolerancia: '', codigo_desde: '', codigo_hasta: ''
+      arrival_time: margin ? margin.arrival_time : '', audition_time: margin ? margin.audition_time : '',
+      limite_tolerancia: margin ? margin.limite_tolerancia : '', codigo_desde: '', codigo_hasta: ''
     });
   }
   filas.push({
@@ -161,7 +201,8 @@ function puedeSolicitarCambio(registro, solicitud, opciones) {
 function bloquesConCupo(registros, cfg) {
   var c = cfg || AGENDA_DEFECTO;
   var conteo = {};
-  for (var b = 1; b <= c.bloques; b++) conteo[b] = 0;
+  var last = marginAvailable(c) ? marginBlockId(c) : c.bloques;
+  for (var b = 1; b <= last; b++) conteo[b] = 0;
 
   for (var i = 0; i < registros.length; i++) {
     var r = registros[i];
@@ -171,14 +212,17 @@ function bloquesConCupo(registros, cfg) {
   }
 
   var libres = [];
-  for (var k = 1; k <= c.bloques; k++) {
+  for (var k = 1; k <= last; k++) {
     var h = horarioDeBloque(k, c);
+    var cupo = h.margen ? Number(c.cupo_margen) : c.cupo_por_bloque;
     libres.push({
       block_id: k,
+      etiqueta: blockLabel(k, c),
       ventana: h.ventana,
       ocupados: conteo[k],
-      cupo: c.cupo_por_bloque,
-      disponibles: Math.max(0, c.cupo_por_bloque - conteo[k])
+      cupo: cupo,
+      disponibles: Math.max(0, cupo - conteo[k]),
+      margen: !!h.margen
     });
   }
   return libres;
@@ -219,7 +263,7 @@ function currentBlock(nowMinutes, cfg) {
     var block = Math.floor((nowMinutes - c.inicio_minutos) / c.duracion_bloque) + 1;
     return { phase: 'BLOQUE', block_id: block };
   }
-  if (nowMinutes < c.contingencia_inicio) return { phase: 'MARGEN', block_id: null };
+  if (nowMinutes < c.contingencia_inicio) return { phase: 'MARGEN', block_id: marginAvailable(c) ? marginBlockId(c) : null };
   if (nowMinutes < c.contingencia_fin) return { phase: 'CONTINGENCIA', block_id: null };
   return { phase: 'CERRADO', block_id: null };
 }

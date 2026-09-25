@@ -12,7 +12,7 @@ proyecto = un cupo).
 | **Aplicación** | Google Apps Script Web App (URL `/exec` en `site/config.json` y en CONFIG `web_app_url`) |
 | **Base de datos** | Google Sheets — 18 hojas ([esquema](docs/SCHEMA.md)) |
 | **Costo** | $0 |
-| **Pruebas** | `npm test` — 318 pruebas |
+| **Pruebas** | `npm test` — 322 pruebas |
 | **Versión** | 2.0.0 (iteración 2) |
 
 ## Qué hace
@@ -95,8 +95,8 @@ docs/                  documentación
 ## Desarrollo
 
 ```bash
-npm test                      # 318 pruebas (74 core + 32 dataset + 47 iteración 2
-                              #   + 108 integración + 57 integración iteración 2)
+npm test                      # 322 pruebas (74 core + 32 dataset + 47 iteración 2
+                              #   + 108 integración + 61 integración iteración 2)
 node tools/empaquetar.js      # genera build/Codigo.gs para desplegar
 ```
 

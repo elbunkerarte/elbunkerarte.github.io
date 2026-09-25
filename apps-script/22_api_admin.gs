@@ -323,9 +323,10 @@ function accionResolverCambio(datos, sesion) {
     // Capacity is verified at approval time, not at request time.
     var libres = bloquesConCupo(leerHoja(HOJA.REGISTRO), agendaConfigurada());
     var destino = libres.filter(function (b) { return String(b.block_id) === String(datos.nuevo_bloque); })[0];
-    if (!destino) return { ok: false, error: 'Bloque destino invalido.' };
+    if (!destino) return { ok: false, error: 'Bloque destino inválido.' };
     if (destino.disponibles <= 0) {
-      return { ok: false, error: 'El bloque ' + destino.block_id + ' ya está lleno (' + destino.ocupados + '/' + destino.cupo + ').' };
+      return { ok: false, error: (destino.margen ? 'El margen operativo' : 'El bloque ' + destino.block_id) +
+                                 ' ya está lleno (' + destino.ocupados + '/' + destino.cupo + ').' };
     }
 
     var aplicado = aplicarCambio(registro, datos.nuevo_bloque, {

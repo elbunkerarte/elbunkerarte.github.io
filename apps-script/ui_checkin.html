@@ -171,10 +171,10 @@ function llenarBloques() {
   var sel = $('#filtroBloque');
   var previo = sel.value;
   var bloques = {};
-  ROSTER.forEach(function (p) { if (p.final_block) bloques[p.final_block] = true; });
+  ROSTER.forEach(function (p) { if (p.final_block) bloques[p.final_block] = p.block_label || ('Bloque ' + p.final_block); });
   sel.innerHTML = '<option value="">Todos los bloques</option>' +
     Object.keys(bloques).sort(function (a, b) { return a - b; })
-      .map(function (b) { return '<option value="' + b + '">Bloque ' + b + '</option>'; }).join('');
+      .map(function (b) { return '<option value="' + b + '">' + escaparHtml(bloques[b]) + '</option>'; }).join('');
   sel.value = previo;
 }
 
@@ -249,7 +249,7 @@ function pintarFicha(p, via, matchedMember) {
           (p.group_code ? ' ' + escaparHtml(p.group_code) + ' · ' + escaparHtml(p.members_declared) + ' en escena' : '') +
           ' · ' + escaparHtml(p.discipline) + (via ? ' · encontrado por ' + via : '') + '</div></div>' +
         '<div style="text-align:right">' + etiquetaEstado(p.attendance_status) +
-        '<div style="color:var(--tenue);font-size:12.5px;margin-top:6px">Bloque ' + escaparHtml(p.final_block) +
+        '<div style="color:var(--tenue);font-size:12.5px;margin-top:6px">' + escaparHtml(p.block_label || ('Bloque ' + p.final_block)) +
         '<br>Llegada ' + escaparHtml(p.arrival_time) + ' · Audición <b>' + escaparHtml(p.final_time) + '</b></div></div>' +
       '</div>' +
       '<div class="aviso info" style="margin-top:14px;font-size:13px"><b>Valida con el documento físico' + (p.group_code ? ' de cada integrante' : '') + '</b>' +

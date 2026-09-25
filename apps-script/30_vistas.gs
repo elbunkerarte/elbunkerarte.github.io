@@ -324,7 +324,7 @@ function operationalIndicator(filas, hora) {
   var labels = { ANTES: 'Antes de iniciar', MARGEN: 'Margen operativo', CONTINGENCIA: 'Contingencia',
                  CERRADO: 'Audiciones cerradas', DESCONOCIDO: 'Hora desconocida' };
   out.etiqueta = phase.block_id
-    ? 'Bloque ' + phase.block_id + ' (' + horarioDeBloque(phase.block_id, cfgAgenda).ventana + ')'
+    ? blockLabel(phase.block_id, cfgAgenda) + ' (' + horarioDeBloque(phase.block_id, cfgAgenda).ventana + ')'
     : labels[phase.phase];
   return out;
 }
@@ -341,8 +341,10 @@ function calcularMetricas(filas, hora) {
 
   var cfgAgenda = agendaConfigurada();
   var porBloque = {};
-  for (var b = 1; b <= cfgAgenda.bloques; b++) {
-    porBloque[b] = { block_id: b, ventana: horarioDeBloque(b, cfgAgenda).ventana, asignados: 0, realizadas: 0 };
+  var lastBlock = marginAvailable(cfgAgenda) ? marginBlockId(cfgAgenda) : cfgAgenda.bloques;
+  for (var b = 1; b <= lastBlock; b++) {
+    porBloque[b] = { block_id: b, etiqueta: blockLabel(b, cfgAgenda), ventana: horarioDeBloque(b, cfgAgenda).ventana,
+                     asignados: 0, realizadas: 0 };
   }
 
   var members = leerHoja(HOJA.INTEGRANTES);

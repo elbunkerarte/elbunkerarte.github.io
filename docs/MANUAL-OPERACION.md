@@ -231,7 +231,7 @@ Luego revisa **Ocupación por bloque → Ver ocupación**.
 | 10 bloques de 30 min, 10 personas cada uno | 3:00 p. m. a 8:00 p. m. |
 | Llegada al check-in | 15 min antes de su bloque |
 | Tolerancia | 5 min |
-| Margen operativo | 8:00 a 8:30 p. m. |
+| Margen operativo (hasta 10 cambios de horario aprobados) | 8:00 a 8:30 p. m. |
 | Contingencia | 8:30 a 9:00 p. m. |
 | **Cierre definitivo** | **9:00 p. m.** |
 
@@ -374,6 +374,13 @@ código, el motivo, el contacto y el horario actual.
 
 - **Aprobar:** elige el bloque destino (solo salen los que tienen cupo libre). El
   sistema cambia hora y bloque — **el código NO cambia**.
+- **Cuando ya se emitieron los 100 códigos, los 10 bloques están llenos.** Para
+  eso existe el **Margen operativo (8:00–8:30 p. m.)**: aparece al final de la
+  lista con **10 cupos** solo para cambios aprobados. Quien pasa al margen llega a
+  las **7:45 p. m.** y audiciona a las **8:00 p. m.**; en el check-in y en los
+  mensajes sale como "Margen operativo". Los cupos se configuran en CONFIG →
+  `cupo_margen_cambios` (0 = sin margen; máximo 10, lo que cabe antes de la
+  contingencia).
 - **Rechazar:** escribe el motivo. La persona conserva su horario.
 
 El participante nunca elige la hora: la decides tú. Cuando resuelvas, avísale con

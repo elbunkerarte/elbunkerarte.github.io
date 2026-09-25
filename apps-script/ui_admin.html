@@ -395,7 +395,7 @@ function verBloques() {
     ocupado(b, false);
     $('#salidaBloques').innerHTML = '<div class="tabla-envoltura"><table><thead><tr><th>Bloque</th><th>Ventana</th><th>Ocupados</th><th>Cupo</th><th>Disponibles</th></tr></thead><tbody>' +
       r.bloques.map(function (x) {
-        return '<tr><td><b>' + x.block_id + '</b></td><td>' + escaparHtml(x.ventana) + '</td><td>' + x.ocupados + '</td><td>' + x.cupo + '</td>' +
+        return '<tr><td><b>' + escaparHtml(x.etiqueta || x.block_id) + '</b></td><td>' + escaparHtml(x.ventana) + '</td><td>' + x.ocupados + '</td><td>' + x.cupo + '</td>' +
           '<td style="color:' + (x.disponibles ? 'var(--ok)' : 'var(--error)') + '"><b>' + x.disponibles + '</b></td></tr>';
       }).join('') + '</tbody></table></div>';
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaBloques', 'error', 'Error', e.message); });
@@ -408,7 +408,7 @@ function cargarCambios() {
       var cambios = res[0].cambios, bloques = res[1].bloques;
       if (!cambios.length) { $('#salidaCambios').innerHTML = '<div class="aviso info"><b>Sin solicitudes</b>Nadie ha pedido cambio de horario.</div>'; return; }
       var opciones = bloques.map(function (x) {
-        return '<option value="' + x.block_id + '"' + (x.disponibles ? '' : ' disabled') + '>Bloque ' + x.block_id + ' (' + x.ventana + ') · ' + x.disponibles + ' libres</option>';
+        return '<option value="' + x.block_id + '"' + (x.disponibles ? '' : ' disabled') + '>' + escaparHtml(x.etiqueta || ('Bloque ' + x.block_id)) + ' (' + x.ventana + ') · ' + x.disponibles + ' libres</option>';
       }).join('');
       $('#salidaCambios').innerHTML = cambios.map(function (c) {
         var pendiente = String(c.estado).toUpperCase() === 'PENDIENTE';

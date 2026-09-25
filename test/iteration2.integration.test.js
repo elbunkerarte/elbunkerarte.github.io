@@ -651,6 +651,65 @@ describe('The rehearsal resumes when a phase runs out of time (Apps Script stops
 });
 
 // ===========================================================================
+describe('Approved schedule changes go to the 8:00 p. m. margin when the ten blocks are full', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    const rows = F.registerAndIssueCodes(test.project, 100);
+    const request = (code, id) => {
+      const who = rows.find((r) => r.code === code);
+      return test.project.run('accionSolicitarCambio', { participant_code: code, full_name: who.full_name, reason_short: 'Work',
+        contact: '3001112233', acceptance: true, client_submission_id: id, form_elapsed_ms: 60000 });
+    };
+    return { account, test, rows, request };
+  });
+
+  it('with the 100 codes issued every block is full and the margin offers 10 seats', () => {
+    const { test } = env();
+    const blocks = test.project.run('accionBloquesDisponibles', {}, F.ADMIN_SESSION).bloques;
+    expect(blocks.slice(0, 10).every((b) => b.disponibles === 0)).toBe(true);
+    const margin = blocks[10];
+    expect([blocks.length, margin.block_id, margin.margen, margin.etiqueta, margin.ventana, margin.cupo, margin.disponibles])
+      .toEqual([11, 11, true, 'Margen operativo', '20:00-20:30', 10, 10]);
+  });
+  it('a change approved into the margin keeps the code and moves the time to 8:00 p. m. (arrival 7:45)', () => {
+    const { test, request } = env();
+    const req = request('B-005', 'margin-1');
+    const r = test.project.run('accionResolverCambio', { solicitud_id: req.solicitud_id, aprobar: true, nuevo_bloque: 11 }, F.ADMIN_SESSION);
+    expect([r.estado, r.code, r.nuevo_bloque, r.nueva_hora, r.hora_llegada]).toEqual(['APROBADO', 'B-005', 11, '20:00', '19:45']);
+    const row = test.project.records('REGISTRO').find((x) => x.code === 'B-005');
+    expect([String(row.final_block), row.final_time, row.arrival_time]).toEqual(['11', '20:00', '19:45']);
+    const msg = test.project.run('accionMensajes', { plantilla: 'CAMBIO_APROBADO' }, F.ADMIN_SESSION).mensajes
+      .find((m) => m.code === 'B-005' || /B-005/.test(m.cuerpo));
+    expect(msg.cuerpo).toContain('8:00 p. m. (margen operativo)');
+    expect(msg.cuerpo).toContain('7:45 p. m.');
+    const desk = test.project.run('accionBuscarParticipante', { code: 'B-005' }, F.ADMIN_SESSION).participante;
+    expect([desk.block_label, desk.final_time]).toEqual(['Margen operativo', '20:00']);
+    const indicator = test.project.execute('ind', (g) => g.operationalIndicator(g.leerHoja('REGISTRO'), '20:10'));
+    expect([indicator.fase, indicator.esperados, indicator.etiqueta]).toEqual(['MARGEN', 1, 'Margen operativo (20:00-20:30)']);
+  });
+  it('the margin never takes more than its seats', () => {
+    const { test, request } = env();
+    for (let i = 0; i < 9; i++) {
+      const req = request('B-0' + (20 + i), 'margin-fill-' + i);
+      expect(test.project.run('accionResolverCambio', { solicitud_id: req.solicitud_id, aprobar: true, nuevo_bloque: 11 }, F.ADMIN_SESSION).estado).toBe('APROBADO');
+    }
+    const extra = request('B-040', 'margin-over');
+    const r = test.project.run('accionResolverCambio', { solicitud_id: extra.solicitud_id, aprobar: true, nuevo_bloque: 11 }, F.ADMIN_SESSION);
+    expect([r.ok, r.error]).toEqual([false, 'El margen operativo ya está lleno (10/10).']);
+  });
+  it('with cupo_margen_cambios = 0 there is no margin to approve into', () => {
+    const { test, request } = env();
+    F.setConfig(test.project, 'cupo_margen_cambios', '0');
+    const blocks = test.project.run('accionBloquesDisponibles', {}, F.ADMIN_SESSION).bloques;
+    const req = request('B-060', 'margin-off');
+    const r = test.project.run('accionResolverCambio', { solicitud_id: req.solicitud_id, aprobar: true, nuevo_bloque: 11 }, F.ADMIN_SESSION);
+    expect([blocks.length, r.ok]).toEqual([10, false]);
+    F.setConfig(test.project, 'cupo_margen_cambios', '10');
+  });
+});
+
+// ===========================================================================
 describe('Selection size', () => {
   it('seven projects are selected (confirmed by the organization)', () => {
     const account = F.newAccount();

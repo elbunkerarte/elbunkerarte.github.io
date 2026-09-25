@@ -11,34 +11,36 @@ Cada punto tiene uno de tres estados:
 | 🟡 **PENDING** | Falta algo, pero no impide publicar (o es de la organización) |
 | 🔴 **BLOCKED** | No se puede hacer hasta que se cumpla una condición |
 
-**Resumen:** la iteración 2 está **READY en el entorno de PRUEBAS** (318 pruebas
-automáticas y prueba de punta a punta en vivo). **Producción sigue en la
-iteración 1** (implementación en su versión 4) hasta que el responsable técnico dé el GO.
+**Resumen:** la iteración 2 está **publicada en PRODUCCIÓN** desde el
+**25 de septiembre de 2026** (implementación en su versión 5, sitio público
+actualizado), después de probarla en PRUEBAS (322 pruebas automáticas y prueba de
+punta a punta en vivo). Antes de publicar se hizo una copia completa de la hoja de
+producción y se quitaron las 2 inscripciones de prueba.
 
 ---
 
-## 🔴 BLOCKED — publicación en producción
+## ✅ Publicación en producción (hecha el 25-sep)
 
-| # | Qué | Estado | Condición |
-|---|---|---|---|
-| 1 | Publicar la iteración 2 en producción (código, migración, sitio) | 🔴 BLOCKED | **GO del responsable técnico.** Nada se toca en producción antes |
+| # | Qué | Estado |
+|---|---|---|
+| 1 | Publicar la iteración 2 en producción (código, migración, sitio) | ✅ READY |
 
-### Orden de publicación, cuando haya GO
+### Orden de publicación (así se hizo; sirve para la próxima versión)
 
 Detalle de cada paso en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md), sección C.
 
 | Paso | Qué | Hecho |
 |---|---|---|
-| 1 | Respaldo completo de producción (*Pre-evento* o *Manual*) y descargar el XLSX | ☐ |
-| 2 | Pegar `build/Codigo.gs` en el proyecto de producción y guardar | ☐ |
-| 3 | `QUITAR_PRUEBAS_PRELANZAMIENTO` → quita S-07BE9C53 y S-E780AA04 (con respaldo previo y registro en `_LOG`) | ☐ |
-| 4 | `MIGRAR` → informe con "Datos intactos: SI" | ☐ |
-| 5 | CONFIG `web_app_url` = URL `/exec` de producción | ☐ |
-| 6 | Versión nueva de la implementación existente (la URL `/exec` no cambia) | ☐ |
-| 7 | `VERIFICAR` o panel → *Revisar*: "Sistema consistente" | ☐ |
-| 8 | `verAccesos` → entregar los enlaces de `stage-manager` y `tecnico-audio` | ☐ |
-| 9 | Fusionar `feat/iteracion-2` en `feat/sistema-bunker` (publica el sitio) | ☐ |
-| 10 | Prueba de humo **sin crear datos**: página y Formulario 1 desde un celular (fecha y hora correctas, sin avisos de pendiente), "Mi inscripción" con un documento inexistente ("No encontramos tu inscripción"), panel admin y *Revisar* | ☐ |
+| 1 | Respaldo completo de producción (*Pre-evento* o *Manual*) y descargar el XLSX | ✅ |
+| 2 | Pegar `build/Codigo.gs` en el proyecto de producción y guardar | ✅ |
+| 3 | `MIGRAR` → informe con "Datos intactos: SI" | ✅ |
+| 4 | `QUITAR_PRUEBAS_PRELANZAMIENTO` → quita S-07BE9C53 y S-E780AA04 (con respaldo previo y registro en `_LOG`) | ✅ |
+| 5 | CONFIG `web_app_url` = URL `/exec` de producción | ✅ |
+| 6 | Versión nueva de la implementación existente (la URL `/exec` no cambia) | ✅ |
+| 7 | `VERIFICAR` o panel → *Revisar*: "Sistema consistente" | ✅ |
+| 8 | `verAccesos` → entregar los enlaces de `stage-manager` y `tecnico-audio` | ✅ |
+| 9 | Fusionar `feat/iteracion-2` en `feat/sistema-bunker` (publica el sitio) | ✅ |
+| 10 | Prueba de humo **sin crear datos**: página y Formulario 1 desde un celular (fecha y hora correctas, sin avisos de pendiente), "Mi inscripción" con un documento inexistente ("No encontramos tu inscripción"), panel admin y *Revisar* | ✅ |
 
 ---
 
@@ -152,7 +154,7 @@ Detalle de cada paso en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md), sección C.
 ### Pruebas
 | Qué | Estado |
 |---|---|
-| 318 pruebas automáticas (74 core + 32 dataset + 47 iteración 2 + 108 integración + 57 integración iteración 2) | ✅ READY — `npm test` |
+| 322 pruebas automáticas (74 core + 32 dataset + 47 iteración 2 + 108 integración + 61 integración iteración 2) | ✅ READY — `npm test` |
 | Prueba de punta a punta en PRUEBAS, navegador anónimo | ✅ READY — inscripción solista y agrupación, integrante con firma, Mi inscripción, pistas, cambio de horario, check-in, jurados, dashboard, constancia, respaldo y restauración, LIMPIAR, ENSAYO |
 
 ---

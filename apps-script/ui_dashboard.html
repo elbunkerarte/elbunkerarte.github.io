@@ -244,7 +244,7 @@ function pintar(m) {
 
   // --- Chart: progress per block (bar = done, grey figure = assigned) -------
   barras('#gBloques', m.por_bloque.map(function (b) {
-    return { etiqueta: 'Bloque ' + b.block_id, valor: b.realizadas, meta: b.asignados,
+    return { etiqueta: b.etiqueta || ('Bloque ' + b.block_id), valor: b.realizadas, meta: b.asignados,
              titulo: b.ventana + ' · ' + b.realizadas + ' de ' + b.asignados + ' realizadas' };
   }), { conMeta: true });
   tabla('#tBloques', ['Bloque', 'Ventana', 'Realizadas', 'Asignados'],

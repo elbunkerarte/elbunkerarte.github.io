@@ -79,7 +79,7 @@ function plantillas() {
         'CÓDIGO: {{code}}\n' +
         'FECHA: ' + c.fecha_texto + '\n' +
         'LLEGADA (check-in): {{hora_llegada_texto}}\n' +
-        'AUDICIÓN: {{hora_audicion_texto}} (bloque {{final_block}})\n' +
+        'AUDICIÓN: {{hora_audicion_texto}} ({{bloque_texto}})\n' +
         'LUGAR: ' + lugar + '\n\n' +
         'IMPORTANTE:\n' +
         '- Llega a la hora de llegada, no a la de audición.\n' +
@@ -102,7 +102,7 @@ function plantillas() {
         'Tu solicitud de cambio fue APROBADA.\n\n' +
         'CÓDIGO: {{code}} (no cambia)\n' +
         'NUEVA LLEGADA: {{hora_llegada_texto}}\n' +
-        'NUEVA AUDICIÓN: {{hora_audicion_texto}} (bloque {{final_block}})\n\n' +
+        'NUEVA AUDICIÓN: {{hora_audicion_texto}} ({{bloque_texto}})\n\n' +
         'Este es tu horario definitivo. El día del evento no hay más cambios.' + firma
     },
 
@@ -240,6 +240,7 @@ function messageExtras(r, base, members) {
     members_link: link,
     hora_llegada_texto: r.arrival_time ? humanTime(r.arrival_time) : '',
     hora_audicion_texto: (r.final_time || r.original_time) ? humanTime(r.final_time || r.original_time) : '',
+    bloque_texto: blockLabel(r.final_block || r.original_block, agendaConfigurada()).toLowerCase(),
     integrantes_autorizados: summary.authorized,
     integrantes_declarados: declared,
     enlace_grupo_whatsapp: groupLink,

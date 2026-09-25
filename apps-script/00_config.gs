@@ -302,6 +302,7 @@ function configuracionPorDefecto() {
     ['tolerancia_min', '5', 'Minutos de tolerancia antes de perder el turno.'],
     ['antelacion_llegada_min', '15', 'Minutos de antelacion para el check-in.'],
     ['margen_inicio', '20:00', 'Inicio del margen operativo (HH:MM). Va despues del ultimo bloque.'],
+    ['cupo_margen_cambios', '10', 'Cupos del margen operativo (8:00-8:30 p. m.) para cambios de horario aprobados. 0 = sin margen. Máximo 10 (lo que cabe antes de la contingencia).'],
     ['contingencia_inicio', '20:30', 'Inicio de la ventana de contingencia (HH:MM).'],
     ['cierre_audiciones', '21:00', 'Cierre definitivo de audiciones (HH:MM).'],
     ['cierre_cambios', '2026-10-22T18:00:00-05:00', 'Fecha y hora limite del Formulario 2 (cambio de horario).'],
@@ -427,7 +428,11 @@ function agendaConfigurada() {
     margen_inicio: margen === null ? 20 * 60 : margen,
     contingencia_inicio: contingencia === null ? 20 * 60 + 30 : contingencia,
     contingencia_fin: cierre === null ? 21 * 60 : cierre,
-    tolerancia_minutos: cfgNumero('tolerancia_min', 5)
+    tolerancia_minutos: cfgNumero('tolerancia_min', 5),
+    // The margin holds as many 3-minute auditions as fit before contingency, never more.
+    cupo_margen: Math.max(0, Math.min(cfgNumero('cupo_margen_cambios', 10),
+      Math.floor(((contingencia === null ? 20 * 60 + 30 : contingencia) - (margen === null ? 20 * 60 : margen)) /
+        Math.max(1, cfgNumero('duracion_audicion_min', 3)))))
   };
 }
 

@@ -42,6 +42,7 @@ function deskView(r, members) {
     members: list,
     members_authorized: list.filter(function (m) { return normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length,
     final_block: r.final_block || r.original_block,
+    block_label: blockLabel(r.final_block || r.original_block, agendaConfigurada()),
     arrival_time: clockText(r.arrival_time),
     final_time: clockText(r.final_time || r.original_time),
     final_time_texto: humanTime(r.final_time || r.original_time),

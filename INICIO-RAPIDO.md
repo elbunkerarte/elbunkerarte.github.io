@@ -112,7 +112,8 @@ Te llega por el **Formulario 2** (el enlace está en la página pública y en su
 mensaje de asignación). Se puede pedir **hasta el jueves 22 de octubre a las
 6:00 p. m.**, una sola vez por código.
 Panel → **Cambios de horario** → *Aprobar* (eliges un bloque con cupo) o
-*Rechazar* (con motivo). El código nunca cambia.
+*Rechazar* (con motivo). El código nunca cambia. Con los 100 códigos emitidos los
+bloques están llenos: aprueba al **Margen operativo** (8:00 p. m., 10 cupos).
 
 ### 🎤 El 23 de octubre
 La mesa de check-in abre su enlace **con señal** al llegar — eso descarga la lista
