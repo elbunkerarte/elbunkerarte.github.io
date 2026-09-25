@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-25T14:08:02.790Z
+ * Generado: 2026-09-25T14:23:03.002Z
  * Modulos: 22 .gs + 14 .html
  */
 
@@ -2220,6 +2220,10 @@ function interpretVideoProbe(provider, code, location, body) {
       return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: pide iniciar sesión. Comparte como "Cualquier persona con el enlace".' };
     }
     if (code === 200) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'Drive: abierto a cualquier persona con el enlace.' };
+    // A private file answers 401/403 to an anonymous request (measured live 2026-09-25), not only a login redirect.
+    if (code === 401 || code === 403) {
+      return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: el archivo es privado. Comparte como "Cualquier persona con el enlace".' };
+    }
     if (code === 404) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: el archivo no existe.' };
     return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Drive respondió ' + code + '.' };
   }

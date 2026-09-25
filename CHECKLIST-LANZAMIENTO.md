@@ -11,7 +11,7 @@ Cada punto tiene uno de tres estados:
 | 🟡 **PENDING** | Falta algo, pero no impide publicar (o es de la organización) |
 | 🔴 **BLOCKED** | No se puede hacer hasta que se cumpla una condición |
 
-**Resumen:** la iteración 2 está **READY en el entorno de PRUEBAS** (317 pruebas
+**Resumen:** la iteración 2 está **READY en el entorno de PRUEBAS** (318 pruebas
 automáticas y prueba de punta a punta en vivo). **Producción sigue en la
 iteración 1** (implementación en su versión 4) hasta que el responsable técnico dé el GO.
 
@@ -152,7 +152,7 @@ Detalle de cada paso en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md), sección C.
 ### Pruebas
 | Qué | Estado |
 |---|---|
-| 317 pruebas automáticas (74 core + 32 dataset + 47 iteración 2 + 108 integración + 56 integración iteración 2) | ✅ READY — `npm test` |
+| 318 pruebas automáticas (74 core + 32 dataset + 47 iteración 2 + 108 integración + 57 integración iteración 2) | ✅ READY — `npm test` |
 | Prueba de punta a punta en PRUEBAS, navegador anónimo | ✅ READY — inscripción solista y agrupación, integrante con firma, Mi inscripción, pistas, cambio de horario, check-in, jurados, dashboard, constancia, respaldo y restauración, LIMPIAR, ENSAYO |
 
 ---

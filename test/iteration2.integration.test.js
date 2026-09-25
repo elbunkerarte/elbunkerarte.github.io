@@ -223,6 +223,8 @@ describe('Video links: accessible, private, not verifiable', () => {
     account.stubUrl((url) => /youtube\.com\/oembed/.test(url) && /v%3DGONEGONE/.test(url), { code: 404, body: 'Not Found' });
     account.stubUrl((url) => /drive\.google\.com\/file\/d\/PRIVATEFILE123/.test(url),
       { code: 302, body: '', headers: { Location: 'https://accounts.google.com/ServiceLogin?continue=x' } });
+    // What Drive answers today for a private file (measured live 2026-09-25): 401, no redirect.
+    account.stubUrl((url) => /drive\.google\.com\/file\/d\/PRIVATE401FILE/.test(url), { code: 401, body: 'Unauthorized' });
     account.stubUrl((url) => /drive\.google\.com\/file\/d\/PUBLICFILE1234/.test(url),
       { code: 200, body: '<html><meta property="og:title" content="video.mp4"></html>' });
     const check = (url) => test.project.run('accionVerificarVideo', { video_url: url });
@@ -240,6 +242,11 @@ describe('Video links: accessible, private, not verifiable', () => {
     const { check, detail } = env();
     expect(check('https://drive.google.com/file/d/PRIVATEFILE123/view?usp=sharing')).toBe('NO ACCESIBLE');
     expect(detail('https://drive.google.com/file/d/PRIVATEFILE123/view?usp=sharing')).toContain('iniciar sesión');
+  });
+  it('a private Drive file answered with 401 is NO ACCESIBLE and tells how to share it', () => {
+    const { check, detail } = env();
+    expect(check('https://drive.google.com/file/d/PRIVATE401FILE/view?usp=sharing')).toBe('NO ACCESIBLE');
+    expect(detail('https://drive.google.com/file/d/PRIVATE401FILE/view?usp=sharing')).toContain('Cualquier persona con el enlace');
   });
   it('a Drive file shared with anyone who has the link is ACCESIBLE', () => {
     expect(env().check('https://drive.google.com/file/d/PUBLICFILE1234/view')).toBe('ACCESIBLE');
