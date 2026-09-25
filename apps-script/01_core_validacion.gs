@@ -111,6 +111,12 @@ function normalizarTelefono(valor) {
   return soloDigitos;
 }
 
+/** "3239836182" -> "323 983 6182": how a person reads a Colombian mobile number. Anything else is returned trimmed. */
+function phoneText(value) {
+  var digits = normalizarTelefono(value);
+  return digits.length === 10 ? digits.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3') : normalizarTexto(value);
+}
+
 // ---------------------------------------------------------------------------
 // Field-level validators
 // ---------------------------------------------------------------------------

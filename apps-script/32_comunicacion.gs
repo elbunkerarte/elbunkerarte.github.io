@@ -21,7 +21,7 @@ function commsContext() {
     contingencia: humanTime(cfgHora('contingencia_inicio', '20:30')) + ' a ' + humanTime(cfgHora('cierre_audiciones', '21:00')),
     cierre: humanTime(cfgHora('cierre_audiciones', '21:00')),
     cupo: cfgNumero('cupo_total', 100),
-    numero: cfg('whatsapp_oficial', ''),
+    numero: phoneText(cfg('whatsapp_oficial', '')),
     nombre_contacto: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución'),
     correo_datos: cfg('data_protection_email', '')
   };

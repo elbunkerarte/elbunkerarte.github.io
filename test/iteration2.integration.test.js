@@ -444,6 +444,11 @@ describe('Every page renders, its scripts parse, and public pages show nothing d
     const { band } = env();
     expect(band.mensaje).not.toMatch(/\b(inscripcion|codigo|organizacion|recibiras|agrupacion|autorizacion|quedo|revision)\b/);
   });
+  it('the official number is written the way a person reads it', () => {
+    const { band } = env();
+    expect(band.mensaje).toContain('323 983 6182');
+    expect(band.mensaje).not.toContain('3239836182');
+  });
   it('the registration page states the confirmed event facts', () => {
     const text = visibleText(env().rendered.inscripcion.body).replace(/\s+/g, ' ');
     for (const fact of ['viernes 23 de octubre de 2026', '3:00 p. m.', 'Centro Comercial Mayorca', '18', '30', '901292696']) {

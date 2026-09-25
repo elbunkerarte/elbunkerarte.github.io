@@ -70,15 +70,15 @@ function interpretVideoProbe(provider, code, location, body) {
   var loginWall = /accounts\.google\.com|ServiceLogin|signin\/v2|v3\/signin/i;
 
   if (provider === 'youtube') {
-    if (code === 200) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'YouTube: publico o no listado.' };
+    if (code === 200) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'YouTube: público o no listado.' };
     if (code === 401 || code === 403) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'YouTube: video privado o con restricciones.' };
     if (code === 400 || code === 404) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'YouTube: el video no existe o fue eliminado.' };
-    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'YouTube respondio ' + code + '.' };
+    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'YouTube respondió ' + code + '.' };
   }
   if (provider === 'vimeo') {
     if (code === 200) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'Vimeo: accesible.' };
     if (code === 404) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Vimeo: el video no existe o es privado.' };
-    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Vimeo respondio ' + code + ' (puede tener restricciones de privacidad).' };
+    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Vimeo respondió ' + code + ' (puede tener restricciones de privacidad).' };
   }
   if (provider === 'drive' || provider === 'drive_folder') {
     if ((code === 301 || code === 302 || code === 303) && loginWall.test(loc)) {
@@ -89,16 +89,16 @@ function interpretVideoProbe(provider, code, location, body) {
     }
     if (code === 200) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'Drive: abierto a cualquier persona con el enlace.' };
     if (code === 404) return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'Drive: el archivo no existe.' };
-    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Drive respondio ' + code + '.' };
+    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Drive respondió ' + code + '.' };
   }
   if (provider === 'other') {
     if (code >= 200 && code < 300) return { status: VIDEO_STATUS.ACCESIBLE, detail: 'El enlace abre (HTTP ' + code + ').' };
     if (code === 401 || code === 403 || code === 404 || code === 410) {
       return { status: VIDEO_STATUS.NO_ACCESIBLE, detail: 'El enlace no abre sin permisos (HTTP ' + code + ').' };
     }
-    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'El sitio respondio ' + code + '.' };
+    return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'El sitio respondió ' + code + '.' };
   }
-  return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Esta red no permite verificar automaticamente: se revisa a mano.' };
+  return { status: VIDEO_STATUS.NO_VERIFICABLE, detail: 'Esta red no permite verificar automáticamente: se revisa a mano.' };
 }
 
 /** Status for a link without making any request (empty, malformed, social network). */

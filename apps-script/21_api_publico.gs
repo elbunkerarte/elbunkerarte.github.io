@@ -280,7 +280,7 @@ function registerProject(datos, video) {
 }
 
 function mensajeVeredicto(estado, veredicto, dup, groupMatch) {
-  var numero = cfg('whatsapp_oficial', '');
+  var numero = phoneText(cfg('whatsapp_oficial', ''));
   if (estado === ESTADO_ELEGIBILIDAD.APTO) {
     return 'Recibimos tu inscripción. La organización revisa cada inscripción y asigna los ' +
       cfgNumero('cupo_total', 100) + ' cupos en orden de inscripción entre quienes cumplen los requisitos. ' +
