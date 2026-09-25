@@ -989,7 +989,21 @@ describe('Regression: participant free text is not re-interpreted by Sheets', ()
       .filter((w) => w.detail && w.detail.sheet === 'REGISTRO' && w.message.indexOf('became a formula: "=') !== -1);
     expect(injected.map((w) => w.message)).toEqual([]);
   });
-  it('a description starting with "- " survives in REGISTRO [confidence ~70%: verify on a live sheet]', () => {
+  it('a WhatsApp number typed as "+57 311 000 0002" survives and still gets a WhatsApp link (verified on a live sheet 2026-09-24)', () => {
+    const { test } = env();
+    const row = test.project.records('REGISTRO').find((r) => r.email === 'participant0002@example.com');
+    expect(row.whatsapp).toBe('+57 311 000 0002');
+    const m = test.project.run('accionMensajes', { plantilla: 'ASIGNACION', code: row.code }, F.ADMIN_SESSION).mensajes[0];
+    expect(m.whatsapp_url).toMatch(/^https:\/\/wa\.me\/573110000002/);
+  });
+  it('a formula typed into a plain-text column is stored as text (plain text alone does not stop formulas)', () => {
+    const { test } = env();
+    test.project.run('accionInscribir', F.uniqueSubmission(4, { id_number: '=IMPORTXML("https://evil.test")', form_elapsed_ms: 90000 }));
+    const row = test.project.records('REGISTRO').find((r) => r.email === 'participant0004@example.com');
+    expect(row.id_number).toBe('=IMPORTXML("https://evil.test")');
+    expect(test.project.warningsOf('formula-from-string').filter((w) => w.detail && w.detail.sheet === 'REGISTRO')).toEqual([]);
+  });
+  it('a description starting with "- " survives in REGISTRO (verified on a live sheet 2026-09-24)', () => {
     const row = env().test.project.records('REGISTRO').find((r) => r.email === 'participant0003@example.com');
     expect(row.audition_description).toBe('- Sings a cappella and dances');
   });

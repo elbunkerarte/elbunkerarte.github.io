@@ -3,9 +3,9 @@
 A zero-dependency, in-memory Google Apps Script runtime. It loads the **real**
 `apps-script/*.gs` files (in filename order) plus a `PLANTILLAS` registry built
 from `apps-script/*.html` exactly like `tools/empaquetar.js`, and runs them in a
-Node `vm` realm. Suites: `test/integration.test.js` (part of `npm test`) and
-`test/integration.known-bugs.test.js` (`npm run test:known-bugs`, expected to fail
-until the bugs are fixed).
+Node `vm` realm. Suites: `test/integration.test.js` and `test/iteration2.integration.test.js` (both part of
+`npm test`). The iteration-1 known-bugs suite was emptied on 2026-09-24: every defect it
+recorded is fixed and lives on as a regression test.
 
 ## Quick start
 
@@ -77,7 +77,9 @@ A STRING written with `setValue`/`setValues`/`appendRow` into a cell whose numbe
 | `'+57 301 ...'`, `'- text'` | formula parse error `#ERROR!` (Google's behaviour, not re-verified live) |
 | `'2026-10-01T18:00:00-05:00'`, anything with a `T` separator, other text | text |
 
-With `setNumberFormat('@')` applied BEFORE writing, strings are stored verbatim. Numbers in a
+With `setNumberFormat('@')` applied BEFORE writing, strings are stored verbatim, except two things measured on a live
+sheet on 2026-09-24: a leading apostrophe is still dropped (`"'+57 ..."` reads `+57 ...`) and `"=..."` still becomes a
+formula (plain text does not protect against formula injection; only the apostrophe does). Numbers in a
 date-formatted cell read back as Dates, and `clearContent()` keeps formats. Also enforced:
 setValues dimension errors, "at least 1 row", 50,000 chars per cell, 10M cells, "cannot delete all
 non-frozen rows", "cannot hide all sheets", developer-metadata visibility (PROJECT = creator only),

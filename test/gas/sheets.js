@@ -226,7 +226,12 @@ function writeCell(env, store, sheet, r, c, raw, where) {
     if (raw.length > MAX_CELL_CHARS) {
       throw R.error('Your input contains more than the maximum of 50000 characters in a single cell.');
     }
-    if (C.isPlainTextFormat(cell.fmt)) { cell.v = raw; return; }
+    if (C.isPlainTextFormat(cell.fmt)) {
+      // Measured on a live sheet (2026-09-24): plain text still drops a leading
+      // apostrophe and still turns "=..." into a formula when written by the API.
+      if (raw[0] === "'") { cell.v = raw.slice(1); return; }
+      if (raw[0] !== '=' || raw.length < 2) { cell.v = raw; return; }
+    }
     const p = C.parseUserEntry(raw, store.locale);
     switch (p.kind) {
       case 'date':
