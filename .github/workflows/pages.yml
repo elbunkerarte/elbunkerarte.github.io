@@ -6,7 +6,7 @@ name: Deploy public site to GitHub Pages
 on:
   push:
     branches: [main, feat/sistema-bunker]
-    paths: ['site/**', '.github/workflows/pages.yml']
+    paths: ['site/**', 'tools/construir-sitio.js', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
