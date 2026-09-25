@@ -1,46 +1,74 @@
 # Entornos: PRUEBAS y PRODUCCIÓN
 
-Son **dos proyectos de Apps Script distintos, con dos hojas de cálculo distintas.
-No comparten ni una fila.** Puedes romper lo que quieras en pruebas sin que
-producción se entere.
+Son **dos proyectos de Apps Script distintos, con dos hojas de cálculo distintas
+y sus propias carpetas de Drive. No comparten ni una fila.** Puedes romper lo que
+quieras en pruebas sin que producción se entere.
 
 | | PRODUCCIÓN | PRUEBAS |
 |---|---|---|
-| Para qué | La convocatoria real | Ensayar, enseñar al equipo, romper cosas |
-| Datos | Inscripciones reales | 130 personas ficticias, desechables |
-| Hoja de cálculo | La suya | Otra, independiente |
-| `ENTORNO` | `PRODUCCION` | `PRUEBAS` |
-| Aviso en pantalla | ninguno | banner naranja en **todas** las pantallas |
-| `ENSAYO` (cargar 130 falsos) | 🚫 **bloqueado** | ✅ permitido |
-| `LIMPIAR` (vaciar todo) | 🚫 **bloqueado** | ✅ permitido |
+| Para qué | La convocatoria real | Ensayar, enseñar al equipo, probar una versión nueva antes de publicarla |
+| Datos | Inscripciones reales | Personas ficticias, desechables |
+| Hoja de cálculo | *EL BUNKER - BASE MAESTRA* | *[PRUEBAS] EL BUNKER - BASE MAESTRA* |
+| Carpetas de Drive (respaldos, audio, firmas) | *EL BUNKER - …* | *[PRUEBAS] EL BUNKER - …* |
+| Propiedad del script `ENVIRONMENT` | `production` (o ausente) | `test` |
+| Marca interna de la hoja | producción | test |
+| Aviso en pantalla | ninguno | franja a rayas amarillas y negras en **todas** las pantallas |
+| Correos `.test` (datos de prueba) | 🚫 **rechazados** | ✅ aceptados |
+| `ENSAYO` (cargar datos ficticios) | 🚫 **bloqueado** | ✅ permitido |
+| `LIMPIAR` (vaciar los datos) | 🚫 **bloqueado** | ✅ permitido |
+| Enlaces del equipo | Los suyos | Otros, distintos: un enlace de un entorno no abre en el otro |
+
+La URL `/exec` de cada entorno está en su propia hoja CONFIG → `web_app_url`, y en
+*Implementar → Gestionar implementaciones* de cada proyecto. La de producción es
+la que usa el sitio público (`site/config.json`).
 
 ## Por qué el bloqueo es código y no una advertencia
 
-`ENSAYO` mete 130 personas inventadas y `LIMPIAR` vacía las hojas. Si alguien
-ejecuta cualquiera de las dos sobre la convocatoria real un día antes del evento,
-el daño es total y no hay "deshacer".
+`ENSAYO` mete 130 personas inventadas y `LIMPIAR` vacía las hojas y manda a la
+papelera las pistas y firmas. Si alguien ejecuta cualquiera de las dos sobre la
+convocatoria real un día antes del evento, el daño es total.
 
 Una nota en un manual no lo impide: la gente no lee el manual cuando tiene prisa.
-Por eso las dos funciones llaman a `exigirEntornoPruebas()`, que **corta la
-ejecución** con un error explícito si el proyecto no está marcado como PRUEBAS:
+Por eso las dos funciones **cortan la ejecución** con un error si el entorno no
+es PRUEBAS:
 
 ```
 BLOQUEADO: "ENSAYO" solo puede correr en el entorno de PRUEBAS.
-Este proyecto es PRODUCCION y contiene (o contendra) inscripciones reales.
+Proyecto: ENVIRONMENT=production · hoja de calculo: production.
+Produccion contiene (o contendra) inscripciones reales y nunca recibe datos de prueba.
 ```
 
-Y el valor por defecto es `PRODUCCION`: **olvidarse de configurar algo nunca
+El candado tiene **dos llaves**, y las dos tienen que decir "test":
+
+1. La propiedad del script **`ENVIRONMENT`** (*Configuración del proyecto →
+   Propiedades del script*).
+2. Una **marca guardada dentro de la hoja de cálculo**, invisible para los
+   operadores. Se pone una sola vez al instalar y **nunca se cambia**: una base
+   de producción no se puede convertir en base de pruebas corriendo el instalador
+   equivocado, ni al revés.
+
+El valor por defecto es producción: **olvidarse de configurar algo nunca
 convierte producción en un sitio donde se pueden borrar datos.** Un entorno solo
 es de pruebas si alguien lo declaró a propósito.
 
+> Los proyectos instalados en la iteración 1 usaban la propiedad `ENTORNO` =
+> `PRUEBAS`. El sistema la sigue respetando.
+
+Otras protecciones entre entornos:
+- **Restaurar** un respaldo de un entorno en el otro está bloqueado.
+- Producción **rechaza inscripciones con correo `.test`** (el dominio reservado
+  que usan los datos de prueba), así que ahí no se hacen inscripciones de prueba.
+- *Estado del sistema → Revisar* dice en qué entorno estás, qué marca tiene la
+  hoja y cuántos datos de prueba hay (en producción deben ser 0).
+
 ## Cómo distinguirlos de un vistazo
 
-Las dos URL se parecen muchísimo (`script.google.com/macros/s/AKfycb…`), así que
-la única defensa práctica es visual: en PRUEBAS, **todas** las pantallas pintan
-arriba una franja naranja a rayas:
+Las dos URL se parecen muchísimo (`script.google.com/macros/s/AKfycb…/exec`), así
+que la defensa práctica es visual: en PRUEBAS, **todas** las pantallas pintan
+arriba una franja a rayas amarillas y negras:
 
-> ⚠ ENTORNO DE **PRUEBAS** — los datos son ficticios y se pueden borrar.
-> Esto NO es la convocatoria real.
+> [PRUEBAS] · ENTORNO DE **PRUEBAS** — los datos son ficticios y se pueden
+> borrar. Esto NO es la convocatoria real.
 
 Y el título de la pestaña del navegador empieza por `[PRUEBAS]`.
 
@@ -49,41 +77,44 @@ Y el título de la pestaña del navegador empieza por `[PRUEBAS]`.
 ```
 1. Cambias algo en el código
         ↓
-2. npm test                          ← si falla, no sigue
+2. npm test                            ← si falla, no sigue
         ↓
-3. node tools/empaquetar.js
+3. node tools/empaquetar.js            → build/Codigo.gs
         ↓
-4. Lo pegas en PRUEBAS y lo pruebas de verdad
+4. Lo pegas en PRUEBAS, "Versión nueva" de la implementación, y lo pruebas de verdad
         ↓
-5. Solo cuando funciona, lo pegas en PRODUCCIÓN
+5. Solo con el GO del responsable técnico, se publica en PRODUCCIÓN
+   (orden exacto en DESPLIEGUE.md, sección C)
 ```
 
-Para ensayar la jornada completa sin tocar nada real:
-en PRUEBAS, ejecuta **`ENSAYO`** — carga 130 inscripciones, emite los 100
-códigos, simula check-ins, tardanzas, no-shows y contingencia, califica con tres
-jurados y produce el Top 7. Después, **`LIMPIAR`** lo deja vacío otra vez.
+## Ensayar en PRUEBAS
 
-## Cómo crear el entorno de pruebas
+- **`ENSAYO`** (en el editor del proyecto de PRUEBAS): ensayo completo en 13
+  fases — 130 inscripciones, integrantes, una agrupación repetida, revalidación,
+  códigos, pistas, videos, cambios de horario, la jornada, tres jurados, cierre,
+  resultados y respaldo. Si Apps Script corta por tiempo, **se reanuda solo**.
+- **`LIMPIAR`**: borra los datos operativos (inscripciones, integrantes,
+  calificaciones, incidentes, cambios, bitácora) y manda a la papelera las
+  carpetas de pistas y firmas de prueba. **Conserva CONFIG, los usuarios y los
+  respaldos.**
 
-1. https://script.google.com/home/projects/create
+Las dos funciones fallan a propósito en producción.
+
+## Cómo crear un entorno de pruebas nuevo
+
+1. https://script.google.com/home/projects/create — un proyecto **nuevo y vacío**.
 2. Nómbralo **EL BUNKER - PRUEBAS** (que se note en el título).
-3. Pega `build/Codigo.gs` en `Código.gs` → Ctrl+S.
+3. `node tools/empaquetar.js` → pega `build/Codigo.gs` en `Código.gs` → Guardar.
 4. En el desplegable de funciones elige **`INSTALAR_PRUEBAS`** — ⚠️ **no
-   `INSTALAR`**, que lo dejaría marcado como producción — y pulsa Ejecutar.
+   `INSTALAR`**, que lo dejaría como producción — y pulsa Ejecutar.
 5. Autoriza (es un proyecto nuevo, pide permisos otra vez).
-6. Implementar → Nueva implementación → Aplicación web → *Ejecutar como: Yo* ·
-   *Quién tiene acceso: Cualquier usuario*.
+6. **Implementar → Nueva implementación → Aplicación web** → *Ejecutar como: Yo*
+   · *Quién tiene acceso: Cualquier usuario*.
+7. Copia la URL `/exec` en su CONFIG → `web_app_url`.
+8. Ejecuta **`verAccesos`** para ver los enlaces del equipo de PRUEBAS.
 
-Te queda una URL distinta, una hoja de cálculo distinta, y el banner naranja en
-todas las pantallas.
+Te queda una URL distinta, una hoja distinta, sus propias carpetas y la franja de
+PRUEBAS en todas las pantallas.
 
-## Convertir un entorno de uno a otro
-
-Apps Script → **Configuración del proyecto → Propiedades del script** →
-propiedad `ENTORNO`:
-
-- `PRUEBAS` → permite ENSAYO y LIMPIAR, muestra el banner
-- cualquier otro valor (o ausente) → PRODUCCIÓN
-
-> Nunca pongas `PRUEBAS` en el proyecto real. Es justo lo que desactiva las
-> protecciones que impiden borrar la convocatoria.
+> Nunca pongas `ENVIRONMENT` = `test` en el proyecto real. Aunque la marca de la
+> hoja lo sigue protegiendo, es desactivar a propósito una de las dos llaves.

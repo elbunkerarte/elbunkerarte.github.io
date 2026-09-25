@@ -581,6 +581,9 @@ describe('Event-day screens show people with a seat, in words', () => {
       const r = test.project.run(fn, {}, F.ADMIN_SESSION);
       expect([fn, r.total, r.pistas.every((p) => /^B-\d{3}$/.test(p.code))]).toEqual([fn, 2, true]);
     }
+    test.project.run('refrescarVistas');
+    const sheet = test.project.records('PISTAS');
+    expect([sheet.length, sheet.every((p) => /^B-\d{3}$/.test(p.code))]).toEqual([2, true]);
   });
   it('the check-in card shows the presentation format as Form 1 words, not the stored value', () => {
     const { test } = env();

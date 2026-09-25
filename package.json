@@ -9,7 +9,6 @@
     "test:dataset": "node test/dataset.test.js",
     "test:iteration2": "node test/iteration2.test.js",
     "test:integration": "node test/integration.test.js",
-    "check": "node tools/verificar.js",
     "test:iteration2-integration": "node test/iteration2.integration.test.js"
   },
   "license": "UNLICENSED"

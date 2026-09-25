@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-25T14:00:48.401Z
+ * Generado: 2026-09-25T14:08:02.790Z
  * Modulos: 22 .gs + 14 .html
  */
 
@@ -5140,7 +5140,8 @@ function reconstruirAgrupaciones(filas) {
 /** What the audio technician works from, in agenda order. */
 function reconstruirPistas(filas) {
   limpiarDatos(HOJA.PISTAS);
-  var rows = filas.filter(function (r) { return normalizarTexto(r.code) || esVerdadero(r.track_uses); }).sort(byBlockThenCode);
+  // Only people with a seat: a track can only be sent with a code (same rule as the panel lists).
+  var rows = filas.filter(function (r) { return normalizarTexto(r.code); }).sort(byBlockThenCode);
   var datos = rows.map(function (r) {
     return {
       code: r.code, artistic_name: r.artistic_name || r.full_name, participation_mode: r.participation_mode,

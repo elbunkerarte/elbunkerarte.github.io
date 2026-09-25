@@ -1,146 +1,164 @@
-# Checklist de lanzamiento — EL BÚNKER
+# Checklist de lanzamiento — EL BÚNKER (iteración 2)
 
-Estado al **24 de septiembre de 2026**. El brief pide que *cada variable, enlace,
-consentimiento y automatización tenga estado READY / PENDING*.
+Estado al **25 de septiembre de 2026**. Evento: **viernes 23 de octubre de 2026,
+3:00 p. m. – 9:00 p. m., Centro Comercial Mayorca, Sabaneta, Antioquia.**
 
-**Resumen: la máquina está READY. Lo PENDING son decisiones de la organización
-que ningún sistema puede tomar por ella.**
+Cada punto tiene uno de tres estados:
+
+| Estado | Significa |
+|---|---|
+| ✅ **READY** | Construido y verificado |
+| 🟡 **PENDING** | Falta algo, pero no impide publicar (o es de la organización) |
+| 🔴 **BLOCKED** | No se puede hacer hasta que se cumpla una condición |
+
+**Resumen:** la iteración 2 está **READY en el entorno de PRUEBAS** (317 pruebas
+automáticas y prueba de punta a punta en vivo). **Producción sigue en la
+iteración 1** (implementación en su versión 4) hasta que el responsable técnico dé el GO.
 
 ---
 
-## 🔴 BLOQUEANTES — no abrir inscripciones sin esto
+## 🔴 BLOCKED — publicación en producción
 
-| # | Qué | Estado | Quién | Dónde se cambia |
+| # | Qué | Estado | Condición |
+|---|---|---|---|
+| 1 | Publicar la iteración 2 en producción (código, migración, sitio) | 🔴 BLOCKED | **GO del responsable técnico.** Nada se toca en producción antes |
+
+### Orden de publicación, cuando haya GO
+
+Detalle de cada paso en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md), sección C.
+
+| Paso | Qué | Hecho |
+|---|---|---|
+| 1 | Respaldo completo de producción (*Pre-evento* o *Manual*) y descargar el XLSX | ☐ |
+| 2 | Pegar `build/Codigo.gs` en el proyecto de producción y guardar | ☐ |
+| 3 | `QUITAR_PRUEBAS_PRELANZAMIENTO` → quita S-07BE9C53 y S-E780AA04 (con respaldo previo y registro en `_LOG`) | ☐ |
+| 4 | `MIGRAR` → informe con "Datos intactos: SI" | ☐ |
+| 5 | CONFIG `web_app_url` = URL `/exec` de producción | ☐ |
+| 6 | Versión nueva de la implementación existente (la URL `/exec` no cambia) | ☐ |
+| 7 | `VERIFICAR` o panel → *Revisar*: "Sistema consistente" | ☐ |
+| 8 | `verAccesos` → entregar los enlaces de `stage-manager` y `tecnico-audio` | ☐ |
+| 9 | Fusionar `feat/iteracion-2` en `feat/sistema-bunker` (publica el sitio) | ☐ |
+| 10 | Prueba de humo **sin crear datos**: página y Formulario 1 desde un celular (fecha y hora correctas, sin avisos de pendiente), "Mi inscripción" con un documento inexistente ("No encontramos tu inscripción"), panel admin y *Revisar* | ☐ |
+
+---
+
+## 🟡 PENDING — de la organización
+
+| # | Qué | Estado | Dónde se pone | Si no está |
 |---|---|---|---|---|
-| 1 | Razón social del responsable | 🔴 PENDING | Gerencia | CONFIG `legal_name` + `site/config.json` |
-| 2 | NIT | 🔴 PENDING | Gerencia | CONFIG `nit` |
-| 3 | Domicilio legal | 🔴 PENDING | Gerencia | CONFIG `legal_address` |
-| 4 | Correo para derechos de datos | 🔴 PENDING | Gerencia | CONFIG `data_protection_email` |
-| 5 | Teléfono institucional | 🔴 PENDING | Gerencia | CONFIG `institutional_phone` |
-| 6 | Términos: cláusulas jurídicas | 🔴 PENDING | Legal | `site/terminos.html` §10-12 |
-| 7 | Política: finalidades y retención | 🔴 PENDING | Legal | `site/politica-datos.html` §3, §5, §6 |
-| 8 | `consent_version` definitiva | 🔴 PENDING | Legal | CONFIG `consent_version` (`v1-PENDIENTE` → `v1`) |
-| 9 | Publicar términos y política y poner sus URL | 🔴 PENDING | Gerencia | CONFIG `terms_url`, `privacy_policy_url` |
-| 10 | Borrar los avisos amarillos de las páginas legales | 🔴 PENDING | Quien publique | `site/terminos.html`, `site/politica-datos.html` |
+| 2 | Enlace del grupo de WhatsApp | 🟡 PENDING | CONFIG `whatsapp_grupo_enlace` (un enlace `https://…`) | La plantilla 10 de invitación al grupo no aparece. Todo lo demás funciona |
+| 3 | Punto exacto dentro del C.C. Mayorca (plazoleta, piso, entrada) — **opcional** | 🟡 PENDING | CONFIG `evento_direccion` | Los mensajes dicen "Centro Comercial Mayorca, Sabaneta, Antioquia" |
+| 4 | Dominio propio — **opcional** | 🟡 PENDING | Ver [docs/DOMINIO-PROPIO.md](docs/DOMINIO-PROPIO.md) | Se usa la dirección de GitHub Pages |
+| 5 | Revisión jurídica de los Términos y Condiciones v1 — **recomendada** | 🟡 PENDING | [legal/README.md](legal/README.md) | Los términos v1 los redactó el equipo técnico (24-sep), porque no venían entre los documentos entregados; no se tratan como documento contractual revisado |
+| 6 | Logística de la sede: aforo, energía, sonido, evacuación, permisos | 🟡 PENDING | Pendiente de la organización | — |
+| 7 | Piezas gráficas y publicaciones con la fecha y el lugar nuevos | 🟡 PENDING | Pendiente de la organización | — |
 
-> **Por qué está así:** el brief lo exige — *"No inventes nombres legales, NIT,
-> correos, permisos ni textos jurídicos específicos que no hayan sido aprobados"*.
-> El sistema pinta estos valores en amarillo hasta que existan, para que nadie
-> publique un placeholder por error.
-
----
-
-## 🟡 ANTES DEL EVENTO
+## 🟡 PENDING — operación antes del evento
 
 | # | Qué | Estado | Quién | Cuándo |
 |---|---|---|---|---|
-| 11 | Confirmar sede, aforo, energía, sonido, evacuación | 🟡 PENDING | Producción | Antes de anunciar dirección |
-| 12 | Sede y dirección en CONFIG | 🟡 PENDING | Producción | Al confirmar |
-| 13 | Revisar permisos/requisitos del municipio | 🟡 PENDING | Producción | Antes de publicar |
-| 14 | Fecha/hora de cierre de cambios | 🟡 PENDING | Producción | CONFIG `cierre_cambios` |
-| 15 | Entregar su enlace a cada persona del equipo | 🟡 PENDING | Coordinación | Antes del 28-sep |
-| 16 | Poner en `_USUARIOS` la nota `jurado 1/2/3` | 🟡 PENDING | Coordinación | Antes del ensayo |
-| 17 | Ensayo integral (función `ENSAYO`) | 🟡 PENDING | Coordinación | 28-sep |
-| 18 | Limpiar los datos del ensayo | 🟡 PENDING | Coordinación | Tras el ensayo |
-| 19 | Probar el check-in **sin señal** en la sede real | 🟡 PENDING | Coordinación | Antes del 2-oct |
-| 20 | Respaldo + copia offline | 🟡 PENDING | Coordinación | 1-oct |
-| 21 | Hotspot y power banks | 🟡 PENDING | Producción | 1-oct |
-| 22 | Cerrar cambios (`cambios_abiertos=NO`) | 🟡 PENDING | Coordinación | 1-oct |
-| 23 | **Instalar el entorno de PRUEBAS** (proyecto creado con el código; el OAuth pidió verificación en 2 pasos del dueño de la cuenta) | 🟡 PENDING | Dueño de la cuenta Google | Antes del ensayo |
-| 24 | Producción ya tiene inscripciones del 17-sep: **confirmar si son pruebas** y, si lo son, borrarlas a mano en `REGISTRO` (`LIMPIAR` está bloqueado en producción a propósito) | 🟡 PENDING | Coordinación | Antes de abrir |
-| 25 | Revisar correos con dominio mal escrito (p. ej. `gmaik.com`): el validador comprueba la sintaxis, no la errata | 🟡 PENDING | Coordinación | Al cerrar los 100 |
+| 8 | Entregar su enlace a cada una de las 10 cuentas, por un canal privado | 🟡 PENDING | `admin` | Tras el paso 8 del orden de publicación |
+| 9 | Comprobar con `verAccesos` que ningún enlace vence antes de terminar la calificación | 🟡 PENDING | `admin` | Antes del evento |
+| 10 | Ensayo con el equipo real en PRUEBAS (cada persona con su enlace de PRUEBAS) | 🟡 PENDING | Coordinación | Antes del evento |
+| 11 | Probar el check-in **sin señal** en la sede real | 🟡 PENDING | Coordinación | Antes del 23-oct |
+| 12 | Resolver agrupaciones repetidas y REVISIÓN antes de emitir códigos | 🟡 PENDING | Coordinación | Al cerrar los 100 |
+| 13 | Revisar correos con dominio mal escrito (el formulario sugiere la corrección, pero no la impone) | 🟡 PENDING | Coordinación | Al cerrar los 100 |
+| 14 | Descargar la carpeta de audio al computador del técnico y *Respaldar audios* | 🟡 PENDING | Coordinación + técnico | 22-oct |
+| 15 | Respaldo *Pre-evento* + copia offline del XLSX | 🟡 PENDING | Coordinación | 22-oct |
+| 16 | Hotspot y power banks | 🟡 PENDING | Producción | 22-oct |
+
+> El cierre de cambios de horario **no** requiere acción: el Formulario 2 se
+> cierra solo el **22 de octubre a las 6:00 p. m.** (CONFIG `cierre_cambios`).
 
 ---
 
-## ✅ READY — construido, desplegado y verificado
+## ✅ READY — construido y verificado
 
-### Infraestructura
+### Entornos e infraestructura
 | Qué | Estado | Evidencia |
 |---|---|---|
-| Sitio público | ✅ READY | https://miguelgamer77721-ui.github.io/el-bunker/ — HTTP 200 |
-| Aplicación web desplegada | ✅ READY | Versión 1, acceso *Cualquier usuario* |
-| Base maestra, 14 hojas | ✅ READY | Creada por `INSTALAR` |
-| Secretos fuera del repositorio | ✅ READY | Script Properties |
-| Respaldo automático diario | ✅ READY | Disparador 23:00 |
-| Refresco de vistas cada 6 h | ✅ READY | Disparador instalado |
-| Publicación automática del sitio | ✅ READY | GitHub Actions, corre las pruebas antes |
+| Entorno de PRUEBAS separado (proyecto, hoja y carpetas propios, franja visible) | ✅ READY | En uso para la prueba en vivo del 25-sep |
+| `ENSAYO` y `LIMPIAR` bloqueados fuera de PRUEBAS (doble llave: propiedad + marca de la hoja) | ✅ READY | Bloqueo en código |
+| Producción rechaza correos `.test` | ✅ READY | Bloqueo en código |
+| Sitio público | ✅ READY | https://miguelgamer77721-ui.github.io/el-bunker/ (se actualiza en el paso 9) |
+| Publicación del sitio con pruebas previas | ✅ READY | GitHub Actions corre `npm test` antes de publicar |
+| Despliegue sin clasp que conserva la URL `/exec` | ✅ READY | [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md) |
+| Migración que solo añade, con respaldo previo y control de filas | ✅ READY | `MIGRAR` |
+| `web_app_url` en CONFIG y aviso en *Revisar* | ✅ READY | `web_app_url_ok` |
+| Disparadores: respaldo diario 23:00, vistas cada 6 h, videos cada hora | ✅ READY | Instalados por `INSTALAR`/`MIGRAR` |
 
-### Formularios y flujo
+### Datos legales
 | Qué | Estado |
 |---|---|
-| Mini-página con los 4 botones exigidos | ✅ READY |
-| Formulario 1 con los 20 campos | ✅ READY |
-| 4 consentimientos separados y registrables | ✅ READY |
-| Versión del texto legal sellada por inscripción | ✅ READY |
-| Validación de edad 18-28 al día del evento | ✅ READY |
-| Validación de residencia | ✅ READY |
-| Duplicados: documento duro, correo/teléfono alerta | ✅ READY |
-| Idempotencia | ✅ READY — probada en producción |
-| Formulario 2 con sus 4 reglas | ✅ READY |
-| Códigos B-001…B-100 estables e irrepetibles | ✅ READY |
-| Agenda de 10 bloques + contingencia | ✅ READY |
+| Responsable: Corporación Socio cultural El Arte es la Solución · NIT 901292696 · representante legal Jeison Duval Mazo Castañeda | ✅ READY — confirmado por la organización el 24-sep |
+| Dirección y canal físico de reclamos: Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia | ✅ READY |
+| Correo El.arterslasolucion@gmail.com · teléfono 304 232 8502 | ✅ READY |
+| Política de tratamiento de datos v2-2026-09-24 (Ley 1581 de 2012) | ✅ READY |
+| Términos y Condiciones v1-2026-09-24 | ✅ READY (revisión jurídica recomendada, punto 5) |
+| Versión de términos, política y responsable sellada en cada aceptación | ✅ READY |
+
+### Inscripción y participante
+| Qué | Estado |
+|---|---|
+| Formulario 1: solista, dúo (2) y agrupación (3–15) | ✅ READY |
+| Edad 18–30 al 23 de octubre y residencia en Sabaneta | ✅ READY |
+| Duplicados: documento duro; correo y teléfono, alerta | ✅ READY |
+| Agrupación = un proyecto = un cupo, con GRP y clave | ✅ READY |
+| Autorización individual de cada integrante con firma dibujada | ✅ READY — probado en vivo |
+| Aviso de agrupaciones con nombre equivalente (decide una persona) | ✅ READY |
+| "Mi inscripción": estado, código, horario, pista, video, agrupación | ✅ READY — probado en vivo |
+| Subida de pistas (máx. 15 MB, renombradas, sin borrar la anterior) | ✅ READY — probado en vivo con 5, 14 y 16 MB (esta última rechazada) |
+| Comprobación de videos (YouTube, Vimeo, Drive; IG/TikTok para revisión manual) | ✅ READY |
+| Formulario 2: una solicitud por código, hasta el 22-oct 18:00 | ✅ READY — probado en vivo |
+| Protección contra abuso: campo trampa, tiempo mínimo, límite por minuto y por documento | ✅ READY |
+| CAPTCHA | ⚪ NO IMPLEMENTADO — decisión declarada |
 
 ### Operación
 | Qué | Estado |
 |---|---|
-| Panel de inscritos con filtros y búsqueda | ✅ READY |
-| Emisión de códigos idempotente | ✅ READY |
-| Aprobación/rechazo de cambios con control de cupo | ✅ READY |
-| Check-in por código o documento | ✅ READY |
+| Panel con 7 pestañas (Inscritos, Agrupaciones, Cerrar los 100, Cambios, Pistas, Comunicación, Respaldo y sistema) | ✅ READY |
+| Emisión de códigos B-001…B-100 idempotente | ✅ READY |
+| 9 plantillas de mensajes + la del grupo de WhatsApp cuando exista el enlace | ✅ READY |
+| WhatsApp con envío humano (botón *Abrir chat*) y contactos `.vcf` | ✅ READY |
+| Constancia imprimible por agrupación con firmas digitales y líneas para firmar en papel | ✅ READY — probado en vivo |
+| Check-in por código, documento o documento de un integrante | ✅ READY — probado en vivo |
+| Estados PRECOLA / EN AUDICIÓN / REALIZADA para el stage manager | ✅ READY |
+| Lista de pistas en orden de agenda para el técnico de audio | ✅ READY |
 | **Check-in sin internet, con cola de sincronización** | ✅ READY |
-| Regla de los 5 minutos | ✅ READY |
-| Plan de contingencia según tiempo real restante | ✅ READY |
-| Cierre 21:30 | ✅ READY |
-| 7 estados de asistencia con transiciones validadas | ✅ READY |
-| Incidentes | ✅ READY |
+| Plan de contingencia según el tiempo real restante | ✅ READY |
+| Cierre de jornada 9:00 p. m. | ✅ READY |
+| 10 cuentas personales con vencimiento y revocación | ✅ READY |
 
-### Evaluación
+### Evaluación y resultados
 | Qué | Estado |
 |---|---|
-| 3 paneles de jurado independientes y ciegos | ✅ READY |
-| Rúbrica de 8 factores, pesos = 100 | ✅ READY |
-| Tarjeta incompleta = inválida (no cero) | ✅ READY |
-| Top 7 sobre audiciones realizadas | ✅ READY |
-| Desempate Performance → Talento → Identidad | ✅ READY |
-| Empate irresoluble → marca comité, no inventa | ✅ READY |
-| Ranking completo no público | ✅ READY |
+| 3 jurados independientes; solo se califica lo REALIZADO | ✅ READY — probado en vivo con dos jurados |
+| Rúbrica de 8 factores, pesos = 100, escala 1–10 | ✅ READY |
+| Mínimo 2 tarjetas válidas para entrar al ranking | ✅ READY |
+| Top 7 con desempate Performance → Talento → Identidad | ✅ READY |
+| Empate en el corte → acta del comité en el dashboard | ✅ READY |
+| *Calcular resultados* explica quién queda fuera del ranking y por qué | ✅ READY |
+| Dashboard con hora simulada para ensayar | ✅ READY |
 
-### Datos y reportes
+### Datos y respaldos
 | Qué | Estado |
 |---|---|
-| Dashboard con los 15 indicadores + 4 gráficos | ✅ READY |
-| Exportación XLSX | ✅ READY |
-| Respaldo XLSX + JSON con restauración | ✅ READY |
-| Bitácora sin datos personales | ✅ READY |
-| 7 plantillas de comunicación | ✅ READY |
-| Enlaces de WhatsApp (envío humano) | ✅ READY |
-
-### Seguridad
-| Qué | Estado |
-|---|---|
-| 5 roles verificados en el router | ✅ READY |
-| Enlaces firmados, con caducidad y revocables | ✅ READY |
-| Jurado sin acceso a documento ni contacto | ✅ READY |
-| Escritura serializada (candado) | ✅ READY |
-| Escapado de salida | ✅ READY |
-| No se piden fotos de cédula | ✅ READY |
-| Rate limiting / CAPTCHA | ⚪ NO IMPLEMENTADO — decisión declarada |
+| Respaldo con etiqueta (XLSX con agrupaciones plegables + JSON) | ✅ READY |
+| Restauración desde JSON con `RESTAURAR` | ✅ READY — probada en vivo el 25-sep |
+| Respaldo de audios | ✅ READY |
+| Columnas en texto plano (cédulas, teléfonos, horas, fechas) | ✅ READY — corregido tras encontrarlo en vivo |
+| Bitácora `_LOG` sin datos personales | ✅ READY |
 
 ### Pruebas
 | Qué | Estado |
 |---|---|
-| 97 pruebas automáticas | ✅ READY — `npm test` |
-| 18 casos del QA obligatorio | ✅ READY |
-| Dataset de 130 → exactamente 100 códigos | ✅ READY |
-| Inscripción real de extremo a extremo | ✅ VERIFICADO en producción |
+| 317 pruebas automáticas (74 core + 32 dataset + 47 iteración 2 + 108 integración + 56 integración iteración 2) | ✅ READY — `npm test` |
+| Prueba de punta a punta en PRUEBAS, navegador anónimo | ✅ READY — inscripción solista y agrupación, integrante con firma, Mi inscripción, pistas, cambio de horario, check-in, jurados, dashboard, constancia, respaldo y restauración, LIMPIAR, ENSAYO |
 
 ---
 
-## Orden sugerido
+## Documentación para el equipo
 
-1. **Hoy:** gerencia entrega los 5 datos legales (#1-5).
-2. **Hoy:** legal redacta las cláusulas (#6-8) y se publican (#9-10).
-3. **Al confirmar sede:** #11-13.
-4. **Con eso, se abre la convocatoria.**
-5. **28-sep:** ensayo integral (#17) y limpieza (#18).
-6. **1-oct:** respaldo, cerrar cambios, recordatorios (#20-22).
+- [INICIO-RAPIDO.md](INICIO-RAPIDO.md) — una página.
+- [docs/MANUAL-OPERACION.md](docs/MANUAL-OPERACION.md) — manual completo.
+- [docs/MANUAL-RECUPERACION.md](docs/MANUAL-RECUPERACION.md) — cuando algo falla.
