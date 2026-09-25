@@ -177,7 +177,7 @@ function validateTrackUpload(fileName, byteLength, headBytes, options) {
   }
   if (!byteLength) return { ok: false, error: 'El archivo está vacío.' };
   if (byteLength > maxMb * 1024 * 1024) {
-    return { ok: false, error: 'El archivo supera ' + maxMb + ' MB. Comprimelo (MP3 a 192 kbps) o entregalo en USB.' };
+    return { ok: false, error: 'El archivo supera ' + maxMb + ' MB. Comprímelo (MP3 a 192 kbps) o entrégalo en USB.' };
   }
   var type = detectAudioType(headBytes);
   if (!audioTypeMatchesExtension(type, ext)) {

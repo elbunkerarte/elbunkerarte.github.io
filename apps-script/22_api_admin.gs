@@ -274,6 +274,13 @@ function accionListarCambios(datos) {
   return {
     cambios: cambios.filter(function (c) {
       return !estado || estado === 'TODOS' || normalizarComparable(c.estado) === estado;
+    }).map(function (c) {
+      // A cell that is not plain text reads back as a 1899-12-30 date: staff always see clock times.
+      return Object.assign({}, c, {
+        original_time: clockText(c.original_time) || c.original_time,
+        nueva_hora: clockText(c.nueva_hora) || c.nueva_hora,
+        resuelto_at: String(c.resuelto_at || '').replace('T', ' ').slice(0, 16)
+      });
     }),
     pendientes: cambios.filter(function (c) { return normalizarComparable(c.estado) === 'PENDIENTE'; }).length
   };

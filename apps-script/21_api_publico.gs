@@ -249,7 +249,7 @@ function registerProject(datos, video) {
       full_name: normalizarTexto(datos.full_name), id_number: normalizarTexto(datos.id_number),
       normalized_id_number: candidate.normalized_id_number, birth_date: normalizarTexto(datos.birth_date),
       age: verdict.edad === null ? '' : verdict.edad, adult_confirmation: esVerdadero(datos.adult_confirmation),
-      artistic_role: normalizarTexto(datos.leader_role) || 'Lider / vocero',
+      artistic_role: normalizarTexto(datos.leader_role) || 'Líder / vocero',
       consent_terms: esVerdadero(datos.accept_terms), consent_data: esVerdadero(datos.accept_data_processing),
       consent_image: esVerdadero(datos.accept_image_voice), consent_at: now,
       terms_version: termsVersion, policy_version: policyVersion, data_controller: controller,
@@ -676,7 +676,7 @@ function accionSolicitarCambio(datos) {
     registrar('participante', '', 'SOLICITUD_CAMBIO', registro.code, solicitudId);
     return {
       solicitud_id: solicitudId, estado: ESTADO_CAMBIO.PENDIENTE,
-      mensaje: 'Registramos tu solicitud. Produccion te confirmara por WhatsApp o correo si es APROBADA o NO APROBADA. ' +
+      mensaje: 'Registramos tu solicitud. Producción te confirmará por WhatsApp o correo si es APROBADA o NO APROBADA. ' +
                'Mientras tanto tu horario original sigue vigente.'
     };
   });

@@ -493,6 +493,31 @@ describe('Messages: the WhatsApp group invite only exists once there is a link',
 });
 
 // ===========================================================================
+describe('Schedule changes listed to staff read as clock times', () => {
+  it('a change sheet whose time column lost its plain-text format still lists "15:00", never a 1899 date', () => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    const rows = F.registerAndIssueCodes(test.project, 3);
+    // the live PRUEBAS sheet had this column formatted before the plain-text rule covered it
+    test.project.execute('dropPlainText', (g) => {
+      const sheet = F.masterSheet(g, '_CAMBIOS');
+      const col = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].indexOf('original_time') + 1;
+      sheet.getRange(2, col, sheet.getMaxRows() - 1, 1).setNumberFormat('General');
+    });
+    const who = rows.find((r) => r.code === 'B-002');
+    const req = test.project.run('accionSolicitarCambio', {
+      participant_code: 'B-002', full_name: who.full_name, reason_short: 'Work', contact: '3001112233', acceptance: true,
+      client_submission_id: 'change-fmt', form_elapsed_ms: 60000 });
+    expect(req.estado).toBe('PENDIENTE');
+    const listed = test.project.run('accionListarCambios', { estado: 'TODOS' }, F.ADMIN_SESSION).cambios[0];
+    expect(listed.original_time).toBe('15:00');
+    test.project.run('accionResolverCambio', { solicitud_id: req.solicitud_id, aprobar: true, nuevo_bloque: 5 }, F.ADMIN_SESSION);
+    const resolved = test.project.run('accionListarCambios', { estado: 'TODOS' }, F.ADMIN_SESSION).cambios[0];
+    expect([resolved.nueva_hora, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(resolved.resuelto_at)]).toEqual(['17:00', true]);
+  });
+});
+
+// ===========================================================================
 describe('Selection size', () => {
   it('seven projects are selected (confirmed by the organization)', () => {
     const account = F.newAccount();

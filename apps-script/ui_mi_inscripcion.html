@@ -86,7 +86,7 @@ function factHtml(k, v) {
 function render(r) {
   $('#avisoGlobal').innerHTML = '';
   var html = '<section class="tarjeta" style="border-color:var(--amarillo)">' +
-    '<div style="color:var(--tenue);font-size:13px;letter-spacing:.1em">' + escaparHtml(r.participation_mode) + ' · ' + escaparHtml(r.submission_id) + '</div>' +
+    '<div style="color:var(--tenue);font-size:13px;letter-spacing:.1em">' + escaparHtml(({ SOLISTA: 'Solista', DUO: 'Dúo', AGRUPACION: 'Agrupación' })[r.participation_mode] || r.participation_mode) + ' · ' + escaparHtml(r.submission_id) + '</div>' +
     '<div class="codigo-grande" style="font-size:34px;color:var(--texto)">' + escaparHtml(r.artistic_name || '') + '</div>' +
     '<p style="margin:8px 0 0">' + etiquetaEstado(r.eligibility_status) + ' ' + escaparHtml(r.estado_texto) + '</p></section>';
 
@@ -135,7 +135,7 @@ function render(r) {
 
   if (r.whatsapp_oficial) {
     html += '<section class="tarjeta"><h2>Guarda nuestro número</h2><p style="margin:0 0 12px">Guarda el <b>' +
-      escaparHtml(r.whatsapp_oficial) + '</b> como <b>' + escaparHtml(r.whatsapp_nombre) + '</b>: desde ahí enviamos códigos, horarios y novedades.</p>' +
+      escaparHtml(String(r.whatsapp_oficial).replace(/^(\d{3})(\d{3})(\d{4})$/, '$1 $2 $3')) + '</b> como <b>' + escaparHtml(r.whatsapp_nombre) + '</b>: desde ahí enviamos códigos, horarios y novedades.</p>' +
       '<button type="button" class="boton fantasma" id="btnGuardarContacto">Guardar contacto</button></section>';
   }
   $('#estado').innerHTML = html;

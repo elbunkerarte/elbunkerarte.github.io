@@ -495,7 +495,7 @@ function generarMensajes() {
   llamar('mensajes', { plantilla: $('#plantilla').value, bloque: $('#filtroBloqueMsg').value })
     .then(function (r) {
       ocupado(b, false);
-      $('#salidaMensajes').innerHTML = '<div class="aviso ok"><b>' + r.total + ' mensajes generados</b>' + escaparHtml(r.nombre) + '</div>' +
+      $('#salidaMensajes').innerHTML = '<div class="aviso ok"><b>' + r.total + (r.total === 1 ? ' mensaje generado' : ' mensajes generados') + '</b>' + escaparHtml(r.nombre) + '</div>' +
         '<div class="tabla-envoltura" style="max-height:440px;overflow-y:auto"><table><thead><tr><th>Código</th><th>Nombre</th><th>WhatsApp</th><th>Mensaje</th></tr></thead><tbody>' +
         r.mensajes.map(function (m) {
           return '<tr><td><b>' + escaparHtml(m.code || m.submission_id) + '</b></td><td>' + escaparHtml(m.full_name) + '</td>' +
