@@ -606,6 +606,41 @@ describe('The printable acceptance record shows the drawn signatures', () => {
 });
 
 // ===========================================================================
+describe('The rehearsal resumes when a phase runs out of time (Apps Script stops at 6 minutes)', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    return { account, test };
+  });
+
+  it('a seed phase past its deadline stops before writing anything and says what is pending', () => {
+    const { test } = env();
+    const r = test.project.execute('late', (g) => g.cargarDatosDePrueba(g.Date.now() - 1));
+    expect([r.pausa, r.pendientes, test.project.records('REGISTRO').length]).toEqual([true, 131, 0]);
+  });
+  it('resuming skips the stored registrations and still replays the deliberate retry', () => {
+    const { test } = env();
+    test.project.execute('full', (g) => g.cargarDatosDePrueba());
+    const rows = test.project.records('REGISTRO').length;
+    const again = test.project.execute('resume', (g) => g.cargarDatosDePrueba(g.Date.now() + 3600000));
+    expect([rows, test.project.records('REGISTRO').length, again.total, again.repetidos]).toEqual([130, 130, 130, 1]);
+  });
+  it('a paused phase stays pending and the continuation trigger is scheduled', () => {
+    const { test } = env();
+    const r = test.project.execute('pause', (g) => {
+      g.cargarIntegrantesDePrueba = () => ({ pausa: true, pendientes: 7 });
+      const out = g.ensayoIntegral();
+      const state = JSON.parse(g.PropertiesService.getScriptProperties().getProperty(g.REHEARSAL_STATE_KEY));
+      const triggers = g.ScriptApp.getProjectTriggers().map((t) => t.getHandlerFunction());
+      return { out, done: state.done, triggers };
+    });
+    expect([r.out.en_curso, r.out.pendientes, r.out.fase]).toEqual([true, 7, '2. Integrantes de agrupaciones']);
+    expect(r.done).toEqual(['1. Inscripciones (130 + reintento)']);
+    expect(r.triggers).toContain('ENSAYO_CONTINUAR');
+  });
+});
+
+// ===========================================================================
 describe('Selection size', () => {
   it('seven projects are selected (confirmed by the organization)', () => {
     const account = F.newAccount();

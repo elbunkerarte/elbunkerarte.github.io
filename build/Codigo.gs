@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-25T13:32:26.420Z
+ * Generado: 2026-09-25T14:00:48.401Z
  * Modulos: 22 .gs + 14 .html
  */
 
@@ -6800,40 +6800,88 @@ function buildTestTrackBase64() {
  * validation, duplicate detection, group detection and idempotency exactly as
  * production will. Only runs in the test environment.
  */
-function cargarDatosDePrueba() {
+function cargarDatosDePrueba(deadline) {
   exigirEntornoPruebas('CARGAR DATOS DE PRUEBA');
   var filas = construirDatasetPrueba(130);
   var resultados = { total: filas.length, por_estado: {}, repetidos: 0 };
+  var stored = storedIdempotencyKeys();
+  var seen = {};
 
-  filas.forEach(function (f) {
+  for (var i = 0; i < filas.length; i++) {
+    var f = filas[i];
+    var key = 'inscripcion:' + f.client_submission_id;
+    var isRetry = seen[key];
+    seen[key] = true;
+    // Resuming: rows already processed are skipped; the deliberate retry of an id still runs (it must replay).
+    if (!isRetry && stored[key]) continue;
+    if (deadline && Date.now() > deadline) return rehearsalPause(resultados, filas.length - i);
     var r = accionInscribir(f);
     if (r.repetido) resultados.repetidos++;
     var e = r.eligibility_status || ('ERROR: ' + (r.error || ''));
     resultados.por_estado[e] = (resultados.por_estado[e] || 0) + 1;
-  });
+  }
+  if (deadline) resultados = seedRegistrationSummary(resultados.repetidos);
 
   registrar('sistema', 'admin', 'CARGAR_DATOS_PRUEBA', '', JSON.stringify(resultados));
   console.log(JSON.stringify(resultados, null, 2));
   return resultados;
 }
 
+/** Keys already recorded in _IDEMPOTENCIA, read once (one lookup per row would cost ~0.3 s each). */
+function storedIdempotencyKeys() {
+  var keys = {};
+  leerHoja(HOJA.IDEMPOTENCIA).forEach(function (r) { keys[String(r.clave)] = true; });
+  return keys;
+}
+
+/** A phase that ran out of time: the rehearsal keeps it pending and continues in a new execution. */
+function rehearsalPause(partial, pending) {
+  return { pausa: true, pendientes: pending, parcial: partial };
+}
+
+/** Totals of the seed registrations as they stand in REGISTRO (a resumed phase only saw its last chunk). */
+function seedRegistrationSummary(retries) {
+  var out = { total: 0, por_estado: {}, repetidos: retries || 0 };
+  leerHoja(HOJA.REGISTRO).forEach(function (r) {
+    if (!isTestData(r)) return;
+    out.total++;
+    out.por_estado[r.eligibility_status] = (out.por_estado[r.eligibility_status] || 0) + 1;
+  });
+  return out;
+}
+
 /** Registers the seed members of every group project through the real action. */
-function cargarIntegrantesDePrueba() {
+function cargarIntegrantesDePrueba(deadline) {
   exigirEntornoPruebas('CARGAR INTEGRANTES DE PRUEBA');
   var groups = leerHoja(HOJA.REGISTRO).filter(function (r) {
     return r.group_code && normalizarComparable(r.eligibility_status) !== 'INCOMPLETO';
   });
   var payloads = buildTestMembers(groups);
   var summary = { total: payloads.length, por_estado: {}, repetidos: 0, errores: 0 };
-  payloads.forEach(function (p) {
+  var stored = storedIdempotencyKeys();
+  for (var i = 0; i < payloads.length; i++) {
+    var p = payloads[i];
+    if (stored['integrante:' + p.client_submission_id]) continue;       // already registered in an earlier run
+    if (deadline && Date.now() > deadline) return rehearsalPause(summary, payloads.length - i);
     p.group_key = groupAccessKey(p.group_code);
     var r = accionRegistrarIntegrante(p);
     if (r.repetido) summary.repetidos++;
-    if (r.ok === false) { summary.errores++; return; }
+    if (r.ok === false) { summary.errores++; continue; }
     summary.por_estado[r.member_status] = (summary.por_estado[r.member_status] || 0) + 1;
-  });
+  }
+  if (deadline) summary = seedMemberSummary(payloads.length);
   registrar('sistema', 'admin', 'CARGAR_INTEGRANTES_PRUEBA', '', JSON.stringify(summary));
   return summary;
+}
+
+/** Totals of the non-leader members as they stand in _INTEGRANTES. */
+function seedMemberSummary(total) {
+  var out = { total: total, por_estado: {} };
+  leerHoja(HOJA.INTEGRANTES).forEach(function (m) {
+    if (esVerdadero(m.is_leader)) return;
+    out.por_estado[m.member_status] = (out.por_estado[m.member_status] || 0) + 1;
+  });
+  return out;
 }
 
 /**
@@ -6853,9 +6901,11 @@ function ensayoIntegral() {
   var state = JSON.parse(props.getProperty(REHEARSAL_STATE_KEY) || '{"done":[],"report":[]}');
   var admin = { ok: true, rol: ROL.ADMIN, alias: 'ensayo' };
 
+  // Apps Script kills an execution at 6 minutes; long phases stop at this deadline and resume.
+  var deadline = started + REHEARSAL_BUDGET_MS;
   var phases = [
-    ['1. Inscripciones (130 + reintento)', function () { return cargarDatosDePrueba(); }],
-    ['2. Integrantes de agrupaciones', function () { return cargarIntegrantesDePrueba(); }],
+    ['1. Inscripciones (130 + reintento)', function () { return cargarDatosDePrueba(deadline); }],
+    ['2. Integrantes de agrupaciones', function () { return cargarIntegrantesDePrueba(deadline); }],
     ['3. Agrupacion repetida: el operador decide', function () { return rehearsalResolveRepeatedGroup(admin); }],
     ['4. Revalidar', function () { return accionRevalidarTodo({}, admin).resumen; }],
     ['5. Emitir codigos', function () {
@@ -6884,6 +6934,11 @@ function ensayoIntegral() {
       return { en_curso: true, hechas: state.done.length, total: phases.length };
     }
     var result = phases[i][1]();
+    if (result && result.pausa) {
+      scheduleRehearsalContinuation();
+      console.log(name + ': en pausa por tiempo, faltan ' + result.pendientes + '. Continúa solo en 1 minuto.');
+      return { en_curso: true, hechas: state.done.length, total: phases.length, fase: name, pendientes: result.pendientes };
+    }
     state.done.push(name);
     state.report.push({ paso: name, resultado: result });
     props.setProperty(REHEARSAL_STATE_KEY, JSON.stringify(state).slice(0, 8500));
