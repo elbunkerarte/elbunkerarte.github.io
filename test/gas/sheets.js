@@ -15,6 +15,7 @@
  *    keeps formats (so the next write inherits the date format);
  *  - setValues() dimension checks, getRange() "at least 1 row" checks, the
  *    50,000 characters-per-cell limit, "cannot delete all non-frozen rows";
+ *  - appendRow() ignores a plain-text '@' format and resets the cells it fills;
  *  - developer metadata visibility (PROJECT metadata is only visible to the
  *    project that created it).
  */
@@ -28,6 +29,8 @@ const MAX_CELL_CHARS = 50000;
 const MAX_CELLS = 10000000;
 const MAX_GROUP_DEPTH = 8;
 const DEFAULT_ROWS = 1000;
+// The number format appendRow leaves on the cells it fills (read back from a live sheet).
+const APPEND_ROW_FORMAT = '0.###############';
 const DEFAULT_COLS = 26;
 
 const DM_VISIBILITY = { DOCUMENT: 'DOCUMENT', PROJECT: 'PROJECT' };
@@ -934,7 +937,14 @@ function makeSpreadsheetApp(env) {
         if (!Array.isArray(values)) throw R.error("The parameters don't match the method signature for SpreadsheetApp.Sheet.appendRow.");
         const r = sheet.lastRow() + 1;
         expandGrid(store, sheet, r, values.length);
-        values.forEach((v, i) => writeCell(env, store, sheet, r, i + 1, v, 'appendRow'));
+        values.forEach((v, i) => {
+          // Measured on a live sheet (2026-09-25): appendRow ignores a plain-text '@' column format.
+          // Every non-empty cell it fills gets the automatic format, so '15:00' becomes a time,
+          // '0012' becomes 12 and later setValue() calls on that cell are parsed too. Only a
+          // leading apostrophe keeps the text (and is dropped); an empty cell keeps its format.
+          if (v !== '' && v !== null && v !== undefined) sheet.ensureCell(r, i + 1).fmt = APPEND_ROW_FORMAT;
+          writeCell(env, store, sheet, r, i + 1, v, 'appendRow');
+        });
         return facade;
       },
       clear(options) {

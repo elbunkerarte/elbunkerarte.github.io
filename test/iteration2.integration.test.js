@@ -493,6 +493,53 @@ describe('Messages: the WhatsApp group invite only exists once there is a link',
 });
 
 // ===========================================================================
+describe('Rows appended by the API keep what the person typed (appendRow ignores plain text)', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    const solo = test.project.run('accionInscribir', F.validSubmission({
+      client_submission_id: 'typed-1', id_number: '10034567', whatsapp: '3010000009', birth_date: '2001-04-12',
+      artistic_name: '1999', song_name: '4:20' }));
+    const band = test.project.run('accionInscribir', groupSubmission(2, 'AGRUPACION', 'La Banda Typed', 3));
+    const png = test.project.execute('png', (g) => g.TEST_SIGNATURE_PNG);
+    const member = test.project.run('accionRegistrarIntegrante',
+      memberSubmission('GRP-001', band.group_key, 1, { id_number: '98765432', birth_date: '2000-01-15', signature_png: png }));
+    return { account, test, solo, band, member };
+  });
+
+  it('a registration row stores document, phone, birth date, artistic name and song as the typed text', () => {
+    const { test, solo } = env();
+    expect(solo.eligibility_status).toBe('APTO');
+    const row = test.project.records('REGISTRO').find((r) => r.submission_id === solo.submission_id);
+    expect([row.id_number, row.whatsapp, row.birth_date, row.artistic_name, row.song_name])
+      .toEqual(['10034567', '3010000009', '2001-04-12', '1999', '4:20']);
+  });
+  it('a member row stores the document and the birth date as text', () => {
+    const { test, member } = env();
+    expect(member.member_status).toBe('AUTORIZADO');
+    const row = test.project.records('_INTEGRANTES').find((r) => r.member_id === member.member_id);
+    expect([row.id_number, row.birth_date]).toEqual(['98765432', '2000-01-15']);
+  });
+  it('a change request stores the original time as "15:00"', () => {
+    const { test } = env();
+    test.project.run('accionAsignarCodigos', {}, F.ADMIN_SESSION);
+    const who = test.project.records('REGISTRO').find((r) => r.code === 'B-001');
+    const req = test.project.run('accionSolicitarCambio', { participant_code: 'B-001', full_name: who.full_name, reason_short: 'Work',
+      contact: '3001112233', acceptance: true, client_submission_id: 'change-typed', form_elapsed_ms: 60000 });
+    expect(req.estado).toBe('PENDIENTE');
+    const change = test.project.records('_CAMBIOS')[0];
+    expect([change.original_time, change.contact]).toEqual(['15:00', '3001112233']);
+  });
+  it('a plain-text cell filled by an append still takes a later update as text', () => {
+    const { test, solo } = env();
+    const row = test.project.records('REGISTRO').find((r) => r.submission_id === solo.submission_id);
+    test.project.execute('laterUpdate', (g) => g.actualizarFila('REGISTRO', row._row, { birth_date: '2002-05-13', whatsapp: '3010000010' }));
+    const after = test.project.records('REGISTRO').find((r) => r.submission_id === solo.submission_id);
+    expect([after.birth_date, after.whatsapp]).toEqual(['2002-05-13', '3010000010']);
+  });
+});
+
+// ===========================================================================
 describe('Schedule changes listed to staff read as clock times', () => {
   it('a change sheet whose time column lost its plain-text format still lists "15:00", never a 1899 date', () => {
     const account = F.newAccount();

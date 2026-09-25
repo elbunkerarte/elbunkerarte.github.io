@@ -31,7 +31,7 @@ function guardSubmission(datos, kind) {
   var testData = isTestData(datos);
   if (testData && !esPruebas()) {
     registrar('anonimo', '', 'BLOQUEO_DATO_DE_PRUEBA', kind, '');
-    return { ok: false, motivo: 'DATO_DE_PRUEBA', error: 'Produccion no admite datos de prueba.' };
+    return { ok: false, motivo: 'DATO_DE_PRUEBA', error: 'Producción no admite datos de prueba.' };
   }
   if (testData) return null;                       // the rehearsal loads 130 rows in a burst on purpose
 

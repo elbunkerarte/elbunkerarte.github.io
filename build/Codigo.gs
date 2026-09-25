@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-25T13:12:23.306Z
+ * Generado: 2026-09-25T13:20:49.636Z
  * Modulos: 22 .gs + 14 .html
  */
 
@@ -2405,9 +2405,9 @@ function invalidateHeaderCache() { _headerCache = {}; }
  */
 var PLAIN_TEXT_COLUMNS = {
   'REGISTRO': ['id_number', 'normalized_id_number', 'whatsapp', 'normalized_phone', 'birth_date', 'group_code', 'code',
-               'original_time', 'arrival_time', 'final_time'],
+               'original_time', 'arrival_time', 'final_time', 'artistic_name', 'song_name'],
   '_INTEGRANTES': ['id_number', 'normalized_id_number', 'birth_date', 'group_code'],
-  '_CAMBIOS': ['original_time', 'nueva_hora'],
+  '_CAMBIOS': ['code', 'contact', 'original_time', 'nueva_hora'],
   'AGENDA': ['arrival_time', 'audition_time', 'limite_tolerancia'],
   'CHECK-IN': ['arrival_time', 'final_time', 'check_in_time'],
   'PISTAS': ['final_time'],
@@ -2524,13 +2524,44 @@ function cellValue(v) {
   return v;
 }
 
-/** Appends one object as a row, respecting the sheet's header order. */
+/**
+ * Appends one object as a row, respecting the sheet's header order.
+ *
+ * appendRow parses every string as if it were typed and ignores a plain-text
+ * column format (measured on a live sheet 2026-09-25: '15:00' became a time,
+ * '2001-04-12' a date, '3010000004' a number). A leading apostrophe is the only
+ * thing it honours, so plain-text columns get one - unless cellValue already
+ * added it, because a second apostrophe would stay visible. appendRow also
+ * resets the format of the cells it fills, so the plain-text format is put back
+ * for the next update of those cells.
+ */
 function agregarFila(nombreHoja, objeto) {
   var h = hoja(nombreHoja);
   var cols = encabezados(nombreHoja);
-  var fila = cols.map(function (c) { return cellValue(objeto[c]); });
+  var plain = PLAIN_TEXT_COLUMNS[nombreHoja] || [];
+  var fila = cols.map(function (c) {
+    var v = cellValue(objeto[c]);
+    var alreadyQuoted = typeof objeto[c] === 'string' && v !== objeto[c];
+    return plain.indexOf(c) !== -1 && typeof v === 'string' && v !== '' && !alreadyQuoted ? "'" + v : v;
+  });
   h.appendRow(fila);
-  return h.getLastRow();
+  var row = h.getLastRow();
+  plainTextRuns(cols, plain).forEach(function (run) {
+    h.getRange(row, run[0] + 1, 1, run[1]).setNumberFormat('@');
+  });
+  return row;
+}
+
+/** [[startIndex, length], ...] of the contiguous header positions that are plain text. */
+function plainTextRuns(cols, plain) {
+  var runs = [];
+  cols.forEach(function (c, i) {
+    if (plain.indexOf(c) === -1) return;
+    var last = runs[runs.length - 1];
+    if (last && last[0] + last[1] === i) last[1]++;
+    else runs.push([i, 1]);
+  });
+  return runs;
 }
 
 /** Appends many rows in ONE write - the only way to stay inside the time limit. */
@@ -3165,7 +3196,7 @@ function guardSubmission(datos, kind) {
   var testData = isTestData(datos);
   if (testData && !esPruebas()) {
     registrar('anonimo', '', 'BLOQUEO_DATO_DE_PRUEBA', kind, '');
-    return { ok: false, motivo: 'DATO_DE_PRUEBA', error: 'Produccion no admite datos de prueba.' };
+    return { ok: false, motivo: 'DATO_DE_PRUEBA', error: 'Producción no admite datos de prueba.' };
   }
   if (testData) return null;                       // the rehearsal loads 130 rows in a burst on purpose
 
