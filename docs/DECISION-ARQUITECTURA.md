@@ -75,7 +75,7 @@ los respaldos. Cero servidores, cero costo, cero tarjeta de crédito.
 justificarlo: la URL de una Web App de Apps Script es
 `script.google.com/macros/s/AKfycb…/exec` — imposible de poner en un afiche o
 leer en voz alta. Pages da
-`miguelgamer77721-ui.github.io/el-bunker/`, carga instantánea, y permite cambiar
+`elbunkerarte.github.io`, carga instantánea, y permite cambiar
 los textos legales sin tocar la aplicación. Además, las visitas casuales desde
 redes sociales no consumen cuota de Apps Script.
 

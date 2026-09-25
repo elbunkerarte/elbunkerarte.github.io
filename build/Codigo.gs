@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-25T15:10:18.274Z
+ * Generado: 2026-09-25T15:43:31.554Z
  * Modulos: 22 .gs + 14 .html
  */
 
@@ -499,10 +499,10 @@ function configuracionPorDefecto() {
     ['policy_version', 'v2-2026-09-24', 'Version de la politica de tratamiento de datos.'],
     ['consent_version', 'v2', 'Version del formulario de autorizaciones.'],
     ['domain', '', 'Dominio propio del sitio, cuando exista. Vacio = se usa sitio_url.'],
-    ['sitio_url', 'https://miguelgamer77721-ui.github.io/el-bunker/', 'Direccion publica del sitio informativo.'],
+    ['sitio_url', 'https://elbunkerarte.github.io/', 'Direccion publica del sitio informativo.'],
     ['web_app_url', '', 'URL publica /exec de esta Web App (Implementar > Gestionar implementaciones). Todos los enlaces se construyen con ella.'],
-    ['privacy_policy_url', 'https://miguelgamer77721-ui.github.io/el-bunker/politica-datos.html', 'URL de la politica de tratamiento de datos.'],
-    ['terms_url', 'https://miguelgamer77721-ui.github.io/el-bunker/terminos.html', 'URL de los terminos y condiciones.'],
+    ['privacy_policy_url', 'https://elbunkerarte.github.io/politica-datos.html', 'URL de la politica de tratamiento de datos.'],
+    ['terms_url', 'https://elbunkerarte.github.io/terminos.html', 'URL de los terminos y condiciones.'],
     ['whatsapp_grupo_enlace', '', 'Enlace de invitacion al grupo de WhatsApp de personas aptas (lo crea la organizacion). Vacio = la invitacion no se ofrece.'],
     ['restaurar_desde', '', 'Solo para recuperacion: ID del archivo JSON de respaldo (ver MANUAL-RECUPERACION).'],
     ['restaurar_confirmacion', '', 'Solo para recuperacion: escribir SI-RESTAURAR y ejecutar RESTAURAR.'],

@@ -1,8 +1,8 @@
 # Mover el sitio a un dominio propio o subdominio institucional
 
-**Estado hoy:** el sitio vive en `https://miguelgamer77721-ui.github.io/el-bunker/`. Esa dirección sigue siendo la
-oficial y **debe seguir funcionando** hasta que la organización tenga su dominio. La URL contiene el usuario de
-GitHub, así que no es la identidad pública final.
+**Estado hoy:** el sitio vive en `https://elbunkerarte.github.io/` (organización de GitHub `elbunkerarte`, desde el
+25-sep-2026). Esa dirección es la oficial hasta que la organización tenga su dominio. La anterior,
+`https://miguelgamer77721-ui.github.io/el-bunker/`, dejó de ser la oficial al mover el repositorio.
 
 > **No se registra ni se compra nada automáticamente.** El dominio lo elige, lo compra (o lo presta, si es un
 > subdominio institucional) y lo administra la organización. Esta guía sólo explica cómo conectarlo cuando exista.
@@ -58,14 +58,13 @@ GitHub recomienda verificar el dominio para evitar que otra cuenta lo tome ("dom
 
 1. **Settings del repositorio → Pages → Custom domain:** escribir el dominio (`elbunker.dominio.co`) y **Save**.
 2. En el DNS del dominio:
-   - **Subdominio:** registro `CNAME` con nombre `elbunker` apuntando a **`miguelgamer77721-ui.github.io`**
-     (sin el nombre del repositorio). Si el repositorio se mueve a otra cuenta u organización, el destino es
-     `<esa-cuenta>.github.io`.
+   - **Subdominio:** registro `CNAME` con nombre `elbunker` apuntando a **`elbunkerarte.github.io`**.
+     Si el repositorio se mueve a otra cuenta u organización, el destino es `<esa-cuenta>.github.io`.
    - **Dominio raíz:** registros `A` hacia
      `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
      y registros `AAAA` hacia
      `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`.
-     Agregar además `www` como `CNAME` a `miguelgamer77721-ui.github.io`.
+     Agregar además `www` como `CNAME` a `elbunkerarte.github.io`.
    - **Nunca** usar registros comodín (`*.dominio.co`): GitHub advierte que exponen a la toma del dominio.
 3. Esperar a que GitHub marque el DNS como correcto.
 4. Marcar **Enforce HTTPS**. Puede tardar hasta 24 horas en estar disponible, mientras se emite el certificado.
@@ -77,7 +76,7 @@ GitHub recomienda verificar el dominio para evitar que otra cuenta lo tome ("dom
 2. Comprobar en el navegador: la portada abre con `https://`, el candado es válido y "ver código fuente" muestra la
    URL canónica y `og:url` con el dominio nuevo.
 3. Comprobar la vista previa social (pegar el enlace en WhatsApp): debe salir la imagen de la convocatoria.
-4. **Comprobar la dirección anterior** `https://miguelgamer77721-ui.github.io/el-bunker/`: no se da por hecho que
+4. **Comprobar la dirección anterior** `https://elbunkerarte.github.io/`: no se da por hecho que
    redirige al dominio nuevo; se abre y se verifica. Si algún material impreso o QR ya circula con la dirección
    anterior, no se desactiva hasta confirmar que lleva al sitio correcto.
 

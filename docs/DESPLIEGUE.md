@@ -11,13 +11,13 @@ iteración 2 a producción, instalar desde cero o migrar a otra cuenta.
 | Pieza | Dónde |
 |---|---|
 | Cuenta Google | `miguelgamer77721@gmail.com` |
-| Cuenta GitHub | `miguelgamer77721-ui` |
-| Repositorio | `miguelgamer77721-ui/el-bunker` (público) |
-| Sitio público | https://miguelgamer77721-ui.github.io/el-bunker/ (se publica desde la rama `feat/sistema-bunker`) |
+| Cuenta GitHub | Organización `elbunkerarte` (gratuita; dueña: la cuenta `miguelgamer77721-ui`) |
+| Repositorio | `elbunkerarte/elbunkerarte.github.io` (público; antes `miguelgamer77721-ui/el-bunker`) |
+| Sitio público | https://elbunkerarte.github.io/ (se publica desde la rama `feat/sistema-bunker`) |
 | Proyecto Apps Script (producción) | `1dFhW2Q7ah6I2-25P-oa6E1mmrIBQVgkuZ5iWp_yrl1hxKQM2iNkpAPrn` |
-| Implementación de producción | `AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW` — hoy en su versión 4, que es la iteración 1 |
+| Implementación de producción | `AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW` — versión 6 (iteración 2 + margen operativo) |
 | Base maestra (producción) | `1beDG22ANdqRTQIMvjw9KMA7Dc_UyNyD-304_Fz29sLg` |
-| Iteración 2 | Rama `feat/iteracion-2`, probada en el entorno de PRUEBAS; **pendiente de publicar en producción** |
+| Iteración 2 | **En producción desde el 25 de septiembre de 2026** (rama `feat/iteracion-2` = `feat/sistema-bunker`) |
 | Enlaces de acceso del equipo | Nunca en el repositorio. Se consultan en el editor con `verAccesos` |
 
 ---

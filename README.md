@@ -8,7 +8,7 @@ proyecto = un cupo).
 
 | | |
 |---|---|
-| **Sitio público** | https://miguelgamer77721-ui.github.io/el-bunker/ |
+| **Sitio público** | https://elbunkerarte.github.io/ |
 | **Aplicación** | Google Apps Script Web App (URL `/exec` en `site/config.json` y en CONFIG `web_app_url`) |
 | **Base de datos** | Google Sheets — 18 hojas ([esquema](docs/SCHEMA.md)) |
 | **Costo** | $0 |

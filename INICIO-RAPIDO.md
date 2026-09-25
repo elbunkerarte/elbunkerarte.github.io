@@ -11,11 +11,11 @@ Centro Comercial Mayorca, Sabaneta, Antioquia.**
 
 | Para | Enlace |
 |---|---|
-| 🌐 **Página pública** (la del QR y los afiches) | https://miguelgamer77721-ui.github.io/el-bunker/ |
+| 🌐 **Página pública** (la del QR y los afiches) | https://elbunkerarte.github.io/ |
 | 📊 **Base maestra** (tu "Excel") | [abrir hoja de cálculo](https://docs.google.com/spreadsheets/d/1beDG22ANdqRTQIMvjw9KMA7Dc_UyNyD-304_Fz29sLg/edit) |
 | 🔑 **Enlaces del equipo** (10, uno por persona) | Los entrega quien administra el sistema, por un canal privado |
 | 📱 **WhatsApp oficial** | 323 983 6182 — guardarlo como "EL BÚNKER — Arte es la Solución" |
-| 💻 Código | github.com/miguelgamer77721-ui/el-bunker |
+| 💻 Código | github.com/elbunkerarte/elbunkerarte.github.io |
 
 ### Las 10 cuentas del equipo
 

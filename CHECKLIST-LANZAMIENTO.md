@@ -82,7 +82,7 @@ Detalle de cada paso en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md), sección C.
 | Entorno de PRUEBAS separado (proyecto, hoja y carpetas propios, franja visible) | ✅ READY | En uso para la prueba en vivo del 25-sep |
 | `ENSAYO` y `LIMPIAR` bloqueados fuera de PRUEBAS (doble llave: propiedad + marca de la hoja) | ✅ READY | Bloqueo en código |
 | Producción rechaza correos `.test` | ✅ READY | Bloqueo en código |
-| Sitio público | ✅ READY | https://miguelgamer77721-ui.github.io/el-bunker/ (se actualiza en el paso 9) |
+| Sitio público | ✅ READY | https://elbunkerarte.github.io/ (organización de GitHub `elbunkerarte`, desde el 25-sep) |
 | Publicación del sitio con pruebas previas | ✅ READY | GitHub Actions corre `npm test` antes de publicar |
 | Despliegue sin clasp que conserva la URL `/exec` | ✅ READY | [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md) |
 | Migración que solo añade, con respaldo previo y control de filas | ✅ READY | `MIGRAR` |
