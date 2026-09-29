@@ -122,7 +122,9 @@ select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns=
 .aviso.error{background:rgba(255,122,107,.08);border-color:var(--error)}
 .aviso.alerta{background:rgba(247,167,5,.08);border-color:var(--amarillo)}
 .aviso.info{background:rgba(255,255,255,.04);border-color:var(--linea)}
-.aviso b{display:block;margin-bottom:4px;font-family:var(--titulo);font-weight:400;font-size:21px;letter-spacing:.04em}
+/* Only the leading <b> is the notice title; any later <b> is inline emphasis inside the text. */
+.aviso>b:first-child{display:block;margin-bottom:4px;font-family:var(--titulo);font-weight:400;font-size:21px;letter-spacing:.04em}
+.aviso b:not(:first-child){font-weight:700;color:var(--texto)}
 
 .codigo-grande{font-family:var(--titulo);font-size:52px;letter-spacing:.06em;color:var(--amarillo);line-height:1}
 .copiable{display:flex;gap:8px;align-items:center;background:var(--negro);border:1px dashed var(--linea);padding:10px 12px;
