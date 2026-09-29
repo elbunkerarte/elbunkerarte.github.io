@@ -37,6 +37,16 @@ base vacía vuelven a empezar en 001 sin tocar nada más. Los números de compro
 Protecciones permanentes: `ENSAYO`, `LIMPIAR` y la carga de datos de prueba lanzan `BLOQUEADO` en producción; producción
 rechaza envíos con marcadores de prueba; las funciones de reset no tienen ruta web.
 
-## 3. Resultado
+## 3. Resultado (29-sep-2026, 14:20–14:30, código `abd7726` = el mismo probado en PRUEBAS)
 
-_Se completa al ejecutar (fecha, respaldos, filas antes/después, versión publicada, salud y humo)._
+| Paso | Resultado |
+|---|---|
+| 1. Copia completa | `EL BUNKER - BASE MAESTRA - COPIA ANTES DE ITER3 20260929-1420` en la carpeta de respaldos |
+| 2–3. Código v3 + `MIGRAR` | **Datos intactos: SI** (REGISTRO 5 = 5). Respaldo previo `RESPALDO-PRE-MIGRACION-20260929-142038` (.xlsx + .json). Hojas nuevas: PARAMETROS_RUBRICA, BOLSA, SEGURO_MAYORCA, _OFERTAS, _SLOTS_HISTORIAL, _EMAIL_LOG, _DESCALIFICACIONES. CONFIG: sede → «Centro Comercial Mayorca · Etapa 1», seleccionados 7 → 10, jurados mínimos 2 → 3, Instagram principal → `elarteeslasolucion_` (AES queda como secundario), términos/política nuevos. Conflicto conservado: `web_app_url` (se mantiene la URL pública existente). Rúbrica R1-2026-09-29 válida |
+| 4. `QUITAR_PRUEBAS_PRELANZAMIENTO` | Quitadas exactamente `S-5F23127D`, `S-67ACAFA8`, `S-2B643606`, `S-494D927B`, `S-433834E6` + 1 integrante + 7 respuestas guardadas. Respaldo previo `RESPALDO-ANTES-DE-QUITAR-20260929-142209` (.xlsx + .json). Después: REGISTRO 0 · INTEGRANTES 0 · IDEMPOTENCIA 0 · CORREOS 0 |
+| 5. Versión nueva | **Versión 8** de la misma implementación (misma URL pública). En el editor quedó sólo una función de lectura de salud, no la de limpieza |
+| 6. Salud | «Sistema consistente»: versión 3.0.0, entorno y hoja `production`, esquema completo, 5 disparadores (respaldo, vencer ofertas, cola de correos, videos, vistas), rúbrica válida 20–100, legal verificado (términos v2-2026-09-29, política v3-2026-09-29), **producción limpia** |
+| 7. Humo sin crear datos | Formulario sin franja de pruebas, Paso 1 de 7, Etapa 1, NIT, textos legales vigentes, sin residuos · Mi inscripción inexistente → «No encontramos…» · admin 0 inscritos · dirección 0 · jurado 1 con la rúbrica R1 y «Sin participantes todavía» · check-in abre · 0 errores de JavaScript |
+
+Secuencias: con REGISTRO vacío, el primer código será `B-001` y el primer equipo `EQ-001`/`GRP-001`.
+Para deshacer (si hiciera falta): abrir la copia del paso 1, que es la base completa anterior.
