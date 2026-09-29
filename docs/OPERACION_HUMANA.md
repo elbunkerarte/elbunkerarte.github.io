@@ -16,7 +16,7 @@ vencen **45 días** después de emitidos. Emitir un enlace nuevo para el mismo a
 | Cuenta (alias) | Rol | Pantalla que abre | Para quién |
 |---|---|---|---|
 | `admin` | admin | Panel (todas las pestañas) + dashboard + check-in | Administración del sistema |
-| `coordinacion` | logistica | Panel + dashboard (sin resultados) + check-in | Coordinación logística |
+| `coordinacion` | logistica | Panel + dashboard (sin puntajes ni resultados) + check-in | Coordinación logística |
 | `direccion` | direccion | Dashboard de dirección | Dirección / gerencia |
 | `checkin-1`, `checkin-2` | checkin | Mesa de check-in | Mesas de entrada |
 | `stage-manager` | checkin | Mesa de check-in (pestaña Escena) | Stage manager y cronómetro |
@@ -28,8 +28,8 @@ Permisos reales (`PERMISOS`): el servidor los aplica en cada acción, no solo la
 | Rol | Puede |
 |---|---|
 | admin | Todo |
-| direccion | Dashboard, resultados privados, inscritos **enmascarados** (sin documento, correo ni teléfono completos), actas de desempate, validar descalificaciones, reabrir evaluaciones, cerrar resultados |
-| logistica | Dashboard (sin la sección de resultados), inscritos con datos completos, aptitud, códigos, bolsa y reemplazos, consolidar lista, cambios, agrupaciones, pistas, videos, comunicación, respaldos y Excel, check-in, cerrar jornada |
+| direccion | Dashboard con puntajes, resultados privados, inscritos **enmascarados** (sin documento, correo ni teléfono completos), actas de desempate, validar descalificaciones, reabrir evaluaciones, cerrar y reabrir resultados, Excel corporativo (enmascarado) y Excel de la póliza |
+| logistica | Dashboard operativo (sin puntajes, ranking ni resultados), inscritos con datos completos, aptitud, códigos, bolsa y reemplazos, consolidar lista, cambios, agrupaciones, pistas, videos, comunicación, respaldos y Excel, check-in, cerrar jornada |
 | checkin | Buscar y cambiar estado del día, lista mínima, pistas (solo lectura), plan de contingencia |
 | jurado | Su lista de audiciones y sus tarjetas |
 
@@ -60,19 +60,26 @@ Solo admin ve además: "Estado del sistema", "Accesos del equipo" (crear o renov
 - **Acta de desempate** (aparece solo si hay un empate en el corte 10 o 20): corte, método, orden decidido,
   participantes, resultado → "Registrar acta".
 - **Descalificaciones, correcciones y cierre**: "Ver reportes" → Validar / Descartar con motivo; "Reabrir evaluación"
-  (código + jurado + motivo); **"Cerrar resultados"** (escribir CERRAR).
+  (código + jurado + motivo); **"Cerrar resultados"** (escribir CERRAR); "Reabrir resultados" (motivo de 10+ caracteres)
+  si hay que corregir algo después del cierre.
+- **Excel corporativo y póliza**: "Generar Excel corporativo" (para dirección sale con documentos, correos y teléfonos
+  enmascarados) y "Generar Excel de la póliza" (SEGURO_MAYORCA).
 - **Inscritos (datos protegidos)**: consulta enmascarada.
-- Dirección **no** abre el panel de logística: el correo `RESULTADO_FINAL`, los Excel y los respaldos los ejecuta
-  logística o admin.
+- Dirección **no** abre el panel de logística: el correo `RESULTADO_FINAL` y los respaldos los ejecuta logística o admin.
+- Los puntajes, la distribución y el Top solo los ven dirección y admin; logística comparte el dashboard solo para la
+  operación.
 
 ### 2.3 Mesa de check-in (`?p=checkin`)
 
-- Buscar por código (B-001), por documento del titular o por documento de cualquier integrante de un dúo o agrupación.
+- Buscar por código (B-001), por documento del titular o por documento de cualquier persona registrada en el equipo del
+  proyecto (integrantes de dúos y agrupaciones, y también el equipo de trabajo de un solista).
   **Siempre validar con el documento físico** (de cada integrante en grupos).
 - La ficha muestra horario, retraso contra la tolerancia de 5 minutos, avisos (autorizaciones incompletas → firmar la
   constancia física; no autoriza imagen/voz → no grabar; pista pendiente o con problema → pedir la USB; cambio de horario
   sin resolver) y solo los botones permitidos: Confirmar CHECK-IN, Pasar a PRECOLA, Sube a escena (EN AUDICIÓN), Audición
   REALIZADA (salida), Pasar a CONTINGENCIA, Marcar NO SHOW.
+- "Registrar incidente" en la ficha: describe qué pasó y qué se hizo; queda en la hoja INCIDENTES (necesita conexión). Si
+  un estado se marcó por error (por ejemplo REALIZADA), se registra el incidente y coordinación lo corrige.
 - Pestañas: Lista por bloque, Escena, Pistas, Contingencia ("Calcular plan ahora"), Pendientes de sincronizar.
 - Funciona sin conexión: las operaciones quedan en el dispositivo y se sincronizan solas o con "Sincronizar ahora".
 
@@ -87,6 +94,7 @@ Solo admin ve además: "Estado del sistema", "Accesos del equipo" (crear o renov
 
 ### 2.5 Jurados (`?p=jurado`)
 
+- Cada jurado entra con su propio enlace: la pantalla de jurado no funciona con cuentas de otro rol.
 - Leer "Cómo calificar (rúbrica oficial)". Calificar solo proyectos con audición REALIZADA, de forma independiente.
 - Por proyecto: una categoría a la vez (1–5), observaciones, reporte de causal de descalificación si aplica.
 - "Guardar borrador" o **"ENVIAR Y BLOQUEAR EVALUACIÓN"**. Después solo dirección reabre. Detalle: `RUBRICA_JURADOS.md`.
@@ -112,11 +120,12 @@ y se ejecutan con interruptores o botones.
 | Antes del vie 16-oct | Un retiro solo lo puede registrar logística ("Retirar y ofrecer el cupo") | Logística |
 | **Vie 16-oct 00:00** (`reemplazos_desde`) | Se habilita "NO PUEDO ASISTIR — SOLICITAR REEMPLAZO" en "Mi inscripción" | Participantes |
 | 16 → 22-oct | Ofertas a suplentes con 24 h para aceptar; vencidas pasan solas cada hora | Sistema; logística vigila "Historial de ofertas" |
-| **Jue 22-oct 00:00** (`confirmacion_final_desde`) | Abre la CONFIRMACIÓN FINAL DE ASISTENCIA. Enviar la plantilla `CONFIRMACION_FINAL` y `RECORDATORIO_24H` | Logística |
+| Mié 21-oct (víspera) | Enviar la plantilla `CONFIRMACION_FINAL`: el correo indica desde y hasta cuándo se confirma. Enviarla la víspera deja la cuota de Gmail del 22-oct (~100/día) para los demás correos | Logística |
+| **Jue 22-oct 00:00** (`confirmacion_final_desde`) | Abre la CONFIRMACIÓN FINAL DE ASISTENCIA en "Mi inscripción". Enviar `RECORDATORIO_24H` ("mañana es tu audición") | Logística |
 | **Jue 22-oct 12:00** (`reemplazo_limite`) | Ya no se ofrecen cupos: todo cupo liberado queda VACANTE SIN REEMPLAZO | Sistema |
 | **Jue 22-oct 18:00** (`cierre_cambios`) | Cierra el Formulario 2 (cambio de horario) | Sistema |
 | **Jue 22-oct 20:00** (`confirmacion_final_hasta`) | Cierra la confirmación final | Sistema |
-| Jue 22-oct, después de las 20:00 | Resolver cambios pendientes → "Vista previa y conteos" → **CONSOLIDAR** (crea `ROSTER_FINAL_2026-10-22`). Respaldo PRE-EVENTO. Excel de la póliza para el C.C. Mayorca. Descargar la carpeta Audio | Logística |
+| Jue 22-oct, después de las 20:00 | Resolver **todos** los cambios pendientes (si queda uno, CONSOLIDAR se niega) → "Vista previa y conteos" → **CONSOLIDAR** (crea `ROSTER_FINAL_2026-10-22`). Respaldo PRE-EVENTO. Excel de la póliza para el C.C. Mayorca. Descargar la carpeta Audio | Logística |
 | **Vie 23-oct** | Evento (ver tabla de bloques). Respaldo AGENDA/POST-EVENTO | Todos |
 | Vie 23-oct 9:00 p. m. | Cierre de audiciones → "Cerrar jornada" | Logística |
 | Vie 23-oct, después del cierre | Jurados envían todo; dirección resuelve descalificaciones y actas; "Cerrar resultados"; logística recarga el panel y envía `RESULTADO_FINAL`; respaldo RESULTADOS | Jurados, dirección, logística |
@@ -150,10 +159,11 @@ Horario del 23-oct (`agendaConfigurada`, tolerancia 5 min, llegada 15 min antes)
 | Decidir… NO APTO / DUPLICADO / INCOMPLETO sobre un titular | Panel → Inscritos | Logística, admin | Exige **liberar el cupo** y lo ofrece al siguiente suplente | Motivo + confirmación | No |
 | Retirar y ofrecer el cupo ("liberar cupo") | Panel → Bolsa y reemplazos | Logística, admin | Quita el código al titular y lo ofrece | Motivo + confirmación | **No** |
 | Cerrar sin reemplazo | Panel → Bolsa, tabla de cupos | Logística, admin | Cancela la oferta abierta y deja el cupo vacante | Motivo | Parcial ("Ofrecer al siguiente" antes del límite) |
-| CONSOLIDAR LISTA OFICIAL DEL EVENTO | Panel → Bolsa y reemplazos | Logística, admin | Cancela ofertas abiertas, crea la foto oficial y bloquea cambios ordinarios | Escribir CONSOLIDAR | Solo admin con "Desbloquear" (motivo); la foto queda y la siguiente es una versión nueva |
+| CONSOLIDAR LISTA OFICIAL DEL EVENTO | Panel → Bolsa y reemplazos | Logística, admin | Cancela ofertas abiertas, crea la foto oficial y bloquea cambios ordinarios | Escribir CONSOLIDAR; se niega (sin cambiar nada) si hay cambios de horario pendientes o códigos con dos titulares | Solo admin con "Desbloquear" (motivo); la foto queda y la siguiente es una versión nueva |
 | Desbloquear | Panel → Bolsa | Solo admin | Reabre cambios ordinarios | Motivo (10+ caracteres) | Sí, volviendo a consolidar |
 | Cerrar jornada | Panel → Respaldo y sistema | Logística, admin | Todo el que no audicionó (salvo quien está en escena) queda NO AUDICIONADO, fuera de la selección. **No verifica la hora** | Confirmación | No desde los paneles |
-| Cerrar resultados | Dashboard | Dirección, admin | Bloquea evaluaciones y deja el Top 10 definitivo | Escribir CERRAR; exige 3 tarjetas por audición, sin empates sin acta, sin DQ pendientes | Solo admin, por la acción `reabrir_resultados` (no tiene botón) |
+| Cerrar resultados | Dashboard | Dirección, admin | Bloquea evaluaciones y deja el Top 10 definitivo | Escribir CERRAR; exige 3 tarjetas por audición, sin empates sin acta, sin DQ pendientes | Sí, con "Reabrir resultados" |
+| Reabrir resultados | Dashboard | Dirección, admin | `resultados_cerrados = NO`: el Top 10 deja de ser definitivo | Motivo (10+ caracteres) | Sí, volviendo a cerrar |
 | Reabrir evaluación | Dashboard | Dirección, admin | La tarjeta vuelve a borrador; deja de contar hasta que el jurado la reenvíe | Motivo | Sí, el jurado reenvía |
 | Validar descalificación | Dashboard | Dirección, admin | Saca al proyecto del ranking | Motivo | No desde los paneles |
 | Registrar acta | Dashboard | Dirección, admin | Decide el orden de un empate en el corte 10 o 20 (reemplaza el acta anterior del mismo corte) | Confirmación + campos obligatorios | Se reemplaza con otra acta |
@@ -205,12 +215,13 @@ Horario del 23-oct (`agendaConfigurada`, tolerancia 5 min, llegada 15 min antes)
 *Ejemplo:* **B-012** (Bloque 2, audición 3:30 p. m.) pidió cambio el 20-oct y sigue PENDIENTE el 22-oct por la noche.
 
 - Mientras no se apruebe, **vale su horario original**. El Formulario 2 cierra el 22-oct a las 18:00.
-- Logística debe resolverlo **antes de consolidar**: "Vista previa y conteos" muestra "Cambios de horario pendientes".
-  CONSOLIDAR no lo impide, pero después ya no se puede resolver y queda el horario original.
+- Logística debe resolverlo **antes de consolidar**: "Vista previa y conteos" muestra "Cambios de horario pendientes" y
+  CONSOLIDAR se niega mientras quede alguno (dice qué códigos).
 - Si los bloques 1–10 están llenos, el destino disponible es el **Margen operativo** (8:00–8:30 p. m., hasta 10 cambios).
 - El día del evento la mesa ve el aviso "Tiene una solicitud de cambio de horario sin resolver".
-- **Cuidado:** si quien pidió el cambio libera su cupo, su solicitud sigue PENDIENTE con ese código. No la resuelvas: el
-  sistema la aplicaría a quien herede el cupo. Avisa a admin.
+- **Cuidado:** si quien pidió el cambio libera su cupo, su solicitud sigue PENDIENTE con ese código. Mientras el cupo no
+  tenga titular, el panel no puede resolverla (y bloquea CONSOLIDAR); si un suplente hereda el cupo, resolverla le cambiaría
+  el horario a él. Avisa a admin en cuanto pase.
 
 ### 5.6 Empate entre jurados o entre proyectos
 
@@ -234,4 +245,4 @@ Horario del 23-oct (`agendaConfigurada`, tolerancia 5 min, llegada 15 min antes)
 | Un integrante no firmó en línea | Firma la "Constancia imprimible" antes de subir al escenario |
 | La pista no llegó | Pedir la USB de respaldo |
 | Se agotó la cuota de correo | Lo pendiente sale solo en las siguientes pasadas (cada 15 min, al renovarse la cuota) |
-| Registrar un incidente | Los paneles no tienen botón de incidentes: las transiciones forzadas los crean solas; cualquier otro se anota en la hoja INCIDENTES |
+| Registrar un incidente | Botón "Registrar incidente" en la ficha de la mesa (necesita conexión). Coordinación lo ve en la hoja INCIDENTES |

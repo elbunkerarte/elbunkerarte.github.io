@@ -100,6 +100,16 @@ function releaseSlotLocked(row, opts) {
     pool_status: POOL_STATUS.RETIRADO,
     participation_status: opts.final ? PARTICIPATION.RETIRO_FINAL : PARTICIPATION.RETIRADO
   });
+  // A pending schedule change of this slot dies with the withdrawal: otherwise it could never be decided
+  // (no holder), or approving it would move the substitute who inherits the code.
+  leerHoja(HOJA.CAMBIOS).forEach(function (c) {
+    if (normalizarComparable(c.code) !== code || normalizarComparable(c.estado) !== ESTADO_CAMBIO.PENDIENTE) return;
+    actualizarFila(HOJA.CAMBIOS, c._fila, { estado: ESTADO_CAMBIO.ANULADO, resuelto_at: now,
+      resuelto_by: opts.actor || 'participante', observacion: 'Anulada: el titular liberó el cupo.' });
+  });
+  if (normalizarComparable(row.change_status) === ESTADO_CAMBIO.PENDIENTE) {
+    actualizarFila(HOJA.REGISTRO, row._fila, { change_status: ESTADO_CAMBIO.ANULADO });
+  }
   slotHistoryLocked(code, opts.final ? 'RETIRO_FINAL' : 'LIBERADO', row.submission_id, opts.actor, opts.reason);
   registrar(opts.actor || 'participante', opts.rol || '', opts.final ? 'RETIRO_FINAL' : 'RETIRO', code, row.submission_id);
   enqueueEmail('RETIRO_CONFIRMADO', Object.assign({}, row, { code: '', previous_code: code }), 'retiro',
@@ -109,6 +119,23 @@ function releaseSlotLocked(row, opts) {
     ? offerSlotLocked(slot, opts.actor || 'sistema')
     : closeSlotVacantLocked(slot, opts.actor || 'sistema', 'Liberado después del límite para reemplazos.');
   return { ok: true, slot_code: code, reemplazo: outcome };
+}
+
+/**
+ * Rows for block capacity: a slot offered to a substitute still owns its place in its block, so it
+ * counts as occupied (otherwise a schedule change could fill the block and the substitute would make it 11).
+ */
+function rowsWithOpenOffers(rows) {
+  var extra = leerHoja(HOJA.OFERTAS).filter(function (o) { return normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE; })
+    .map(function (o) { return { code: o.slot_code, final_block: o.slot_block }; });
+  return rows.concat(extra);
+}
+
+/** What happened to a released slot, in one sentence for the person who released it. */
+function releaseOutcomeText(released) {
+  var estado = normalizarComparable((released.reemplazo || {}).estado);
+  if (estado === OFFER_STATUS.PENDIENTE || estado === SLOT_STATUS.OFRECIDO) return 'se ofreció a la siguiente persona de la bolsa de suplentes.';
+  return 'ya no hay tiempo o suplentes para reemplazarlo, así que queda vacante.';
 }
 
 /** Offers a free slot to the next substitute in priority order, or leaves it vacant if none is left. */
@@ -223,8 +250,8 @@ function accionRetirarme(datos) {
     if (!released.ok) return released;
     return {
       retirado: true, slot_code: released.slot_code,
-      mensaje: 'Liberaste el cupo ' + released.slot_code + '. Gracias por avisar: lo recibirá la siguiente persona de la lista de suplentes. ' +
-               'Esta decisión no se puede deshacer.'
+      mensaje: 'Liberaste el cupo ' + released.slot_code + '. Gracias por avisar: ' + releaseOutcomeText(released) +
+               ' Esta decisión no se puede deshacer.'
     };
   });
 }
@@ -260,7 +287,8 @@ function accionConfirmacionFinal(datos) {
     var released = releaseSlotLocked(fresh, { actor: 'participante', reason: 'Confirmación final: no podrá asistir', final: true });
     if (!released.ok) return released;
     return { confirmado: false, slot_code: released.slot_code,
-             mensaje: 'Registramos que no podrás asistir y liberamos el cupo ' + released.slot_code + '. Gracias por avisar.' };
+             mensaje: 'Registramos que no podrás asistir y liberamos el cupo ' + released.slot_code + '. Gracias por avisar: ' +
+                      releaseOutcomeText(released) };
   });
 }
 
@@ -405,6 +433,9 @@ function accionOfrecerCupo(datos, sesion) {
 
 /** Closes a slot without replacement (cancels its pending offer, if any). */
 function accionCerrarVacante(datos, sesion) {
+  if (cfgBool('lista_oficial_bloqueada', false)) {
+    return { ok: false, error: 'La lista oficial ya está consolidada: no hay cambios ordinarios. Si es una emergencia, admin debe desbloquearla.' };
+  }
   var reason = normalizarTexto(datos.motivo);
   if (reason.length < 5) return { ok: false, error: 'Escribe el motivo.' };
   return conBloqueo(function () {

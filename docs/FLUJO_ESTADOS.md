@@ -170,8 +170,11 @@ stateDiagram-v2
 | "NO PODRÉ ASISTIR" | Igual, más escribir **LIBERAR MI CUPO**. Libera el cupo como `RETIRO_FINAL` (`final_confirmation = NO`) | Participante |
 | "Retirar y ofrecer el cupo" (`accionRetirarParticipante`) | Código + motivo (mín. 5 caracteres); lista sin consolidar. **No tiene restricción de fecha**: sirve también antes del 16-oct. Casilla "retiro de la confirmación final" → `RETIRO_FINAL` | Logística |
 
-Quien confirma SÍ todavía puede responder NO dentro de la ventana (libera el cupo). El suplente que acepta un cupo empieza
-sin confirmación final: debe confirmar él mismo si la ventana está abierta.
+Después de "SÍ CONFIRMO" la pantalla ya no muestra los botones de confirmación: si luego no puede venir, durante la
+ventana avisa a logística ("Retirar" con la casilla de confirmación final); pasadas las 20:00 y hasta la consolidación,
+"Mi inscripción" vuelve a mostrar "NO PUEDO ASISTIR" (cuenta como `RETIRADO`). Durante la ventana del 22-oct ese botón no
+aparece: se usa "NO PODRÉ ASISTIR". El suplente que acepta un cupo empieza sin confirmación final: debe confirmar él
+mismo si la ventana está abierta.
 
 ---
 
@@ -183,15 +186,22 @@ stateDiagram-v2
     SIN_SOLICITUD --> PENDIENTE: Formulario 2
     PENDIENTE --> APROBADO: logística aprueba con bloque destino
     PENDIENTE --> RECHAZADO: logística rechaza
+    PENDIENTE --> ANULADO: el titular libera su cupo antes de la decisión
 ```
 
 | Transición | Reglas del código | Quién |
 |---|---|---|
 | → `PENDIENTE` | Tiene código; declara que no puede asistir en su horario; nombre igual al registrado; **una sola solicitud por código**; antes de `cierre_cambios` (22-oct 18:00); `cambios_abiertos = SI`; lista sin consolidar. Correo `CAMBIO_SOLICITADO` | Participante |
-| → `APROBADO` | Bloque destino con cupo libre al momento de aprobar (bloques 1–10 de 10 cupos; "Margen operativo" 8:00–8:30 p. m. con `cupo_margen_cambios` = 10). **El código no cambia**, solo `final_block`, `final_time`, `arrival_time`. Correo `CAMBIO_APROBADO` | Logística |
+| → `APROBADO` | Bloque destino con cupo libre al momento de aprobar (un cupo ofrecido a un suplente cuenta como ocupado; bloques 1–10 de 10 cupos; "Margen operativo" 8:00–8:30 p. m. con `cupo_margen_cambios` = 10). **El código no cambia**, solo `final_block`, `final_time`, `arrival_time`. Correo `CAMBIO_APROBADO` | Logística |
 | → `RECHAZADO` | Horario original sigue vigente. Correo `CAMBIO_RECHAZADO` | Logística |
+| → `ANULADO` | El titular liberó el cupo antes de que logística decidiera: la solicitud muere con el retiro (observación «Anulada: el titular liberó el cupo»). Así nunca queda una solicitud sin titular, nunca mueve el horario del suplente que hereda el código y nunca bloquea la consolidación | Sistema (al liberar) |
 
-Mientras está `PENDIENTE`, el horario vigente es el original. Tras consolidar la lista no se puede resolver.
+Mientras está `PENDIENTE`, el horario vigente es el original. **CONSOLIDAR se niega mientras exista alguna solicitud
+`PENDIENTE`** (dice qué códigos), porque después de consolidar ya no se pueden aprobar ni rechazar.
+
+Caso especial: si el titular libera su cupo con una solicitud `PENDIENTE`, la solicitud sigue ligada al código. Mientras
+el cupo no tenga nuevo titular, el panel no puede resolverla ("El participante ya no existe en REGISTRO") y, si un
+suplente hereda el código, resolverla afectaría al suplente.
 
 ---
 
@@ -200,21 +210,24 @@ Mientras está `PENDIENTE`, el horario vigente es el original. Tras consolidar l
 ```mermaid
 stateDiagram-v2
     [*] --> ABIERTA
-    ABIERTA --> CONSOLIDADA: CONSOLIDAR (logística)
+    ABIERTA --> CONSOLIDADA: CONSOLIDAR (logística), sin cambios pendientes
     CONSOLIDADA --> ABIERTA: Desbloquear (solo admin, motivo)
     ABIERTA --> CONSOLIDADA_v2: CONSOLIDAR otra vez → ROSTER_FINAL_2026-10-22 v2
 ```
 
 **CONSOLIDAR LISTA OFICIAL DEL EVENTO** (`accionConsolidarLista`, escribir **CONSOLIDAR**):
 
-1. Vence las ofertas caducadas; **cancela las pendientes** y deja sus cupos vacantes.
-2. Reconcilia cupos, titulares, confirmaciones, reemplazos, vacantes, retiros, suplentes y cambios pendientes.
-3. Si hay un código con dos titulares, se detiene.
+1. **Antes de tocar nada** se niega si hay un código con dos titulares o alguna solicitud de cambio `PENDIENTE`. Una
+   consolidación rechazada no cambia ofertas ni cupos.
+2. Vence las ofertas caducadas; **cancela las pendientes** y deja sus cupos vacantes.
+3. Reconcilia cupos, titulares, confirmaciones, reemplazos, vacantes, retiros y suplentes.
 4. Crea la hoja `ROSTER_FINAL_2026-10-22` (protegida) y una copia JSON en Drive.
 5. Pone `lista_oficial_bloqueada = SI` (+ versión, fecha y autor).
 
 Con la lista consolidada quedan bloqueados: liberar cupo, confirmación final, aceptar ofertas, retirar (logística),
-ofrecer cupos, solicitar y resolver cambios, emitir códigos. **No** bloquea el check-in ni la evaluación.
+ofrecer cupos, cerrar un cupo como vacante, quitarle el cupo a un titular desde «Decidir…», solicitar y resolver cambios,
+emitir códigos. **No** bloquea el check-in ni la evaluación. Consolidar se rechaza (sin tocar nada) si hay códigos con dos
+titulares o solicitudes de cambio pendientes.
 "Desbloquear" es solo del admin (motivo de 10+ caracteres); al volver a consolidar se crea una versión nueva.
 
 ---
@@ -256,7 +269,9 @@ stateDiagram-v2
     NA --> [*]
 ```
 
-(Desde cualquier estado se puede pasar a `INCIDENTE`, y de `INCIDENTE` a cualquiera salvo `CONFIRMADO`; la mesa no tiene botón para ello.)
+(Desde cualquier estado se puede pasar a `INCIDENTE`, y de `INCIDENTE` a cualquiera salvo `CONFIRMADO`; la mesa no tiene
+botón para ese estado. El botón "Registrar incidente" de la ficha anota una fila en INCIDENTES sin cambiar el estado; necesita
+conexión.)
 
 | Botón en la mesa (`ui_checkin.html`) | Estado | Además guarda |
 |---|---|---|
@@ -339,10 +354,11 @@ de 3 tarjetas enviadas). Cálculo y actas: `RUBRICA_JURADOS.md`.
 stateDiagram-v2
     [*] --> ABIERTOS
     ABIERTOS --> CERRADOS: CERRAR (dirección/admin), sin empates sin acta, sin DQ pendientes, 3 tarjetas por audición
-    CERRADOS --> ABIERTOS: reabrir_resultados (solo admin, motivo, sin botón)
+    CERRADOS --> ABIERTOS: Reabrir resultados (dirección/admin, motivo)
 ```
 
-Tras cerrar: tarjetas bloqueadas, Top 10 definitivo, y logística/admin envían `RESULTADO_FINAL` desde Comunicación.
+Tras cerrar: tarjetas bloqueadas, Top 10 definitivo, y logística/admin envían `RESULTADO_FINAL` desde Comunicación. Para
+corregir algo después, dirección pulsa "Reabrir resultados" (motivo de 10+ caracteres), corrige y vuelve a cerrar.
 
 ---
 

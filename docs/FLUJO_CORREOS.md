@@ -37,7 +37,7 @@ stateDiagram-v2
 | `ENVIADO` | Gmail lo aceptó | Fin. Guarda el asunto enviado |
 | `ERROR` | Falló un intento; `retry_count` < 3 | Se reintenta en la siguiente pasada |
 | `FALLIDO` | Falló el **tercer** intento (`EMAIL_MAX_RETRIES = 3`), o error permanente: plantilla desconocida, inscripción no encontrada, contenido no permitido | Queda en `_LOG` como `CORREO_FALLIDO`. Solo vuelve a la cola con "Reintentar fallidos" |
-| `OMITIDO` | La persona no tiene correo válido, o es una dirección `.test` (dato de prueba) | Nunca se envía. "Reintentar fallidos" no lo toca |
+| `OMITIDO` | La persona no tiene correo válido, o es una dirección `.test` (dato de prueba) | No se envía. Si después se corrige la dirección, el siguiente envío de esa plantilla lo vuelve a encolar (misma clave). "Reintentar fallidos" no lo toca |
 
 ## 3. Plantillas
 
@@ -57,6 +57,11 @@ Versión de plantillas: **`T3-2026-09-29`** (`EMAIL_TEMPLATE_VERSION`), guardada
 | `CAMBIO_APROBADO` / `CAMBIO_RECHAZADO` | Al resolver la solicitud | `accionResolverCambio` | Titular | `CAMBIO_RESUELTO:<solicitud_id>` (una sola por solicitud) |
 
 `OFERTA_SUPLENTE` y `RETIRO_CONFIRMADO` no aparecen en el selector del panel: solo los genera el sistema.
+El envío manual desde el panel usa **la misma clave** que el envío automático (`emailKey`), así que reenviar, por ejemplo,
+«Resultado de aptitud» a quien ya lo recibió no le manda una segunda copia. Los envíos masivos (aplicar verificación,
+emitir códigos, «Enviar por correo») leen el registro una sola vez y escriben todas las filas de una vez: con uno por uno,
+127 resultados de aptitud tardaron 3,6 min en vivo (29-sep), cerca del límite de 6 min de Apps Script.
+`RETIRO_CONFIRMADO` dice que el cupo se ofrece a la bolsa **si todavía hay tiempo para reemplazos**, y si no, que queda vacante.
 
 ### 3.2 Manuales (Comunicación → "Enviar por correo")
 
@@ -65,7 +70,7 @@ a proyectos retirados.
 
 | Plantilla | Audiencia (código) | Uso previsto |
 |---|---|---|
-| `CONFIRMACION_FINAL` | Con código y sin confirmación final | 22-oct: pedir SÍ CONFIRMO / NO PODRÉ ASISTIR |
+| `CONFIRMACION_FINAL` | Con código y sin confirmación final | Pedir SÍ CONFIRMO / NO PODRÉ ASISTIR. El correo dice la ventana (desde `confirmacion_final_desde` hasta `confirmacion_final_hasta`), así que puede enviarse la víspera (21-oct) para no competir por la cuota del 22-oct |
 | `RECORDATORIO_24H` | Con código | Día anterior al evento |
 | `RECORDATORIO_DIA` | Con código | Día del evento |
 | `CONTINGENCIA` | Asistencia CONTINGENCIA o NO SHOW | Día del evento |

@@ -40,7 +40,7 @@ function byBlockThenCode(a, b) {
 function reconstruirAgenda(filas) {
   limpiarDatos(HOJA.AGENDA);
   var cfgAgenda = agendaConfigurada();
-  var ocupacion = bloquesConCupo(filas, cfgAgenda);
+  var ocupacion = bloquesConCupo(rowsWithOpenOffers(filas), cfgAgenda);
   var porBloque = {};
   ocupacion.forEach(function (o) { porBloque[o.block_id] = o; });
 

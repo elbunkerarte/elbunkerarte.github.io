@@ -180,7 +180,8 @@ function plantillas() {
       asunto: c.evento + ' — registramos que liberaste el cupo {{slot_code}}',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'ESTADO: RETIRADO. Liberaste el cupo {{slot_code}}; lo recibirá la siguiente persona de la bolsa de suplentes.\n\n' +
+        'ESTADO: RETIRADO. Liberaste el cupo {{slot_code}}. Si todavía hay tiempo para reemplazos, se ofrece a la siguiente ' +
+        'persona de la bolsa de suplentes; si no, queda vacante.\n\n' +
         'SIGUIENTE PASO: ninguno. Gracias por avisar a tiempo. Si fue un error, escríbenos por WhatsApp' +
         (c.numero ? ' al ' + c.numero : '') + '.' + firma
     },
@@ -482,6 +483,17 @@ function messageExtras(r, base, members) {
 // ---------------------------------------------------------------------------
 
 /**
+ * The idempotency key of a template for a registration. The automatic senders and the panel's
+ * manual send use the same key, so a manual resend never mails someone a second copy.
+ */
+function emailKey(templateKey, row) {
+  if (templateKey === 'RECEPCION') return 'RECEPCION:' + row.submission_id;
+  if (templateKey === 'APTITUD') return 'APTITUD:' + row.submission_id + ':' + normalizeEligibility(row.eligibility_status);
+  if (templateKey === 'SIN_CUPO') return 'SIN_CUPO:' + row.submission_id + ':' + normalizarComparable(row.pool_status);
+  return templateKey + ':' + row.submission_id + ':' + normalizarComparable(row.code || '');
+}
+
+/**
  * Adds one e-mail to the queue unless the same idempotency key is already queued or sent.
  * Must run inside the script lock (it appends a row). Never throws: mail must not break the operation.
  * options.fresh: the key contains an id created in this same request, so it can not exist yet and the
@@ -493,14 +505,18 @@ function enqueueEmail(templateKey, row, trigger, extras, idempotencyKey, options
   try {
     if (!row || !row.submission_id) return { encolado: false, motivo: 'SIN_REGISTRO' };
     var key = idempotencyKey || (templateKey + ':' + row.submission_id);
-    if (!options.fresh) {
-      var existing = leerHoja(HOJA.EMAIL_LOG).filter(function (e) { return e.idempotency_key === key; })[0];
-      if (existing && normalizarComparable(existing.status) !== EMAIL_STATUS.FALLIDO) {
-        return { encolado: false, motivo: 'YA_EXISTE', email_id: existing.email_id };
-      }
-    }
     var email = normalizarEmail(row.email);
     var skip = !esEmailValido(email) ? 'SIN_CORREO_VALIDO' : (/\.test$/i.test(email) ? 'DATO_DE_PRUEBA' : '');
+    if (!options.fresh) {
+      var existing = options.batch ? options.batch.index[key]
+        : leerHoja(HOJA.EMAIL_LOG).filter(function (e) { return e.idempotency_key === key; }).pop();
+      var st = existing ? normalizarComparable(existing.status) : '';
+      // FALLIDO can always be queued again; OMITIDO only once the address has been corrected.
+      var retryable = st === EMAIL_STATUS.FALLIDO || (st === EMAIL_STATUS.OMITIDO && !skip);
+      if (existing && !retryable) {
+        return { encolado: false, motivo: st === EMAIL_STATUS.OMITIDO ? skip || 'OMITIDO' : 'YA_EXISTE', email_id: existing.email_id };
+      }
+    }
     var claim = !!options.claim && !skip;
     var id = nuevoId('EM');
     var entry = {
@@ -511,12 +527,35 @@ function enqueueEmail(templateKey, row, trigger, extras, idempotencyKey, options
       provider_message_id: '', retry_count: 0,
       last_attempt_at: claim ? isoWithOffset() : '', error: skip, subject: '', payload: JSON.stringify(extras || {}).slice(0, 2000)
     };
+    if (options.batch) {
+      options.batch.rows.push(entry);           // written by commitEmailBatch() in one go
+      options.batch.index[key] = entry;
+      return { encolado: !skip, email_id: id, motivo: skip, entry: null };
+    }
     entry._fila = agregarFila(HOJA.EMAIL_LOG, entry);
     return { encolado: !skip, email_id: id, motivo: skip, entry: claim ? entry : null };
   } catch (e) {
     try { registrar('sistema', '', 'CORREO_ENCOLAR_FALLO', templateKey, e.message); } catch (ignored) { /* nothing left to do */ }
     return { encolado: false, motivo: e.message };
   }
+}
+
+/**
+ * Bulk queueing (aptitude for everyone, codes, the panel's bulk send): the log is read once and every
+ * new row is written in one go. Queueing one by one re-read the whole log per e-mail - measured live
+ * 2026-09-29: 127 aptitude results took 3.6 minutes, close to the 6-minute limit with a few hundred.
+ * Must run inside the script lock, like enqueueEmail.
+ */
+function beginEmailBatch() {
+  var index = {};
+  leerHoja(HOJA.EMAIL_LOG).forEach(function (e) { index[e.idempotency_key] = e; });
+  return { index: index, rows: [], after: [] };
+}
+
+function commitEmailBatch(batch) {
+  if (batch.rows.length) agregarFilasTexto(HOJA.EMAIL_LOG, batch.rows);
+  if (batch.after.length) actualizarFilasEnLote(HOJA.REGISTRO, batch.after);
+  return batch.rows.length;
 }
 
 /**
@@ -705,12 +744,14 @@ function accionEnviarCorreos(datos, sesion) {
   leerHoja(HOJA.REGISTRO).forEach(function (r) { registry[r.submission_id] = r; });
   var queued = 0, repeated = 0, skipped = 0;
   conBloqueo(function () {
+    var batch = beginEmailBatch();
     preparado.mensajes.forEach(function (m) {
       var row = registry[m.submission_id];
-      var key = preparado.plantilla + ':' + m.submission_id + ':' + (row.code || '') + (repeatable[preparado.plantilla] ? ':' + day : '');
-      var r = enqueueEmail(preparado.plantilla, row, 'panel:' + sesion.alias, {}, key);
+      var key = emailKey(preparado.plantilla, row) + (repeatable[preparado.plantilla] ? ':' + day : '');
+      var r = enqueueEmail(preparado.plantilla, row, 'panel:' + sesion.alias, {}, key, { batch: batch });
       if (r.encolado) queued++; else if (r.motivo === 'YA_EXISTE') repeated++; else skipped++;
     });
+    commitEmailBatch(batch);
   });
   var sent = processEmailQueue({ limit: 40 });
   registrar(sesion.alias, sesion.rol, 'ENVIAR_CORREOS', preparado.plantilla,

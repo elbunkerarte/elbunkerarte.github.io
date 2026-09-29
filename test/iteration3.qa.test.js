@@ -751,6 +751,106 @@ describe('Findings of the operator-documentation read-through (2026-09-29)', () 
 });
 
 // ===========================================================================
+describe('Findings of the state-flow read-through (2026-09-29)', () => {
+  const setup = (n) => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    registerMany(test.project, account, n || 103);
+    test.project.run('accionAsignarCodigos', {}, ADMIN);
+    return { account, test, p: test.project, before: test.project.records('REGISTRO') };
+  };
+  const change = (p, who, id) => p.run('accionSolicitarCambio', { participant_code: who.code, full_name: who.full_name, reason_short: 'Trabajo',
+    contact: '3001112233', acceptance: true, client_submission_id: id, form_elapsed_ms: 60000 });
+
+  it('a pending schedule change dies with the withdrawal: annulled, never moves the substitute, never blocks the list', () => {
+    const { account, p, before } = setup();
+    const holder = before.find((r) => r.code === 'B-008');
+    const req = change(p, holder, 'orphan-1');
+    account.setNow('2026-10-18T10:00:00-05:00');
+    const out = p.run('accionRetirarme', Object.assign(identity(holder), { confirmacion: 'LIBERAR MI CUPO' }));
+    expect(out.mensaje).toContain('se ofreció a la siguiente persona');
+    const reqRow = p.records('_CAMBIOS').find((c) => c.solicitud_id === req.solicitud_id);
+    expect([reqRow.estado, /liberó el cupo/.test(reqRow.observacion)]).toEqual(['ANULADO', true]);
+    expect(p.run('accionResolverCambio', { solicitud_id: req.solicitud_id, aprobar: true, nuevo_bloque: 5 }, ADMIN).ok).toBe(false);
+    const offer = p.records('_OFERTAS').find((o) => o.slot_code === 'B-008' && o.estado === 'PENDIENTE');
+    const sub = row(p, (r) => r.submission_id === offer.submission_id);
+    const accepted = p.run('accionResponderOferta', Object.assign(identity(sub), { oferta_id: offer.oferta_id, respuesta: 'ACEPTAR' }));
+    expect([accepted.aceptada, accepted.code]).toEqual([true, 'B-008']);
+    expect(row(p, (r) => r.submission_id === sub.submission_id).final_time).toBe(holder.final_time);
+    account.setNow('2026-10-22T21:00:00-05:00');
+    const done = p.run('accionConsolidarLista', { confirmacion: 'CONSOLIDAR' }, ADMIN);
+    expect(done.ok === false ? done.error : 'ok').toBe('ok');
+  });
+
+  it('after the replacement deadline the withdrawal says the slot stays vacant, in the screen and in the e-mail', () => {
+    const { account, p, before } = setup();
+    account.setNow('2026-10-22T13:00:00-05:00');
+    const holder = before.find((r) => r.code === 'B-009');
+    const out = p.run('accionRetirarme', Object.assign(identity(holder), { confirmacion: 'LIBERAR MI CUPO' }));
+    expect(out.mensaje).toContain('queda vacante');
+    expect(out.mensaje).not.toContain('se ofreció');
+  });
+
+  it('once the list is consolidated, closing a vacancy or taking a holder\'s slot needs admin to unlock it first', () => {
+    const { account, p, before } = setup();
+    account.setNow('2026-10-22T21:00:00-05:00');
+    expect(p.run('accionConsolidarLista', { confirmacion: 'CONSOLIDAR' }, ADMIN).ok).not.toBe(false);
+    const holder = before.find((r) => r.code === 'B-010');
+    const taken = p.run('accionMarcarElegibilidad', { submission_id: holder.submission_id, eligibility_status: 'NO_APTO', motivo: 'Prueba', liberar_cupo: true }, ADMIN);
+    expect([taken.ok, /consolidada/.test(taken.error)]).toEqual([false, true]);
+    expect(row(p, (r) => r.submission_id === holder.submission_id).code).toBe('B-010');
+    const closed = p.run('accionCerrarVacante', { slot_code: 'B-099', motivo: 'Prueba de bloqueo' }, ADMIN);
+    expect([closed.ok, /consolidada/.test(closed.error)]).toEqual([false, true]);
+  });
+
+  it('a skipped e-mail is queued again once the address is corrected; a manual resend never duplicates an automatic one', () => {
+    const { p, before } = setup(4);
+    const who = before.find((r) => r.code === 'B-001');
+    const aptitudeRows = () => p.records('_EMAIL_LOG').filter((e) => e.template_key === 'APTITUD' && e.submission_id === who.submission_id);
+    expect(aptitudeRows().map((e) => e.status)).toEqual(['ENVIADO']);
+    const manual = p.run('accionEnviarCorreos', { plantilla: 'APTITUD' }, ADMIN);
+    expect(aptitudeRows().length).toBe(1);
+    expect(manual.encolados).toBe(0);
+    // A .test address is skipped (OMITIDO); once the operator corrects it the same key queues again.
+    const queue = (email) => p.execute('queue-' + email, (g) => g.conBloqueo(() => {
+      const r = g.leerHoja('REGISTRO').filter((x) => x.submission_id === who.submission_id)[0];
+      return g.enqueueEmail('ASIGNACION', Object.assign({}, r, { email: email }), 'prueba', {}, 'REENVIO:' + who.submission_id);
+    }));
+    expect([queue('bad@ejemplo-bunker.test').encolado, queue('bad@ejemplo-bunker.test').encolado]).toEqual([false, false]);
+    expect(queue('participant0001@example.com').encolado).toBe(true);
+    expect(queue('participant0001@example.com').motivo).toBe('YA_EXISTE');
+    const keyed = p.records('_EMAIL_LOG').filter((e) => e.idempotency_key === 'REENVIO:' + who.submission_id).map((e) => e.status);
+    expect(keyed).toEqual(['OMITIDO', 'PENDIENTE']);
+  });
+
+  it('a slot offered to a substitute keeps its place when logistics fills blocks', () => {
+    const { account, p, before } = setup(110);
+    account.setNow('2026-10-18T10:00:00-05:00');
+    const holder = before.find((r) => r.code === 'B-012');
+    const block = String(holder.final_block || holder.original_block);
+    const beforeFree = p.run('accionBloquesDisponibles').bloques.find((b) => String(b.block_id) === block).disponibles;
+    p.run('accionRetirarme', Object.assign(identity(holder), { confirmacion: 'LIBERAR MI CUPO' }));
+    const afterFree = p.run('accionBloquesDisponibles').bloques.find((b) => String(b.block_id) === block).disponibles;
+    expect(afterFree).toBe(beforeFree);
+  });
+
+  it('the juror gets the disqualification note back, so saving the draft again keeps it', () => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    const p = test.project;
+    registerMany(p, account, 3);
+    p.run('accionAsignarCodigos', {}, ADMIN);
+    p.run('accionRegistrarEstado', { code: 'B-001', estado: 'CHECK-IN' }, ADMIN);
+    p.run('accionRegistrarEstado', { code: 'B-001', estado: 'EN AUDICION' }, ADMIN);
+    p.run('accionRegistrarEstado', { code: 'B-001', estado: 'REALIZADA' }, ADMIN);
+    const api = (body) => p.clientCall('api', Object.assign({ t: test.tokens['jurado-1'] }, body));
+    api(Object.assign({ accion: 'guardar_evaluacion', code: 'B-001', dq_flag: true, dq_causa: 'PLAYBACK', dq_nota: 'Voz grabada en el coro' }, all(3)));
+    const card = api({ accion: 'lista_evaluacion' }).participantes.find((x) => x.code === 'B-001');
+    expect(card.dq_nota).toBe('Voz grabada en el coro');
+  });
+});
+
+// ===========================================================================
 describe('Production reset: removing the pre-launch test rows leaves nothing of them behind', () => {
   it('removes their rows, their replay answers and their signature files; a real registration keeps all of its own', () => {
     const account = F.newAccount();

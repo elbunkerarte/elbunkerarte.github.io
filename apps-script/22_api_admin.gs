@@ -225,11 +225,15 @@ function accionRevalidarTodo(datos, sesion) {
 var FINAL_ELIGIBILITY = ['APTO', 'NO_APTO', 'DUPLICADO', 'INCOMPLETO'];
 
 /** Queues the aptitude result e-mail once per (registration, state). Caller holds the lock. */
-function queueAptitudeEmailLocked(row, status) {
+function queueAptitudeEmailLocked(row, status, batch) {
   if (FINAL_ELIGIBILITY.indexOf(status) === -1) return false;
-  var r = enqueueEmail('APTITUD', Object.assign({}, row, { eligibility_status: status }), 'aptitud', {},
-                       'APTITUD:' + row.submission_id + ':' + status);
-  if (r.encolado) actualizarFila(HOJA.REGISTRO, row._fila, { aptitude_notified_at: isoWithOffset() });
+  var decided = Object.assign({}, row, { eligibility_status: status });
+  var r = enqueueEmail('APTITUD', decided, 'aptitud', {}, emailKey('APTITUD', decided), batch ? { batch: batch } : {});
+  if (r.encolado) {
+    var stamp = { aptitude_notified_at: isoWithOffset() };
+    if (batch) batch.after.push({ fila: row._fila, cambios: stamp });
+    else actualizarFila(HOJA.REGISTRO, row._fila, stamp);
+  }
   return r.encolado;
 }
 
@@ -251,7 +255,9 @@ function accionAplicarVerificacion(datos, sesion) {
     });
     actualizarFilasEnLote(HOJA.REGISTRO, updates);
     var queued = 0;
-    updates.forEach(function (u) { if (queueAptitudeEmailLocked(u.row, u.status)) queued++; });
+    var batch = beginEmailBatch();
+    updates.forEach(function (u) { if (queueAptitudeEmailLocked(u.row, u.status, batch)) queued++; });
+    commitEmailBatch(batch);
     var pool = refreshPoolLocked();
     registrar(sesion.alias, sesion.rol, 'APLICAR_VERIFICACION', '', JSON.stringify(counts));
     return { aplicadas: updates.length, por_estado: counts, correos_en_cola: queued, bolsa: pool,
@@ -265,9 +271,11 @@ function accionAplicarVerificacion(datos, sesion) {
 function accionNotificarAptitud(datos, sesion) {
   var result = conBloqueo(function () {
     var queued = 0;
+    var batch = beginEmailBatch();
     leerHoja(HOJA.REGISTRO).forEach(function (r) {
-      if (queueAptitudeEmailLocked(r, normalizeEligibility(r.eligibility_status))) queued++;
+      if (queueAptitudeEmailLocked(r, normalizeEligibility(r.eligibility_status), batch)) queued++;
     });
+    commitEmailBatch(batch);
     registrar(sesion.alias, sesion.rol, 'NOTIFICAR_APTITUD', '', queued + ' correos');
     return { correos_en_cola: queued };
   });
@@ -291,6 +299,9 @@ function accionMarcarElegibilidad(datos, sesion) {
     var nuevo = normalizeEligibility(datos.eligibility_status);
     if (!ESTADO_ELEGIBILIDAD[nuevo]) return { ok: false, error: 'Estado de elegibilidad inválido: ' + datos.eligibility_status };
     var holder = !!normalizarTexto(registro.code);
+    if (holder && (nuevo === 'NO_APTO' || nuevo === 'DUPLICADO' || nuevo === 'INCOMPLETO') && cfgBool('lista_oficial_bloqueada', false)) {
+      return { ok: false, error: 'La lista oficial ya está consolidada: quitarle el cupo a un titular es un cambio que exige que admin la desbloquee primero.' };
+    }
     if (holder && (nuevo === 'NO_APTO' || nuevo === 'DUPLICADO' || nuevo === 'INCOMPLETO')) {
       if (!esVerdadero(datos.liberar_cupo)) {
         return { ok: false, requiere_liberar: true,
@@ -365,16 +376,18 @@ function accionAsignarCodigos(datos, sesion) {
     // Each newly assigned project gets its code and schedule; each eligible project without a
     // slot is told whether it is a substitute or outside the pool. Idempotent per state.
     var queued = { asignacion: 0, sin_cupo: 0 };
+    var batch = beginEmailBatch();
     leerHoja(HOJA.REGISTRO).forEach(function (r) {
       if (normalizarTexto(r.code)) {
-        if (enqueueEmail('ASIGNACION', r, 'asignacion', {}, 'ASIGNACION:' + r.submission_id + ':' + normalizarComparable(r.code)).encolado) queued.asignacion++;
+        if (enqueueEmail('ASIGNACION', r, 'asignacion', {}, emailKey('ASIGNACION', r), { batch: batch }).encolado) queued.asignacion++;
         return;
       }
       var p = normalizarComparable(r.pool_status);
       if (normalizeEligibility(r.eligibility_status) === 'APTO' && (p === POOL_STATUS.SUPLENTE || p === POOL_STATUS.FUERA_DE_BOLSA)) {
-        if (enqueueEmail('SIN_CUPO', r, 'asignacion', {}, 'SIN_CUPO:' + r.submission_id + ':' + p).encolado) queued.sin_cupo++;
+        if (enqueueEmail('SIN_CUPO', r, 'asignacion', {}, emailKey('SIN_CUPO', r), { batch: batch }).encolado) queued.sin_cupo++;
       }
     });
+    commitEmailBatch(batch);
     refrescarVistas();
 
     registrar(sesion.alias, sesion.rol, 'ASIGNAR_CODIGOS', '',
@@ -415,7 +428,7 @@ function accionListarCambios(datos) {
 }
 
 function accionBloquesDisponibles() {
-  return { bloques: bloquesConCupo(leerHoja(HOJA.REGISTRO), agendaConfigurada()) };
+  return { bloques: bloquesConCupo(rowsWithOpenOffers(leerHoja(HOJA.REGISTRO)), agendaConfigurada()) };
 }
 
 /** Production approves (with a destination block) or rejects. */
@@ -456,7 +469,7 @@ function accionResolverCambio(datos, sesion) {
     }
 
     // Capacity is verified at approval time, not at request time.
-    var libres = bloquesConCupo(leerHoja(HOJA.REGISTRO), agendaConfigurada());
+    var libres = bloquesConCupo(rowsWithOpenOffers(leerHoja(HOJA.REGISTRO)), agendaConfigurada());
     var destino = libres.filter(function (b) { return String(b.block_id) === String(datos.nuevo_bloque); })[0];
     if (!destino) return { ok: false, error: 'Bloque destino inválido.' };
     if (destino.disponibles <= 0) {
@@ -807,7 +820,7 @@ function accionCerrarResultados(datos, sesion) {
   });
 }
 
-/** Admin only: reopens the results (e.g. a validated correction). Logged with the reason. */
+/** Direction or admin: reopens the results (e.g. a validated correction). Logged with the reason. */
 function accionReabrirResultados(datos, sesion) {
   var reason = normalizarTexto(datos.motivo);
   if (reason.length < 10) return { ok: false, error: 'Escribe el motivo (queda en la bitácora).' };

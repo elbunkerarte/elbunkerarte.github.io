@@ -179,7 +179,8 @@ function accionListaEvaluacion(datos, sesion) {
         puntajes: card ? ratingsOf(card, rubric.categorias) : null,
         observaciones: card ? card.observaciones : '',
         dq_flag: card ? esVerdadero(card.dq_flag) : false,
-        dq_causa: card ? card.dq_causa || '' : ''
+        dq_causa: card ? card.dq_causa || '' : '',
+        dq_nota: card ? card.dq_nota || '' : ''     // sent back so saving the draft again keeps it
       };
     })
   };

@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-29T17:31:35.147Z
+ * Generado: 2026-09-29T17:41:22.641Z
  * Modulos: 23 .gs + 14 .html
  */
 
@@ -1973,7 +1973,8 @@ var ESTADO_CAMBIO = {
   SIN_SOLICITUD: 'SIN_SOLICITUD',
   PENDIENTE: 'PENDIENTE',
   APROBADO: 'APROBADO',
-  RECHAZADO: 'RECHAZADO'
+  RECHAZADO: 'RECHAZADO',
+  ANULADO: 'ANULADO'           // the requester released the slot before logistics decided
 };
 
 /**
@@ -3402,6 +3403,30 @@ function plainTextRuns(cols, plain) {
     else runs.push([i, 1]);
   });
   return runs;
+}
+
+/**
+ * agregarFila() for many rows in ONE write, with the same plain-text rule (leading apostrophe on
+ * plain-text columns, then the '@' format put back). Returns the first row number written.
+ */
+function agregarFilasTexto(nombreHoja, objetos) {
+  if (!objetos.length) return 0;
+  var h = hoja(nombreHoja);
+  var cols = encabezados(nombreHoja);
+  var plain = PLAIN_TEXT_COLUMNS[nombreHoja] || [];
+  var matriz = objetos.map(function (o) {
+    return cols.map(function (c) {
+      var v = cellValue(o[c]);
+      var alreadyQuoted = typeof o[c] === 'string' && v !== o[c];
+      return plain.indexOf(c) !== -1 && typeof v === 'string' && v !== '' && !alreadyQuoted ? "'" + v : v;
+    });
+  });
+  var first = h.getLastRow() + 1;
+  h.getRange(first, 1, matriz.length, cols.length).setValues(matriz);
+  plainTextRuns(cols, plain).forEach(function (run) {
+    h.getRange(first, run[0] + 1, matriz.length, run[1]).setNumberFormat('@');
+  });
+  return first;
 }
 
 /** Appends many rows in ONE write - the only way to stay inside the time limit. */
@@ -5213,11 +5238,15 @@ function accionRevalidarTodo(datos, sesion) {
 var FINAL_ELIGIBILITY = ['APTO', 'NO_APTO', 'DUPLICADO', 'INCOMPLETO'];
 
 /** Queues the aptitude result e-mail once per (registration, state). Caller holds the lock. */
-function queueAptitudeEmailLocked(row, status) {
+function queueAptitudeEmailLocked(row, status, batch) {
   if (FINAL_ELIGIBILITY.indexOf(status) === -1) return false;
-  var r = enqueueEmail('APTITUD', Object.assign({}, row, { eligibility_status: status }), 'aptitud', {},
-                       'APTITUD:' + row.submission_id + ':' + status);
-  if (r.encolado) actualizarFila(HOJA.REGISTRO, row._fila, { aptitude_notified_at: isoWithOffset() });
+  var decided = Object.assign({}, row, { eligibility_status: status });
+  var r = enqueueEmail('APTITUD', decided, 'aptitud', {}, emailKey('APTITUD', decided), batch ? { batch: batch } : {});
+  if (r.encolado) {
+    var stamp = { aptitude_notified_at: isoWithOffset() };
+    if (batch) batch.after.push({ fila: row._fila, cambios: stamp });
+    else actualizarFila(HOJA.REGISTRO, row._fila, stamp);
+  }
   return r.encolado;
 }
 
@@ -5239,7 +5268,9 @@ function accionAplicarVerificacion(datos, sesion) {
     });
     actualizarFilasEnLote(HOJA.REGISTRO, updates);
     var queued = 0;
-    updates.forEach(function (u) { if (queueAptitudeEmailLocked(u.row, u.status)) queued++; });
+    var batch = beginEmailBatch();
+    updates.forEach(function (u) { if (queueAptitudeEmailLocked(u.row, u.status, batch)) queued++; });
+    commitEmailBatch(batch);
     var pool = refreshPoolLocked();
     registrar(sesion.alias, sesion.rol, 'APLICAR_VERIFICACION', '', JSON.stringify(counts));
     return { aplicadas: updates.length, por_estado: counts, correos_en_cola: queued, bolsa: pool,
@@ -5253,9 +5284,11 @@ function accionAplicarVerificacion(datos, sesion) {
 function accionNotificarAptitud(datos, sesion) {
   var result = conBloqueo(function () {
     var queued = 0;
+    var batch = beginEmailBatch();
     leerHoja(HOJA.REGISTRO).forEach(function (r) {
-      if (queueAptitudeEmailLocked(r, normalizeEligibility(r.eligibility_status))) queued++;
+      if (queueAptitudeEmailLocked(r, normalizeEligibility(r.eligibility_status), batch)) queued++;
     });
+    commitEmailBatch(batch);
     registrar(sesion.alias, sesion.rol, 'NOTIFICAR_APTITUD', '', queued + ' correos');
     return { correos_en_cola: queued };
   });
@@ -5279,6 +5312,9 @@ function accionMarcarElegibilidad(datos, sesion) {
     var nuevo = normalizeEligibility(datos.eligibility_status);
     if (!ESTADO_ELEGIBILIDAD[nuevo]) return { ok: false, error: 'Estado de elegibilidad inválido: ' + datos.eligibility_status };
     var holder = !!normalizarTexto(registro.code);
+    if (holder && (nuevo === 'NO_APTO' || nuevo === 'DUPLICADO' || nuevo === 'INCOMPLETO') && cfgBool('lista_oficial_bloqueada', false)) {
+      return { ok: false, error: 'La lista oficial ya está consolidada: quitarle el cupo a un titular es un cambio que exige que admin la desbloquee primero.' };
+    }
     if (holder && (nuevo === 'NO_APTO' || nuevo === 'DUPLICADO' || nuevo === 'INCOMPLETO')) {
       if (!esVerdadero(datos.liberar_cupo)) {
         return { ok: false, requiere_liberar: true,
@@ -5353,16 +5389,18 @@ function accionAsignarCodigos(datos, sesion) {
     // Each newly assigned project gets its code and schedule; each eligible project without a
     // slot is told whether it is a substitute or outside the pool. Idempotent per state.
     var queued = { asignacion: 0, sin_cupo: 0 };
+    var batch = beginEmailBatch();
     leerHoja(HOJA.REGISTRO).forEach(function (r) {
       if (normalizarTexto(r.code)) {
-        if (enqueueEmail('ASIGNACION', r, 'asignacion', {}, 'ASIGNACION:' + r.submission_id + ':' + normalizarComparable(r.code)).encolado) queued.asignacion++;
+        if (enqueueEmail('ASIGNACION', r, 'asignacion', {}, emailKey('ASIGNACION', r), { batch: batch }).encolado) queued.asignacion++;
         return;
       }
       var p = normalizarComparable(r.pool_status);
       if (normalizeEligibility(r.eligibility_status) === 'APTO' && (p === POOL_STATUS.SUPLENTE || p === POOL_STATUS.FUERA_DE_BOLSA)) {
-        if (enqueueEmail('SIN_CUPO', r, 'asignacion', {}, 'SIN_CUPO:' + r.submission_id + ':' + p).encolado) queued.sin_cupo++;
+        if (enqueueEmail('SIN_CUPO', r, 'asignacion', {}, emailKey('SIN_CUPO', r), { batch: batch }).encolado) queued.sin_cupo++;
       }
     });
+    commitEmailBatch(batch);
     refrescarVistas();
 
     registrar(sesion.alias, sesion.rol, 'ASIGNAR_CODIGOS', '',
@@ -5403,7 +5441,7 @@ function accionListarCambios(datos) {
 }
 
 function accionBloquesDisponibles() {
-  return { bloques: bloquesConCupo(leerHoja(HOJA.REGISTRO), agendaConfigurada()) };
+  return { bloques: bloquesConCupo(rowsWithOpenOffers(leerHoja(HOJA.REGISTRO)), agendaConfigurada()) };
 }
 
 /** Production approves (with a destination block) or rejects. */
@@ -5444,7 +5482,7 @@ function accionResolverCambio(datos, sesion) {
     }
 
     // Capacity is verified at approval time, not at request time.
-    var libres = bloquesConCupo(leerHoja(HOJA.REGISTRO), agendaConfigurada());
+    var libres = bloquesConCupo(rowsWithOpenOffers(leerHoja(HOJA.REGISTRO)), agendaConfigurada());
     var destino = libres.filter(function (b) { return String(b.block_id) === String(datos.nuevo_bloque); })[0];
     if (!destino) return { ok: false, error: 'Bloque destino inválido.' };
     if (destino.disponibles <= 0) {
@@ -5795,7 +5833,7 @@ function accionCerrarResultados(datos, sesion) {
   });
 }
 
-/** Admin only: reopens the results (e.g. a validated correction). Logged with the reason. */
+/** Direction or admin: reopens the results (e.g. a validated correction). Logged with the reason. */
 function accionReabrirResultados(datos, sesion) {
   var reason = normalizarTexto(datos.motivo);
   if (reason.length < 10) return { ok: false, error: 'Escribe el motivo (queda en la bitácora).' };
@@ -6315,7 +6353,8 @@ function accionListaEvaluacion(datos, sesion) {
         puntajes: card ? ratingsOf(card, rubric.categorias) : null,
         observaciones: card ? card.observaciones : '',
         dq_flag: card ? esVerdadero(card.dq_flag) : false,
-        dq_causa: card ? card.dq_causa || '' : ''
+        dq_causa: card ? card.dq_causa || '' : '',
+        dq_nota: card ? card.dq_nota || '' : ''     // sent back so saving the draft again keeps it
       };
     })
   };
@@ -6618,6 +6657,16 @@ function releaseSlotLocked(row, opts) {
     pool_status: POOL_STATUS.RETIRADO,
     participation_status: opts.final ? PARTICIPATION.RETIRO_FINAL : PARTICIPATION.RETIRADO
   });
+  // A pending schedule change of this slot dies with the withdrawal: otherwise it could never be decided
+  // (no holder), or approving it would move the substitute who inherits the code.
+  leerHoja(HOJA.CAMBIOS).forEach(function (c) {
+    if (normalizarComparable(c.code) !== code || normalizarComparable(c.estado) !== ESTADO_CAMBIO.PENDIENTE) return;
+    actualizarFila(HOJA.CAMBIOS, c._fila, { estado: ESTADO_CAMBIO.ANULADO, resuelto_at: now,
+      resuelto_by: opts.actor || 'participante', observacion: 'Anulada: el titular liberó el cupo.' });
+  });
+  if (normalizarComparable(row.change_status) === ESTADO_CAMBIO.PENDIENTE) {
+    actualizarFila(HOJA.REGISTRO, row._fila, { change_status: ESTADO_CAMBIO.ANULADO });
+  }
   slotHistoryLocked(code, opts.final ? 'RETIRO_FINAL' : 'LIBERADO', row.submission_id, opts.actor, opts.reason);
   registrar(opts.actor || 'participante', opts.rol || '', opts.final ? 'RETIRO_FINAL' : 'RETIRO', code, row.submission_id);
   enqueueEmail('RETIRO_CONFIRMADO', Object.assign({}, row, { code: '', previous_code: code }), 'retiro',
@@ -6627,6 +6676,23 @@ function releaseSlotLocked(row, opts) {
     ? offerSlotLocked(slot, opts.actor || 'sistema')
     : closeSlotVacantLocked(slot, opts.actor || 'sistema', 'Liberado después del límite para reemplazos.');
   return { ok: true, slot_code: code, reemplazo: outcome };
+}
+
+/**
+ * Rows for block capacity: a slot offered to a substitute still owns its place in its block, so it
+ * counts as occupied (otherwise a schedule change could fill the block and the substitute would make it 11).
+ */
+function rowsWithOpenOffers(rows) {
+  var extra = leerHoja(HOJA.OFERTAS).filter(function (o) { return normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE; })
+    .map(function (o) { return { code: o.slot_code, final_block: o.slot_block }; });
+  return rows.concat(extra);
+}
+
+/** What happened to a released slot, in one sentence for the person who released it. */
+function releaseOutcomeText(released) {
+  var estado = normalizarComparable((released.reemplazo || {}).estado);
+  if (estado === OFFER_STATUS.PENDIENTE || estado === SLOT_STATUS.OFRECIDO) return 'se ofreció a la siguiente persona de la bolsa de suplentes.';
+  return 'ya no hay tiempo o suplentes para reemplazarlo, así que queda vacante.';
 }
 
 /** Offers a free slot to the next substitute in priority order, or leaves it vacant if none is left. */
@@ -6741,8 +6807,8 @@ function accionRetirarme(datos) {
     if (!released.ok) return released;
     return {
       retirado: true, slot_code: released.slot_code,
-      mensaje: 'Liberaste el cupo ' + released.slot_code + '. Gracias por avisar: lo recibirá la siguiente persona de la lista de suplentes. ' +
-               'Esta decisión no se puede deshacer.'
+      mensaje: 'Liberaste el cupo ' + released.slot_code + '. Gracias por avisar: ' + releaseOutcomeText(released) +
+               ' Esta decisión no se puede deshacer.'
     };
   });
 }
@@ -6778,7 +6844,8 @@ function accionConfirmacionFinal(datos) {
     var released = releaseSlotLocked(fresh, { actor: 'participante', reason: 'Confirmación final: no podrá asistir', final: true });
     if (!released.ok) return released;
     return { confirmado: false, slot_code: released.slot_code,
-             mensaje: 'Registramos que no podrás asistir y liberamos el cupo ' + released.slot_code + '. Gracias por avisar.' };
+             mensaje: 'Registramos que no podrás asistir y liberamos el cupo ' + released.slot_code + '. Gracias por avisar: ' +
+                      releaseOutcomeText(released) };
   });
 }
 
@@ -6923,6 +6990,9 @@ function accionOfrecerCupo(datos, sesion) {
 
 /** Closes a slot without replacement (cancels its pending offer, if any). */
 function accionCerrarVacante(datos, sesion) {
+  if (cfgBool('lista_oficial_bloqueada', false)) {
+    return { ok: false, error: 'La lista oficial ya está consolidada: no hay cambios ordinarios. Si es una emergencia, admin debe desbloquearla.' };
+  }
   var reason = normalizarTexto(datos.motivo);
   if (reason.length < 5) return { ok: false, error: 'Escribe el motivo.' };
   return conBloqueo(function () {
@@ -7138,7 +7208,7 @@ function byBlockThenCode(a, b) {
 function reconstruirAgenda(filas) {
   limpiarDatos(HOJA.AGENDA);
   var cfgAgenda = agendaConfigurada();
-  var ocupacion = bloquesConCupo(filas, cfgAgenda);
+  var ocupacion = bloquesConCupo(rowsWithOpenOffers(filas), cfgAgenda);
   var porBloque = {};
   ocupacion.forEach(function (o) { porBloque[o.block_id] = o; });
 
@@ -9007,7 +9077,8 @@ function plantillas() {
       asunto: c.evento + ' — registramos que liberaste el cupo {{slot_code}}',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'ESTADO: RETIRADO. Liberaste el cupo {{slot_code}}; lo recibirá la siguiente persona de la bolsa de suplentes.\n\n' +
+        'ESTADO: RETIRADO. Liberaste el cupo {{slot_code}}. Si todavía hay tiempo para reemplazos, se ofrece a la siguiente ' +
+        'persona de la bolsa de suplentes; si no, queda vacante.\n\n' +
         'SIGUIENTE PASO: ninguno. Gracias por avisar a tiempo. Si fue un error, escríbenos por WhatsApp' +
         (c.numero ? ' al ' + c.numero : '') + '.' + firma
     },
@@ -9309,6 +9380,17 @@ function messageExtras(r, base, members) {
 // ---------------------------------------------------------------------------
 
 /**
+ * The idempotency key of a template for a registration. The automatic senders and the panel's
+ * manual send use the same key, so a manual resend never mails someone a second copy.
+ */
+function emailKey(templateKey, row) {
+  if (templateKey === 'RECEPCION') return 'RECEPCION:' + row.submission_id;
+  if (templateKey === 'APTITUD') return 'APTITUD:' + row.submission_id + ':' + normalizeEligibility(row.eligibility_status);
+  if (templateKey === 'SIN_CUPO') return 'SIN_CUPO:' + row.submission_id + ':' + normalizarComparable(row.pool_status);
+  return templateKey + ':' + row.submission_id + ':' + normalizarComparable(row.code || '');
+}
+
+/**
  * Adds one e-mail to the queue unless the same idempotency key is already queued or sent.
  * Must run inside the script lock (it appends a row). Never throws: mail must not break the operation.
  * options.fresh: the key contains an id created in this same request, so it can not exist yet and the
@@ -9320,14 +9402,18 @@ function enqueueEmail(templateKey, row, trigger, extras, idempotencyKey, options
   try {
     if (!row || !row.submission_id) return { encolado: false, motivo: 'SIN_REGISTRO' };
     var key = idempotencyKey || (templateKey + ':' + row.submission_id);
-    if (!options.fresh) {
-      var existing = leerHoja(HOJA.EMAIL_LOG).filter(function (e) { return e.idempotency_key === key; })[0];
-      if (existing && normalizarComparable(existing.status) !== EMAIL_STATUS.FALLIDO) {
-        return { encolado: false, motivo: 'YA_EXISTE', email_id: existing.email_id };
-      }
-    }
     var email = normalizarEmail(row.email);
     var skip = !esEmailValido(email) ? 'SIN_CORREO_VALIDO' : (/\.test$/i.test(email) ? 'DATO_DE_PRUEBA' : '');
+    if (!options.fresh) {
+      var existing = options.batch ? options.batch.index[key]
+        : leerHoja(HOJA.EMAIL_LOG).filter(function (e) { return e.idempotency_key === key; }).pop();
+      var st = existing ? normalizarComparable(existing.status) : '';
+      // FALLIDO can always be queued again; OMITIDO only once the address has been corrected.
+      var retryable = st === EMAIL_STATUS.FALLIDO || (st === EMAIL_STATUS.OMITIDO && !skip);
+      if (existing && !retryable) {
+        return { encolado: false, motivo: st === EMAIL_STATUS.OMITIDO ? skip || 'OMITIDO' : 'YA_EXISTE', email_id: existing.email_id };
+      }
+    }
     var claim = !!options.claim && !skip;
     var id = nuevoId('EM');
     var entry = {
@@ -9338,12 +9424,35 @@ function enqueueEmail(templateKey, row, trigger, extras, idempotencyKey, options
       provider_message_id: '', retry_count: 0,
       last_attempt_at: claim ? isoWithOffset() : '', error: skip, subject: '', payload: JSON.stringify(extras || {}).slice(0, 2000)
     };
+    if (options.batch) {
+      options.batch.rows.push(entry);           // written by commitEmailBatch() in one go
+      options.batch.index[key] = entry;
+      return { encolado: !skip, email_id: id, motivo: skip, entry: null };
+    }
     entry._fila = agregarFila(HOJA.EMAIL_LOG, entry);
     return { encolado: !skip, email_id: id, motivo: skip, entry: claim ? entry : null };
   } catch (e) {
     try { registrar('sistema', '', 'CORREO_ENCOLAR_FALLO', templateKey, e.message); } catch (ignored) { /* nothing left to do */ }
     return { encolado: false, motivo: e.message };
   }
+}
+
+/**
+ * Bulk queueing (aptitude for everyone, codes, the panel's bulk send): the log is read once and every
+ * new row is written in one go. Queueing one by one re-read the whole log per e-mail - measured live
+ * 2026-09-29: 127 aptitude results took 3.6 minutes, close to the 6-minute limit with a few hundred.
+ * Must run inside the script lock, like enqueueEmail.
+ */
+function beginEmailBatch() {
+  var index = {};
+  leerHoja(HOJA.EMAIL_LOG).forEach(function (e) { index[e.idempotency_key] = e; });
+  return { index: index, rows: [], after: [] };
+}
+
+function commitEmailBatch(batch) {
+  if (batch.rows.length) agregarFilasTexto(HOJA.EMAIL_LOG, batch.rows);
+  if (batch.after.length) actualizarFilasEnLote(HOJA.REGISTRO, batch.after);
+  return batch.rows.length;
 }
 
 /**
@@ -9532,12 +9641,14 @@ function accionEnviarCorreos(datos, sesion) {
   leerHoja(HOJA.REGISTRO).forEach(function (r) { registry[r.submission_id] = r; });
   var queued = 0, repeated = 0, skipped = 0;
   conBloqueo(function () {
+    var batch = beginEmailBatch();
     preparado.mensajes.forEach(function (m) {
       var row = registry[m.submission_id];
-      var key = preparado.plantilla + ':' + m.submission_id + ':' + (row.code || '') + (repeatable[preparado.plantilla] ? ':' + day : '');
-      var r = enqueueEmail(preparado.plantilla, row, 'panel:' + sesion.alias, {}, key);
+      var key = emailKey(preparado.plantilla, row) + (repeatable[preparado.plantilla] ? ':' + day : '');
+      var r = enqueueEmail(preparado.plantilla, row, 'panel:' + sesion.alias, {}, key, { batch: batch });
       if (r.encolado) queued++; else if (r.motivo === 'YA_EXISTE') repeated++; else skipped++;
     });
+    commitEmailBatch(batch);
   });
   var sent = processEmailQueue({ limit: 40 });
   registrar(sesion.alias, sesion.rol, 'ENVIAR_CORREOS', preparado.plantilla,

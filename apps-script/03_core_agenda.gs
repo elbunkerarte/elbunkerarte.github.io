@@ -157,7 +157,8 @@ var ESTADO_CAMBIO = {
   SIN_SOLICITUD: 'SIN_SOLICITUD',
   PENDIENTE: 'PENDIENTE',
   APROBADO: 'APROBADO',
-  RECHAZADO: 'RECHAZADO'
+  RECHAZADO: 'RECHAZADO',
+  ANULADO: 'ANULADO'           // the requester released the slot before logistics decided
 };
 
 /**

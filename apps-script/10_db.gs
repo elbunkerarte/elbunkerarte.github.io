@@ -279,6 +279,30 @@ function plainTextRuns(cols, plain) {
   return runs;
 }
 
+/**
+ * agregarFila() for many rows in ONE write, with the same plain-text rule (leading apostrophe on
+ * plain-text columns, then the '@' format put back). Returns the first row number written.
+ */
+function agregarFilasTexto(nombreHoja, objetos) {
+  if (!objetos.length) return 0;
+  var h = hoja(nombreHoja);
+  var cols = encabezados(nombreHoja);
+  var plain = PLAIN_TEXT_COLUMNS[nombreHoja] || [];
+  var matriz = objetos.map(function (o) {
+    return cols.map(function (c) {
+      var v = cellValue(o[c]);
+      var alreadyQuoted = typeof o[c] === 'string' && v !== o[c];
+      return plain.indexOf(c) !== -1 && typeof v === 'string' && v !== '' && !alreadyQuoted ? "'" + v : v;
+    });
+  });
+  var first = h.getLastRow() + 1;
+  h.getRange(first, 1, matriz.length, cols.length).setValues(matriz);
+  plainTextRuns(cols, plain).forEach(function (run) {
+    h.getRange(first, run[0] + 1, matriz.length, run[1]).setNumberFormat('@');
+  });
+  return first;
+}
+
 /** Appends many rows in ONE write - the only way to stay inside the time limit. */
 function agregarFilas(nombreHoja, objetos) {
   if (!objetos.length) return 0;

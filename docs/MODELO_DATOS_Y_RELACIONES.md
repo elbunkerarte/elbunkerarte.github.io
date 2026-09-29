@@ -27,8 +27,8 @@
 | `PISTAS` | Vista | Pistas en orden de agenda para el técnico | `reconstruirPistas` |
 | `JURADO_1`, `JURADO_2`, `JURADO_3` | Fuente | Una tarjeta por proyecto por jurado | Cada jurado desde su pantalla; dirección/admin al reabrir |
 | `RESULTADOS` | Vista (privada) | Ranking calculado, Top 20, empates, excluidos | `reconstruirResultados` |
-| `DASHBOARD` | Vista (privada) | Indicadores (incluye el Top 20 privado) | `reconstruirDashboard` |
-| `INCIDENTES` | Fuente | Incidentes del día (id `INC-…`) | Transiciones forzadas del check-in; acción `nuevo_incidente` (API) |
+| `DASHBOARD` | Vista (privada) | Indicadores (la hoja incluye el Top 20 privado; en pantalla, puntajes y ranking solo para dirección y admin) | `reconstruirDashboard` |
+| `INCIDENTES` | Fuente | Incidentes del día (id `INC-…`) | Botón "Registrar incidente" de la mesa de check-in; transiciones forzadas (API) |
 | `CONFIG` | Parámetro | Fechas, cupos, textos legales, interruptores SI/NO | Operador (a mano) + el sistema en claves de etapa |
 | `_INTEGRANTES` | Fuente | Una fila por persona y proyecto (intérpretes y equipo de trabajo) | Formulario 1 (quien inscribe) y enlace "equipo y firmas" (cada persona) |
 | `_DELIBERACIONES` | Fuente | Actas de desempate (id `ACTA-…`) | Dirección/admin |
