@@ -388,7 +388,6 @@ function accionAsignarCodigos(datos, sesion) {
       }
     });
     commitEmailBatch(batch);
-    refrescarVistas();
 
     registrar(sesion.alias, sesion.rol, 'ASIGNAR_CODIGOS', '',
               'nuevos=' + resultado.asignados.length + ' sin_cupo=' + resultado.sin_cupo.length);
@@ -405,6 +404,7 @@ function accionAsignarCodigos(datos, sesion) {
       detalle: resultado.asignados.slice(0, 200)
     };
   });
+  if (out && out.ok !== false) refrescarVistas();                 // outside the data lock
   out.envio = processEmailQueue({ limit: 15 });
   return out;
 }
@@ -436,7 +436,7 @@ function accionResolverCambio(datos, sesion) {
   if (cfgBool('lista_oficial_bloqueada', false)) {
     return { ok: false, error: 'La lista oficial ya está consolidada: no hay cambios ordinarios. Si es una emergencia, admin debe desbloquearla.' };
   }
-  return conBloqueo(function () {
+  return lockedThenRefresh(function () {
     var solicitudes = leerHoja(HOJA.CAMBIOS);
     var solicitud = solicitudes.filter(function (c) { return c.solicitud_id === datos.solicitud_id; })[0];
     if (!solicitud) return { ok: false, error: 'Solicitud no encontrada.' };
@@ -463,7 +463,6 @@ function accionResolverCambio(datos, sesion) {
       enqueueEmail('CAMBIO_RECHAZADO', buscarPorCodigo(solicitud.code), 'cambio', { solicitud_id: solicitud.solicitud_id },
                    'CAMBIO_RESUELTO:' + solicitud.solicitud_id);
       refreshPoolLocked();
-      refrescarVistas();
       return { estado: ESTADO_CAMBIO.RECHAZADO, code: solicitud.code,
                mensaje: 'Solicitud rechazada. El participante mantiene su horario original.' };
     }
@@ -494,7 +493,6 @@ function accionResolverCambio(datos, sesion) {
     enqueueEmail('CAMBIO_APROBADO', buscarPorCodigo(solicitud.code), 'cambio', { solicitud_id: solicitud.solicitud_id },
                  'CAMBIO_RESUELTO:' + solicitud.solicitud_id);
     refreshPoolLocked();
-    refrescarVistas();
 
     return {
       estado: ESTADO_CAMBIO.APROBADO, code: solicitud.code,

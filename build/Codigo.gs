@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-29T17:41:22.641Z
+ * Generado: 2026-09-29T18:36:18.223Z
  * Modulos: 23 .gs + 14 .html
  */
 
@@ -5401,7 +5401,6 @@ function accionAsignarCodigos(datos, sesion) {
       }
     });
     commitEmailBatch(batch);
-    refrescarVistas();
 
     registrar(sesion.alias, sesion.rol, 'ASIGNAR_CODIGOS', '',
               'nuevos=' + resultado.asignados.length + ' sin_cupo=' + resultado.sin_cupo.length);
@@ -5418,6 +5417,7 @@ function accionAsignarCodigos(datos, sesion) {
       detalle: resultado.asignados.slice(0, 200)
     };
   });
+  if (out && out.ok !== false) refrescarVistas();                 // outside the data lock
   out.envio = processEmailQueue({ limit: 15 });
   return out;
 }
@@ -5449,7 +5449,7 @@ function accionResolverCambio(datos, sesion) {
   if (cfgBool('lista_oficial_bloqueada', false)) {
     return { ok: false, error: 'La lista oficial ya está consolidada: no hay cambios ordinarios. Si es una emergencia, admin debe desbloquearla.' };
   }
-  return conBloqueo(function () {
+  return lockedThenRefresh(function () {
     var solicitudes = leerHoja(HOJA.CAMBIOS);
     var solicitud = solicitudes.filter(function (c) { return c.solicitud_id === datos.solicitud_id; })[0];
     if (!solicitud) return { ok: false, error: 'Solicitud no encontrada.' };
@@ -5476,7 +5476,6 @@ function accionResolverCambio(datos, sesion) {
       enqueueEmail('CAMBIO_RECHAZADO', buscarPorCodigo(solicitud.code), 'cambio', { solicitud_id: solicitud.solicitud_id },
                    'CAMBIO_RESUELTO:' + solicitud.solicitud_id);
       refreshPoolLocked();
-      refrescarVistas();
       return { estado: ESTADO_CAMBIO.RECHAZADO, code: solicitud.code,
                mensaje: 'Solicitud rechazada. El participante mantiene su horario original.' };
     }
@@ -5507,7 +5506,6 @@ function accionResolverCambio(datos, sesion) {
     enqueueEmail('CAMBIO_APROBADO', buscarPorCodigo(solicitud.code), 'cambio', { solicitud_id: solicitud.solicitud_id },
                  'CAMBIO_RESUELTO:' + solicitud.solicitud_id);
     refreshPoolLocked();
-    refrescarVistas();
 
     return {
       estado: ESTADO_CAMBIO.APROBADO, code: solicitud.code,
@@ -6143,7 +6141,7 @@ function accionPlanContingencia(datos) {
 
 /** Hard close (21:00 by default): everybody pending becomes NO AUDICIONADO. */
 function accionCerrarJornada(datos, sesion) {
-  return conBloqueo(function () {
+  return lockedThenRefresh(function () {
     var filas = leerHoja(HOJA.REGISTRO);
     var cierre = cerrarJornada(filas, { ahora: ahoraISO(), responsable: sesion.alias });
 
@@ -6157,7 +6155,6 @@ function accionCerrarJornada(datos, sesion) {
       };
     }));
 
-    refrescarVistas();
     registrar(sesion.alias, sesion.rol, 'CERRAR_JORNADA', '', cierre.total + ' participantes');
     return { cerrados: cierre.total, detalle: cierre.cambios };
   });
@@ -7175,7 +7172,31 @@ function accionDesbloquearLista(datos, sesion) {
  * one tab and a different one on another.
  */
 
+/**
+ * Rebuilds every view sheet. Views are derived data, so they have their own lock (the user lock: the
+ * web app always runs as the deploying user, so it is one lock for every execution) and are never
+ * rebuilt while holding the data lock: measured live 2026-09-29, a rebuild took 40-63 s with 135
+ * projects, and inside the data lock it kept every public registration waiting. A rebuild that finds
+ * another one running skips (the running one, or the next action or trigger, brings the views up to date).
+ */
 function refrescarVistas() {
+  var lock = LockService.getUserLock();
+  if (!lock.tryLock(1000)) return { omitido: 'OTRA_ACTUALIZACION_EN_CURSO' };
+  try {
+    return rebuildViews();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Runs a data mutation under the data lock, then refreshes the views outside it (unless it was refused). */
+function lockedThenRefresh(fn) {
+  var out = conBloqueo(fn);
+  if (!(out && out.ok === false)) out.vistas = refrescarVistas();
+  return out;
+}
+
+function rebuildViews() {
   var filas = leerHoja(HOJA.REGISTRO);
   var out = {
     agenda: reconstruirAgenda(filas),
@@ -7297,10 +7318,16 @@ function reconstruirAgrupaciones(filas) {
   });
 
   agregarFilas(HOJA.AGRUPACIONES, out);
-  spans.forEach(function (s) {
-    sheet.getRange(s.start, 1, s.count, 1).shiftRowGroupDepth(1);
-    try { sheet.getRange(s.master, 1, 1, sheet.getLastColumn()).setFontWeight('bold'); } catch (e) { /* cosmetic */ }
-  });
+  spans.forEach(function (s) { sheet.getRange(s.start, 1, s.count, 1).shiftRowGroupDepth(1); });
+  // One call for every project row (one call per group cost ~0.25 s each, live 2026-09-29).
+  if (spans.length) {
+    try {
+      var lastCol = sheet.getLastColumn();
+      sheet.getRange(2, 1, Math.max(1, out.length), lastCol).setFontWeight('normal');
+      sheet.getRangeList(spans.map(function (s) { return sheet.getRange(s.master, 1, 1, lastCol).getA1Notation(); }))
+        .setFontWeight('bold');
+    } catch (e) { /* cosmetic */ }
+  }
   try {
     sheet.setRowGroupControlPosition(SpreadsheetApp.GroupControlTogglePosition.BEFORE);
     sheet.collapseAllRowGroups();

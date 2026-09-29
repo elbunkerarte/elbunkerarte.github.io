@@ -851,6 +851,30 @@ describe('Findings of the state-flow read-through (2026-09-29)', () => {
 });
 
 // ===========================================================================
+describe('Views are rebuilt outside the data lock (live 2026-09-29: 40-63 s per rebuild blocked registrations)', () => {
+  it('closing the day, issuing codes and resolving a change rebuild the views without holding the data lock', () => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    const p = test.project;
+    registerMany(p, account, 3);
+    const probe = (label, run) => p.execute(label, (g) => {
+      const original = g.rebuildViews;
+      const seen = [];
+      g.rebuildViews = function () { seen.push(g.LockService.getScriptLock().hasLock()); return original.apply(this, arguments); };
+      try { run(g); } finally { g.rebuildViews = original; }
+      return seen;
+    });
+    const admin = { ok: true, rol: 'admin', alias: 'admin' };
+    expect(probe('codes', (g) => g.accionAsignarCodigos({}, admin))).toEqual([false]);
+    const who = p.records('REGISTRO').find((r) => r.code === 'B-002');
+    const req = p.run('accionSolicitarCambio', { participant_code: 'B-002', full_name: who.full_name, reason_short: 'Trabajo',
+      contact: '3001112233', acceptance: true, client_submission_id: 'views-1', form_elapsed_ms: 60000 });
+    expect(probe('change', (g) => g.accionResolverCambio({ solicitud_id: req.solicitud_id, aprobar: false, observacion: 'x' }, admin))).toEqual([false]);
+    expect(probe('close', (g) => g.accionCerrarJornada({}, admin))).toEqual([false]);
+  });
+});
+
+// ===========================================================================
 describe('Production reset: removing the pre-launch test rows leaves nothing of them behind', () => {
   it('removes their rows, their replay answers and their signature files; a real registration keeps all of its own', () => {
     const account = F.newAccount();

@@ -7,7 +7,31 @@
  * one tab and a different one on another.
  */
 
+/**
+ * Rebuilds every view sheet. Views are derived data, so they have their own lock (the user lock: the
+ * web app always runs as the deploying user, so it is one lock for every execution) and are never
+ * rebuilt while holding the data lock: measured live 2026-09-29, a rebuild took 40-63 s with 135
+ * projects, and inside the data lock it kept every public registration waiting. A rebuild that finds
+ * another one running skips (the running one, or the next action or trigger, brings the views up to date).
+ */
 function refrescarVistas() {
+  var lock = LockService.getUserLock();
+  if (!lock.tryLock(1000)) return { omitido: 'OTRA_ACTUALIZACION_EN_CURSO' };
+  try {
+    return rebuildViews();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Runs a data mutation under the data lock, then refreshes the views outside it (unless it was refused). */
+function lockedThenRefresh(fn) {
+  var out = conBloqueo(fn);
+  if (!(out && out.ok === false)) out.vistas = refrescarVistas();
+  return out;
+}
+
+function rebuildViews() {
   var filas = leerHoja(HOJA.REGISTRO);
   var out = {
     agenda: reconstruirAgenda(filas),
@@ -129,10 +153,16 @@ function reconstruirAgrupaciones(filas) {
   });
 
   agregarFilas(HOJA.AGRUPACIONES, out);
-  spans.forEach(function (s) {
-    sheet.getRange(s.start, 1, s.count, 1).shiftRowGroupDepth(1);
-    try { sheet.getRange(s.master, 1, 1, sheet.getLastColumn()).setFontWeight('bold'); } catch (e) { /* cosmetic */ }
-  });
+  spans.forEach(function (s) { sheet.getRange(s.start, 1, s.count, 1).shiftRowGroupDepth(1); });
+  // One call for every project row (one call per group cost ~0.25 s each, live 2026-09-29).
+  if (spans.length) {
+    try {
+      var lastCol = sheet.getLastColumn();
+      sheet.getRange(2, 1, Math.max(1, out.length), lastCol).setFontWeight('normal');
+      sheet.getRangeList(spans.map(function (s) { return sheet.getRange(s.master, 1, 1, lastCol).getA1Notation(); }))
+        .setFontWeight('bold');
+    } catch (e) { /* cosmetic */ }
+  }
   try {
     sheet.setRowGroupControlPosition(SpreadsheetApp.GroupControlTogglePosition.BEFORE);
     sheet.collapseAllRowGroups();

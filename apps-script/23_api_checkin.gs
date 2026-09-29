@@ -242,7 +242,7 @@ function accionPlanContingencia(datos) {
 
 /** Hard close (21:00 by default): everybody pending becomes NO AUDICIONADO. */
 function accionCerrarJornada(datos, sesion) {
-  return conBloqueo(function () {
+  return lockedThenRefresh(function () {
     var filas = leerHoja(HOJA.REGISTRO);
     var cierre = cerrarJornada(filas, { ahora: ahoraISO(), responsable: sesion.alias });
 
@@ -256,7 +256,6 @@ function accionCerrarJornada(datos, sesion) {
       };
     }));
 
-    refrescarVistas();
     registrar(sesion.alias, sesion.rol, 'CERRAR_JORNADA', '', cierre.total + ' participantes');
     return { cerrados: cierre.total, detalle: cierre.cambios };
   });
