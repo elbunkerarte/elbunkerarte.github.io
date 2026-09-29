@@ -16,6 +16,7 @@ var PROP = {
   ENVIRONMENT: 'ENVIRONMENT',
   AUDIO_FOLDER: 'AUDIO_FOLDER',
   SIGNATURES_FOLDER: 'SIGNATURES_FOLDER',
+  REGISTRATION_SIGNATURES_FOLDER: 'REGISTRATION_SIGNATURES_FOLDER',
   // Iteration-1 key, still honoured so an already-installed test project stays a test project.
   ENTORNO: 'ENTORNO'
 };

@@ -330,6 +330,7 @@
         contratación ni presentación.
       </div>
       <button type="submit" class="boton" id="btnEnviar">Enviar mi inscripción</button>
+      <div id="estadoEnvio" aria-live="polite" style="margin-top:12px"></div>
     </section>
 
     <div class="navegacion-pasos" id="navegacionPasos">
@@ -606,10 +607,27 @@ function enviar() {
   var boton = $('#btnEnviar');
   ocupado(boton, true, 'Enviando…');
   $('#avisoGlobal').innerHTML = '';
+  $('#estadoEnvio').innerHTML = '<div class="aviso info"><b>Enviando tu inscripción…</b>' +
+    'Tarda unos segundos. No cierres ni recargues esta página.</div>';
+  sendWithRetries(datos, boton, 0);
+}
+
+// A busy server or a dropped connection is retried with the same client_submission_id, so the
+// server replays the first result instead of creating a second registration.
+var SUBMIT_RETRIES = 3;
+function sendWithRetries(datos, boton, attempt) {
   llamar('inscribir', datos)
     .then(mostrarResultado)
     .catch(function (e) {
+      var transient = /ocupado|conexi|network|timeout|tiempo|HTTP 0|unavailable/i.test(e.message || '');
+      if (transient && attempt < SUBMIT_RETRIES) {
+        $('#estadoEnvio').innerHTML = '<div class="aviso alerta"><b>Muchas personas se están inscribiendo en este momento</b>' +
+          'Seguimos intentando por ti (' + (attempt + 1) + ' de ' + SUBMIT_RETRIES + '). No cierres esta página.</div>';
+        setTimeout(function () { sendWithRetries(datos, boton, attempt + 1); }, 3000 * (attempt + 1) + Math.floor(Math.random() * 2000));
+        return;
+      }
       ocupado(boton, false);
+      $('#estadoEnvio').innerHTML = '';
       mostrarAviso('#avisoGlobal', 'error', 'No pudimos enviar tu inscripción',
         e.message + ' — Si vuelves a intentarlo no se creará un registro duplicado.');
     });
@@ -648,6 +666,7 @@ function teamBlockHtml(r) {
 }
 
 function mostrarResultado(r) {
+  $('#estadoEnvio').innerHTML = '';
   if (r.eligibility_status === 'INCOMPLETO') {
     ocupado($('#btnEnviar'), false);
     nuevoIdEnvio('inscripcion');

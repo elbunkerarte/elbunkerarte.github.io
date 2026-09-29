@@ -482,26 +482,35 @@ function messageExtras(r, base, members) {
 /**
  * Adds one e-mail to the queue unless the same idempotency key is already queued or sent.
  * Must run inside the script lock (it appends a row). Never throws: mail must not break the operation.
+ * options.fresh: the key contains an id created in this same request, so it can not exist yet and the
+ *   log is not scanned. options.claim: the row is written already claimed (ENVIANDO) and returned as
+ *   `entry`, for deliverClaimedEmail() to send it right after the lock without reading the sheets again.
  */
-function enqueueEmail(templateKey, row, trigger, extras, idempotencyKey) {
+function enqueueEmail(templateKey, row, trigger, extras, idempotencyKey, options) {
+  options = options || {};
   try {
     if (!row || !row.submission_id) return { encolado: false, motivo: 'SIN_REGISTRO' };
     var key = idempotencyKey || (templateKey + ':' + row.submission_id);
-    var existing = leerHoja(HOJA.EMAIL_LOG).filter(function (e) { return e.idempotency_key === key; })[0];
-    if (existing && normalizarComparable(existing.status) !== EMAIL_STATUS.FALLIDO) {
-      return { encolado: false, motivo: 'YA_EXISTE', email_id: existing.email_id };
+    if (!options.fresh) {
+      var existing = leerHoja(HOJA.EMAIL_LOG).filter(function (e) { return e.idempotency_key === key; })[0];
+      if (existing && normalizarComparable(existing.status) !== EMAIL_STATUS.FALLIDO) {
+        return { encolado: false, motivo: 'YA_EXISTE', email_id: existing.email_id };
+      }
     }
     var email = normalizarEmail(row.email);
     var skip = !esEmailValido(email) ? 'SIN_CORREO_VALIDO' : (/\.test$/i.test(email) ? 'DATO_DE_PRUEBA' : '');
+    var claim = !!options.claim && !skip;
     var id = nuevoId('EM');
-    agregarFila(HOJA.EMAIL_LOG, {
+    var entry = {
       email_id: id, at: isoWithOffset(), template_key: templateKey, template_version: EMAIL_TEMPLATE_VERSION,
       trigger: trigger || 'manual', idempotency_key: key, recipient: email, submission_id: row.submission_id,
       person_id: row.person_id || '', code: row.code || row.previous_code || '',
-      status: skip ? EMAIL_STATUS.OMITIDO : EMAIL_STATUS.PENDIENTE, provider_message_id: '', retry_count: 0,
-      last_attempt_at: '', error: skip, subject: '', payload: JSON.stringify(extras || {}).slice(0, 2000)
-    });
-    return { encolado: !skip, email_id: id, motivo: skip };
+      status: skip ? EMAIL_STATUS.OMITIDO : (claim ? EMAIL_STATUS.ENVIANDO : EMAIL_STATUS.PENDIENTE),
+      provider_message_id: '', retry_count: 0,
+      last_attempt_at: claim ? isoWithOffset() : '', error: skip, subject: '', payload: JSON.stringify(extras || {}).slice(0, 2000)
+    };
+    entry._fila = agregarFila(HOJA.EMAIL_LOG, entry);
+    return { encolado: !skip, email_id: id, motivo: skip, entry: claim ? entry : null };
   } catch (e) {
     try { registrar('sistema', '', 'CORREO_ENCOLAR_FALLO', templateKey, e.message); } catch (ignored) { /* nothing left to do */ }
     return { encolado: false, motivo: e.message };
@@ -554,32 +563,44 @@ function processEmailQueue(options) {
   var base = webAppUrl();
   var production = environmentName() === 'production';
   var outcomes = claimed.map(function (e) {
-    var out = { e: e, cambios: {} };
-    try {
-      var tpl = templates[e.template_key];
-      var row = registry[e.submission_id];
-      if (!tpl || !row) throw new Error(!tpl ? 'PLANTILLA_DESCONOCIDA' : 'REGISTRO_NO_ENCONTRADO');
-      var payload = {};
-      try { payload = JSON.parse(e.payload || '{}'); } catch (ignored) { payload = {}; }
-      var msg = renderizarPlantilla(tpl, row, Object.assign(messageExtras(row, base, members), payload));
-      var bad = forbiddenLink(msg.asunto + '\n' + msg.cuerpo);
-      if (bad && (production || /\{\{/.test(bad))) throw new Error('CONTENIDO_NO_PERMITIDO: ' + bad);
-      MailApp.sendEmail({
-        to: e.recipient, subject: msg.asunto, body: emailPlainText(msg.cuerpo),
-        htmlBody: emailHtml(msg.asunto, msg.cuerpo), name: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución')
-      });
-      out.cambios = { status: EMAIL_STATUS.ENVIADO, subject: msg.asunto.slice(0, 250), error: '', last_attempt_at: isoWithOffset() };
-      out.sent = true;
-      out.payload = payload;
-    } catch (err) {
-      var retries = Number(e.retry_count || 0) + 1;
-      var permanent = /^(PLANTILLA_DESCONOCIDA|REGISTRO_NO_ENCONTRADO|CONTENIDO_NO_PERMITIDO)/.test(err.message);
-      out.cambios = { status: permanent || retries >= EMAIL_MAX_RETRIES ? EMAIL_STATUS.FALLIDO : EMAIL_STATUS.ERROR,
-                      retry_count: retries, error: String(err.message).slice(0, 300), last_attempt_at: isoWithOffset() };
-    }
-    return out;
+    return deliverEmail(e, registry[e.submission_id], members, templates, base, production);
   });
 
+  recordDeliveries(outcomes);
+  outcomes.forEach(function (o) { if (o.sent) result.enviados++; else result.errores++; });
+  try { result.cuota_restante = MailApp.getRemainingDailyQuota(); } catch (e2) { /* keep the earlier value */ }
+  return result;
+}
+
+/** Renders and sends one claimed log entry. Never throws: returns the changes for its log row. */
+function deliverEmail(e, row, members, templates, base, production) {
+  var out = { e: e, cambios: {} };
+  try {
+    var tpl = templates[e.template_key];
+    if (!tpl || !row) throw new Error(!tpl ? 'PLANTILLA_DESCONOCIDA' : 'REGISTRO_NO_ENCONTRADO');
+    var payload = {};
+    try { payload = JSON.parse(e.payload || '{}'); } catch (ignored) { payload = {}; }
+    var msg = renderizarPlantilla(tpl, row, Object.assign(messageExtras(row, base, members), payload));
+    var bad = forbiddenLink(msg.asunto + '\n' + msg.cuerpo);
+    if (bad && (production || /\{\{/.test(bad))) throw new Error('CONTENIDO_NO_PERMITIDO: ' + bad);
+    MailApp.sendEmail({
+      to: e.recipient, subject: msg.asunto, body: emailPlainText(msg.cuerpo),
+      htmlBody: emailHtml(msg.asunto, msg.cuerpo), name: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución')
+    });
+    out.cambios = { status: EMAIL_STATUS.ENVIADO, subject: msg.asunto.slice(0, 250), error: '', last_attempt_at: isoWithOffset() };
+    out.sent = true;
+    out.payload = payload;
+  } catch (err) {
+    var retries = Number(e.retry_count || 0) + 1;
+    var permanent = /^(PLANTILLA_DESCONOCIDA|REGISTRO_NO_ENCONTRADO|CONTENIDO_NO_PERMITIDO)/.test(err.message);
+    out.cambios = { status: permanent || retries >= EMAIL_MAX_RETRIES ? EMAIL_STATUS.FALLIDO : EMAIL_STATUS.ERROR,
+                    retry_count: retries, error: String(err.message).slice(0, 300), last_attempt_at: isoWithOffset() };
+  }
+  return out;
+}
+
+/** Writes the outcome of each delivery to its log row, under the lock. */
+function recordDeliveries(outcomes) {
   conBloqueo(function () {
     actualizarFilasEnLote(HOJA.EMAIL_LOG, outcomes.map(function (o) { return { fila: o.e._fila, cambios: o.cambios }; }));
     outcomes.forEach(function (o) {
@@ -589,9 +610,29 @@ function processEmailQueue(options) {
       }
     });
   });
-  outcomes.forEach(function (o) { if (o.sent) result.enviados++; else result.errores++; });
-  try { result.cuota_restante = MailApp.getRemainingDailyQuota(); } catch (e2) { /* keep the earlier value */ }
-  return result;
+}
+
+/**
+ * Sends an entry enqueueEmail() wrote already claimed, with the row and members the caller holds:
+ * the receipt of a registration no longer re-reads the registry, the members and the whole log
+ * (~2.7 s per submission measured live, 2026-09-29). Without quota the row goes back to PENDIENTE
+ * for the queue; if this execution dies first, the queue retries the ENVIANDO row after 15 minutes.
+ */
+function deliverClaimedEmail(entry, row, members) {
+  if (!entry || !entry._fila) return null;
+  try {
+    var quota = 0;
+    try { quota = MailApp.getRemainingDailyQuota(); } catch (e) { quota = 0; }
+    if (quota - EMAIL_QUOTA_RESERVE <= 0) {
+      recordDeliveries([{ e: entry, cambios: { status: EMAIL_STATUS.PENDIENTE, last_attempt_at: '' } }]);
+      return { enviado: false, motivo: 'SIN_CUOTA' };
+    }
+    var outcome = deliverEmail(entry, row, members || [], plantillas(), webAppUrl(), environmentName() === 'production');
+    recordDeliveries([outcome]);
+    return { enviado: !!outcome.sent, error: outcome.sent ? '' : outcome.cambios.error };
+  } catch (e) {
+    return { enviado: false, error: e.message };
+  }
 }
 
 function markChangeNotification(requestId, text) {
@@ -603,12 +644,6 @@ function markChangeNotification(requestId, text) {
 function procesarColaCorreos() {
   try { return processEmailQueue({ limit: 40 }); }
   catch (e) { registrar('sistema', '', 'COLA_CORREOS_FALLO', '', e.message); return { error: e.message }; }
-}
-
-/** Sends one queued e-mail right away (e.g. the reception receipt), outside any lock. Never throws. */
-function sendNow(key) {
-  try { return processEmailQueue({ keys: [key], limit: 1 }); }
-  catch (e) { return { error: e.message }; }
 }
 
 // ---------------------------------------------------------------------------

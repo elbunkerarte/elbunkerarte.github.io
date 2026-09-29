@@ -157,19 +157,46 @@ function accionInscribir(datos) {
   var video = videoUrl ? cachedVideoCheck(videoUrl) : videoStatusWithoutProbe('');
 
   // Slow work outside the lock: the receipt id is random, so it can be chosen before the lock.
+  // Header reads are one round trip each; cached here, the locked section only writes (measured
+  // live 2026-09-29: 6.8 s under the lock and 12 s in total per submission before this change).
+  [HOJA.REGISTRO, HOJA.INTEGRANTES, HOJA.LOG, HOJA.EMAIL_LOG, HOJA.IDEMPOTENCIA].forEach(function (n) { encabezados(n); });
   var submissionId = nuevoId('S');
   var signature = null;
   if (normalizarTexto(datos.signature_png)) {
-    signature = storeSignature(submissionId, 'INSCRITO', datos.signature_png);
+    signature = storeSignature(submissionId, 'INSCRITO', datos.signature_png, registrationSignaturesFolder());
     if (!signature.ok) return { ok: false, error: signature.error };
   }
 
-  var result = exactlyOnce(key, function () { return registerProject(datos, video, submissionId, signature); });
-  if (result && result.ok !== false && !result.repetido) sendNow('RECEPCION:' + result.submission_id);
+  var internal = {};
+  var result = exactlyOnceWithFile(key, signature, function () {
+    return registerProject(datos, video, submissionId, signature, internal);
+  });
+  if (internal.email) deliverClaimedEmail(internal.email, internal.row, [internal.member]);
   return result;
 }
 
-function registerProject(datos, video, submissionId, signature) {
+/**
+ * exactlyOnce() for a request that saved a signature file before the lock. When the request does
+ * not keep it (busy lock, a concurrent twin registered first, or a refusal) the file goes to the
+ * trash: the browser retries with a new one and Drive keeps no signature that belongs to nothing.
+ */
+function exactlyOnceWithFile(key, signature, fn) {
+  var result;
+  try {
+    result = exactlyOnce(key, fn);
+  } catch (e) {
+    if (signature) trashFileQuietly(signature.file_id);
+    throw e;
+  }
+  if (signature && result && (result.repetido || result.ok === false)) trashFileQuietly(signature.file_id);
+  return result;
+}
+
+/**
+ * Writes the project, its registrant as a member and the queued receipt. `internal` (optional)
+ * receives the written row, member and claimed e-mail so the caller can send the receipt after the lock.
+ */
+function registerProject(datos, video, submissionId, signature, internal) {
   var options = opcionesValidacion();
   var verdict = validarInscripcion(datos, options);
   if (cfgBool('firma_inscripcion', true) && !signature) {
@@ -312,7 +339,7 @@ function registerProject(datos, video, submissionId, signature) {
              !esVerdadero(datos.adult_confirmation) || (cfgBool('firma_inscripcion', true) && !signature)) {
     registrantStatus = MEMBER_STATUS.INCOMPLETO;
   }
-  agregarFila(HOJA.INTEGRANTES, {
+  var member = {
     member_id: nuevoId('M'), group_code: teamCode, project_submission_id: submissionId,
     created_at: now, updated_at: now, source: source, is_leader: true,
     full_name: row.full_name, id_number: row.id_number, normalized_id_number: candidate.normalized_id_number,
@@ -324,11 +351,15 @@ function registerProject(datos, video, submissionId, signature) {
     signature_file_id: row.signature_file_id, signature_sha256: row.signature_sha256, signature_at: row.signature_at,
     person_role: PERSON_ROLE.INTERPRETE, crew_role: '', on_stage: true, document_type: docType, person_id: personId,
     notes: 'Aceptación y firma en el Formulario 1'
-  });
+  };
+  agregarFila(HOJA.INTEGRANTES, member);
 
   registrar('participante', '', 'INSCRIPCION', submissionId, 'estado=' + status + ' auto=' + auto + ' equipo=' + teamCode);
   if (status === ESTADO_ELEGIBILIDAD.RECIBIDO) {
-    enqueueEmail('RECEPCION', row, 'inscripcion', {}, 'RECEPCION:' + submissionId);
+    // The key holds the id created for this request, so the log needs no scan (fresh).
+    var queued = enqueueEmail('RECEPCION', row, 'inscripcion', {}, 'RECEPCION:' + submissionId,
+                              { fresh: true, claim: !!internal });
+    if (internal && queued.entry) { internal.email = queued.entry; internal.row = row; internal.member = member; }
   }
 
   var complete = status === ESTADO_ELEGIBILIDAD.RECIBIDO;
@@ -463,7 +494,7 @@ function accionRegistrarIntegrante(datos) {
     if (!signature.ok) return { ok: false, error: signature.error };
   }
 
-  return exactlyOnce(key, function () {
+  return exactlyOnceWithFile(key, signature, function () {
     var projects = leerHoja(HOJA.REGISTRO);
     var project = findGroupProject(code, projects);
     if (!project) return { ok: false, error: 'No encontramos ese proyecto.' };

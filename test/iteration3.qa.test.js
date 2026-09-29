@@ -596,4 +596,86 @@ describe('QA-13: the insurance export matches the source of truth', () => {
   });
 });
 
+// ===========================================================================
+describe('Registration fast path (measured live 2026-09-29: 12 s per submission, 6.8 s of it under the lock)', () => {
+  const pngFiles = (account) => account.drive.list((i) => i.kind === 'file' && /\.png$/.test(i.name));
+
+  it('sends the receipt in the same request from the data it holds and logs it ENVIADO', () => {
+    const account = F.newAccount();
+    const p = F.installTest(account, 'pruebas').project;
+    const sent = account.outbox.length;
+    const r = p.run('accionInscribir', F.uniqueSubmission(1, HUMAN));
+    const log = p.records('_EMAIL_LOG').filter((e) => e.submission_id === r.submission_id);
+    expect(log.map((e) => [e.template_key, e.status, e.retry_count])).toEqual([['RECEPCION', 'ENVIADO', 0]]);
+    expect(account.outbox.length - sent).toBe(1);
+    const mail = account.outbox[account.outbox.length - 1];
+    expect([mail.to, mail.body.indexOf(r.submission_id) !== -1, /\{\{/.test(mail.body)]).toEqual(['participant0001@example.com', true, false]);
+  });
+
+  it('keeps Form 1 signatures in one INSCRIPCIONES folder instead of a folder per registration', () => {
+    const account = F.newAccount();
+    const p = F.installTest(account, 'pruebas').project;
+    const a = p.run('accionInscribir', F.uniqueSubmission(1, HUMAN));
+    account.advance(1000);
+    const b = p.run('accionInscribir', F.uniqueSubmission(2, HUMAN));
+    const folders = account.drive.list((i) => i.kind === 'folder');
+    const inscripciones = folders.filter((f) => f.name === 'INSCRIPCIONES');
+    expect(inscripciones.length).toBe(1);
+    expect(folders.some((f) => f.name === a.submission_id || f.name === b.submission_id)).toBe(false);
+    const files = pngFiles(account);
+    expect(files.length).toBe(2);
+    expect(files.every((f) => f.parents.indexOf(inscripciones[0].id) !== -1)).toBe(true);
+    const rows = p.records('REGISTRO');
+    expect(rows.every((r) => files.some((f) => f.id === r.signature_file_id))).toBe(true);
+  });
+
+  it('trashes the signature of a submission the busy lock refused; the retry registers once with its own', () => {
+    const account = F.newAccount();
+    const p = F.installTest(account, 'pruebas').project;
+    p.simulateLockContention(true);
+    const busy = p.post(Object.assign({ accion: 'inscribir' }, F.uniqueSubmission(3, HUMAN))).json();
+    p.simulateLockContention(false);
+    expect([busy.ok, /ocupado/.test(busy.error)]).toEqual([false, true]);
+    expect(pngFiles(account).map((f) => f.trashed)).toEqual([true]);
+    const retry = p.post(Object.assign({ accion: 'inscribir' }, F.uniqueSubmission(3, HUMAN))).json();
+    expect([retry.ok, retry.repetido]).toEqual([true, undefined]);
+    const live = pngFiles(account).filter((f) => !f.trashed);
+    expect(live.length).toBe(1);
+    expect(p.records('REGISTRO').map((r) => r.signature_file_id)).toEqual([live[0].id]);
+  });
+
+  it('without mail quota the receipt waits as PENDIENTE and the 15-minute queue sends it', () => {
+    const account = F.newAccount();
+    const p = F.installTest(account, 'pruebas').project;
+    account.setMailQuota(0);
+    const r = p.run('accionInscribir', F.uniqueSubmission(1, HUMAN));
+    const status = () => p.records('_EMAIL_LOG').filter((e) => e.submission_id === r.submission_id).map((e) => e.status);
+    expect(status()).toEqual(['PENDIENTE']);
+    account.setMailQuota(100);
+    p.fireTrigger('procesarColaCorreos');
+    expect(status()).toEqual(['ENVIADO']);
+    expect(account.outbox.filter((m) => m.body.indexOf(r.submission_id) !== -1).length).toBe(1);
+  });
+
+  it('a receipt claimed by a request that died is sent by the queue only after 15 minutes, once', () => {
+    const account = F.newAccount();
+    const p = F.installTest(account, 'pruebas').project;
+    account.setMailQuota(0);
+    const r = p.run('accionInscribir', F.uniqueSubmission(1, HUMAN));
+    account.setMailQuota(100);
+    // The request died after claiming: the row is ENVIANDO with a fresh attempt time.
+    p.execute('died', (g) => {
+      const e = g.leerHoja('_EMAIL_LOG').filter((x) => x.submission_id === r.submission_id)[0];
+      g.actualizarFila('_EMAIL_LOG', e._fila, { status: 'ENVIANDO', last_attempt_at: g.isoWithOffset() });
+    });
+    const receipts = () => account.outbox.filter((m) => m.body.indexOf(r.submission_id) !== -1).length;
+    p.fireTrigger('procesarColaCorreos');
+    expect(receipts()).toBe(0);
+    account.advance(16 * 60000);
+    p.fireTrigger('procesarColaCorreos');
+    p.fireTrigger('procesarColaCorreos');
+    expect(receipts()).toBe(1);
+  });
+});
+
 process.exit(ejecutar());

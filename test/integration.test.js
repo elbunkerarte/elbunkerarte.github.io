@@ -409,11 +409,11 @@ describe('Registration (Form 1)', () => {
     expect(second.submission_id).toBe(project.records('REGISTRO')[0].submission_id);
     expect(project.records('REGISTRO')).toHaveLength(1);
   });
-  it('takes the script lock once for the row and twice for the receipt e-mail (claim + result), never nested', () => {
+  it('takes the script lock once for the row (receipt claimed with it) and once for the receipt result, never nested', () => {
     const { project } = env();
     const before = project.lockState.script.acquisitions;
     project.run('accionInscribir', F.uniqueSubmission(2));
-    expect(project.lockState.script.acquisitions - before).toBe(3);
+    expect(project.lockState.script.acquisitions - before).toBe(2);
     expect(project.lockState.script.nestedAttempts).toBe(0);
     expect(project.lockState.script.leakedAtEnd).toBe(0);
   });

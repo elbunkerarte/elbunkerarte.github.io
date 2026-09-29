@@ -84,16 +84,40 @@ function storeTrack(row, originalName, base64, songName) {
 }
 
 /** Saves a drawn signature and returns its Drive id and SHA-256 (evidence of what was stored). */
-function storeSignature(groupCode, memberId, dataUrl) {
+function storeSignature(groupCode, memberId, dataUrl, folder) {
   var parsed = parsePngDataUrl(dataUrl);
   if (!parsed.ok) return parsed;
   var bytes = Utilities.base64Decode(parsed.base64);
   if (!isPngBytes(bytes)) return { ok: false, error: 'La firma no es una imagen PNG valida.' };
   if (bytes.length > 300 * 1024) return { ok: false, error: 'La imagen de la firma es demasiado grande.' };
-  var folder = childFolder(signaturesRootFolder(), groupCode);
+  folder = folder || childFolder(signaturesRootFolder(), groupCode);
   var file = folder.createFile(Utilities.newBlob(bytes, 'image/png', groupCode + '_' + memberId + '_' + timestampForNames() + '.png'));
   var hash = bytesToHex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, bytes));
   return { ok: true, file_id: file.getId(), sha256: hash };
+}
+
+/**
+ * Folder for the signatures made in Form 1, kept by id: a folder per registration cost a
+ * name lookup plus a folder creation on every submission (~1 s measured live, 2026-09-29).
+ */
+function registrationSignaturesFolder() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty(PROP.REGISTRATION_SIGNATURES_FOLDER);
+  if (id) {
+    try {
+      var existing = DriveApp.getFolderById(id);
+      if (!existing.isTrashed()) return existing;
+    } catch (e) { /* recreated below */ }
+  }
+  var folder = childFolder(signaturesRootFolder(), 'INSCRIPCIONES');
+  props.setProperty(PROP.REGISTRATION_SIGNATURES_FOLDER, folder.getId());
+  return folder;
+}
+
+/** Moves a file to the Drive trash, ignoring failures (used for signatures of a submission that did not register). */
+function trashFileQuietly(fileId) {
+  if (!fileId) return;
+  try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { /* already gone */ }
 }
 
 /** data:image/png;base64,... of a stored signature, for the printable record. */
