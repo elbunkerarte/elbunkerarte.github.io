@@ -234,7 +234,9 @@ function plantillas() {
         'ESTADO: TIENES TURNO, falta tu confirmación final.\n\n' +
         'CÓDIGO: {{code}} · LLEGADA: {{hora_llegada_texto}} · AUDICIÓN: {{hora_audicion_texto}}\n' +
         'FECHA Y LUGAR: ' + c.fecha_texto + ' · ' + lugar + '\n\n' +
-        'SIGUIENTE PASO: entra a "Mi inscripción" y marca SÍ CONFIRMO o NO PODRÉ ASISTIR antes de ' + c.confirmacion_hasta +
+        // Sent the day before when the daily mail quota is tight, so it names when the buttons open.
+        'SIGUIENTE PASO: entre el ' + c.confirmacion_desde + ' y el ' + c.confirmacion_hasta +
+        ' entra a "Mi inscripción" y marca SÍ CONFIRMO o NO PODRÉ ASISTIR' +
         ': {{url_mi_inscripcion}}\nConfirmar no cambia tu horario.' + firma
     },
 

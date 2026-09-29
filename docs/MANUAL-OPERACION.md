@@ -1,3 +1,5 @@
+> Documento de la iteración 2. Para la operación vigente (iteración 3, 29-sep-2026) ver [OPERACION_HUMANA.md](OPERACION_HUMANA.md), [FLUJO_ESTADOS.md](FLUJO_ESTADOS.md), [FLUJO_CORREOS.md](FLUJO_CORREOS.md) y [RUBRICA_JURADOS.md](RUBRICA_JURADOS.md).
+
 # Manual de operación — EL BÚNKER
 
 Para la coordinación y el equipo. **No hace falta saber programar ni tocar código.**

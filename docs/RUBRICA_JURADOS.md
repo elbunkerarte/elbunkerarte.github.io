@@ -157,8 +157,10 @@ Flujo:
   no están cerrados. Se anotan `reabierta_at`, `reabierta_by`, `reabierta_motivo` en la tarjeta y el total previo en `_LOG`.
 - Mientras una tarjeta reabierta está en borrador **no cuenta**: el proyecto puede quedar temporalmente
   `JURADOS_INSUFICIENTES` hasta que el jurado la reenvíe.
-- Con `resultados_cerrados = SI` no se guarda, no se envía y no se reabre ninguna tarjeta.
-- El jurado solo puede calificar proyectos con audición `REALIZADA` (el admin puede forzar por API; no hay botón).
+- Con `resultados_cerrados = SI` no se guarda, no se envía y no se reabre ninguna tarjeta: primero dirección pulsa
+  "Reabrir resultados" (§11).
+- La pantalla de jurado es solo de las cuentas con rol `jurado` (`notAJuror`): cualquier otro rol, también admin, recibe
+  un aviso y no puede guardar. El jurado solo califica proyectos con audición `REALIZADA`.
 
 ## 8. Dónde vive la rúbrica y qué pasa si alguien la edita
 
@@ -249,4 +251,6 @@ Nueve proyectos van por delante (puestos 1–9). Luego:
 Al cerrar: `resultados_cerrados = SI`, RESULTADOS se recalcula (las posiciones 21+ pasan a `NO_SELECCIONADO`), las
 evaluaciones quedan `BLOQUEADA` y se registra el Top 10 en `_LOG`. Después se envía el correo `RESULTADO_FINAL` desde
 Comunicación (panel de logística/admin): dice solo SELECCIONADO o NO SELECCIONADO, nunca el Top 20.
-Reabrir resultados es solo de admin (`reabrir_resultados`, con motivo de 10+ caracteres) y no tiene botón en los paneles.
+**Reabrir resultados**: dirección o admin (permiso `cerrar_resultados`), botón "Reabrir resultados" en el dashboard, con
+motivo de 10+ caracteres que queda en `_LOG`. Pone `resultados_cerrados = NO`: el Top 10 deja de ser definitivo y se
+pueden reabrir tarjetas o registrar actas hasta volver a cerrar.

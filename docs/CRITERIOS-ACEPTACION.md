@@ -1,3 +1,5 @@
+> Documento de la iteración 2. Para la operación vigente (iteración 3, 29-sep-2026) ver [OPERACION_HUMANA.md](OPERACION_HUMANA.md), [FLUJO_ESTADOS.md](FLUJO_ESTADOS.md), [RUBRICA_JURADOS.md](RUBRICA_JURADOS.md) y [MODELO_DATOS_Y_RELACIONES.md](MODELO_DATOS_Y_RELACIONES.md).
+
 # Criterios de aceptación
 
 El criterio de éxito del brief: *un operador no técnico debe poder hacer 12 cosas

@@ -1,3 +1,5 @@
+> Documento de la iteración 2. Para la operación vigente (iteración 3, 29-sep-2026) ver [MODELO_DATOS_Y_RELACIONES.md](MODELO_DATOS_Y_RELACIONES.md) y [FLUJO_ESTADOS.md](FLUJO_ESTADOS.md).
+
 # Esquema de datos
 
 La base es una hoja de cálculo de Google con **18 pestañas** (versión 2.0.0 del

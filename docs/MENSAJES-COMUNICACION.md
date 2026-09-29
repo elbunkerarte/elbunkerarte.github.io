@@ -1,3 +1,5 @@
+> Documento de la iteración 2. Para la operación vigente (iteración 3, 29-sep-2026) ver [FLUJO_CORREOS.md](FLUJO_CORREOS.md).
+
 # Mensajes de comunicación — para aprobación
 
 Las 7 plantillas que genera el sistema. Se envían por **correo** (automático) o

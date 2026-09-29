@@ -27,7 +27,8 @@ son los de la pantalla. Cada persona usa **solo su enlace personal**; no se comp
 4. Nunca escribir un nombre a mano en la hoja para llenar el cupo.
 
 ## Cómo cerrar la lista (jueves 22-oct)
-1. Temprano: **Comunicación** → plantilla «Confirmación final de asistencia (22-oct)» → **Enviar por correo**.
+1. **Miércoles 21-oct** (la víspera, porque el Gmail de la convocatoria envía unos 100 correos al día): **Comunicación** →
+   plantilla «Confirmación final de asistencia (22-oct)» → **Enviar por correo**. El correo dice desde y hasta cuándo se confirma.
 2. Resolver todos los **Cambios de horario** pendientes (después de consolidar ya no se pueden resolver).
 3. Después de las **8:00 p. m.**: **Bolsa y reemplazos → Vista previa y conteos**. No debe haber «Códigos con dos titulares» ni «Hay cambios pendientes».
 4. **CONSOLIDAR LISTA OFICIAL DEL EVENTO** → escribir **CONSOLIDAR**. Queda la foto `ROSTER_FINAL_2026-10-22` y se bloquean los cambios.
@@ -46,5 +47,7 @@ son los de la pantalla. Cada persona usa **solo su enlace personal**; no se comp
 1. Dashboard → **Resultado consolidado (privado)** → **Calcular resultados**. Puntaje = promedio de los 3 jurados.
 2. **Top 10** = seleccionados públicos. **Top 20** = privado: nunca se publica ni se comunica.
 3. Empate en el corte 10 o 20 que no resolvió Presencia escénica + Factor arena → **Acta de desempate** → **Registrar acta**.
-4. Descalificaciones: **Ver reportes** → **Validar** / **Descartar**. Error de un jurado: **Reabrir evaluación**.
+4. Descalificaciones: **Ver reportes** → **Validar** / **Descartar**. Error de un jurado: **Reabrir evaluación**
+   (si los resultados ya estaban cerrados, primero **Reabrir resultados** con el motivo).
 5. **Cerrar resultados** → escribir **CERRAR**. Luego logística envía «Resultado final (tras cerrar resultados)» desde **Comunicación**.
+6. Dirección también genera desde su dashboard el **Excel corporativo** (datos personales enmascarados) y el **Excel de la póliza**.
