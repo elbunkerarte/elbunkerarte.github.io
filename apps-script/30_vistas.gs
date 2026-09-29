@@ -9,14 +9,17 @@
 
 function refrescarVistas() {
   var filas = leerHoja(HOJA.REGISTRO);
-  return {
+  var out = {
     agenda: reconstruirAgenda(filas),
     check_in: reconstruirCheckIn(filas),
     agrupaciones: reconstruirAgrupaciones(filas),
     pistas: reconstruirPistas(filas),
     resultados: reconstruirResultados(filas),
-    dashboard: reconstruirDashboard(filas)
+    bolsa: reconstruirBolsa(filas),
+    seguro: reconstruirSeguro(filas)
   };
+  out.dashboard = reconstruirDashboard(leerHoja(HOJA.REGISTRO));
+  return out;
 }
 
 function limpiarDatos(nombreHoja) {
@@ -114,10 +117,11 @@ function reconstruirAgrupaciones(filas) {
         row_type: 'INTEGRANTE', group_code: g.group_code, project_code: g.code || '',
         submission_id: g.submission_id, group_display_name: g.group_display_name || g.artistic_name,
         member_id: m.member_id, member_name: m.full_name, member_id_number: m.id_number, member_age: m.age,
-        member_role: m.artistic_role + (esVerdadero(m.is_leader) ? ' (lider)' : ''),
+        member_role: (isCrew(m) ? 'EQUIPO DE TRABAJO: ' + (CREW_ROLE_LABELS[m.crew_role] || m.crew_role) : m.artistic_role) +
+                     (esVerdadero(m.is_leader) ? ' (lider)' : ''),
         member_consents: ['T:' + (esVerdadero(m.consent_terms) ? 'SI' : 'NO'), 'D:' + (esVerdadero(m.consent_data) ? 'SI' : 'NO'),
                           'I:' + (esVerdadero(m.consent_image) ? 'SI' : 'NO')].join(' '),
-        member_signature: normalizarTexto(m.signature_file_id) ? 'SI' : (esVerdadero(m.is_leader) ? 'FORMULARIO 1' : 'NO'),
+        member_signature: normalizarTexto(m.signature_file_id) ? 'SI' : 'NO',
         member_status: m.member_status, member_alert: m.member_alert
       });
     });
@@ -155,80 +159,145 @@ function reconstruirPistas(filas) {
   return datos.length;
 }
 
-/** The committee decision currently in force, if any. */
-function currentDeliberation() {
-  var d = leerHoja(HOJA.DELIBERACIONES).filter(function (x) { return normalizarComparable(x.status) === 'VIGENTE'; });
-  if (!d.length) return null;
-  var last = d[d.length - 1];
-  return { deliberation_id: last.deliberation_id, codes_in_order: String(last.codes_in_order || '').split(',') };
+/** Committee decisions in force: at most one per cut (10 and 20). */
+function currentDeliberations() {
+  var byCut = {};
+  leerHoja(HOJA.DELIBERACIONES).forEach(function (x) {
+    if (normalizarComparable(x.status) !== 'VIGENTE') return;
+    byCut[String(x.cut_position)] = {
+      deliberation_id: x.deliberation_id, cut_position: Number(x.cut_position),
+      codes_in_order: String(x.codes_in_order || '').split(',').filter(Boolean),
+      method: x.method || '', participants: x.participants || '', result: x.result || '', at: x.at, by: x.by
+    };
+  });
+  return Object.keys(byCut).map(function (k) { return byCut[k]; });
 }
 
-/** Joins the three jury sheets onto REGISTRO and writes the ranking. */
+/** Legacy single-decision accessor (last one in force), kept for older callers. */
+function currentDeliberation() {
+  var all = currentDeliberations();
+  return all.length ? all[all.length - 1] : null;
+}
+
+/** The whole ranking computation from the source sheets: one function, used by views, panel and exports. */
+function computeResults(filas) {
+  var rubric = activeRubricCategories();
+  var cards = evaluationCards();
+  var artists = filas.filter(function (r) { return normalizarTexto(r.code); }).map(function (r) {
+    return {
+      code: r.code, artistic_name: r.artistic_name, full_name: r.full_name, discipline: projectGenre(r),
+      audition_status: r.audition_status || r.attendance_status,
+      dq_status: normalizarComparable(r.dq_status),
+      tarjetas: sentCards(cards[normalizarComparable(r.code)])
+    };
+  });
+  return seleccionarTop(artists, {
+    top_publico: cfgNumero('top_seleccionados', 10),
+    top_privado: cfgNumero('top_privado', 20),
+    minimo_jurados: cfgNumero('minimo_jurados', 3),
+    rubrica: rubric,
+    deliberaciones: currentDeliberations(),
+    resultados_cerrados: cfgBool('resultados_cerrados', false)
+  });
+}
+
+/**
+ * Writes RESULTADOS (private: Top 20, Top 10, ties, disqualifications) and persists
+ * evaluation_status / ranking_status into REGISTRO so every screen and export reads the same.
+ */
 function reconstruirResultados(filas) {
   limpiarDatos(HOJA.RESULTADOS);
+  var sel = computeResults(filas);
+  var cards = evaluationCards();
+  var applied = {};
+  sel.deliberaciones_aplicadas.forEach(function (d) { applied[d.cut] = d.deliberation_id; });
 
-  var tarjetasPorCodigo = {};
-  [HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3].forEach(function (nombre, idx) {
-    leerHoja(nombre).forEach(function (f) {
-      var code = normalizarComparable(f.code);
-      if (!code) return;
-      if (!tarjetasPorCodigo[code]) tarjetasPorCodigo[code] = [];
-      var puntajes = {};
-      RUBRICA.forEach(function (factor) { puntajes[factor.id] = f[factor.id]; });
-      tarjetasPorCodigo[code].push({ jurado: idx + 1, puntajes: puntajes });
-    });
-  });
-
-  var artistas = filas.filter(function (r) { return normalizarTexto(r.code); }).map(function (r) {
+  var datos = sel.ranking.map(function (a) {
+    var byJuror = { 1: '', 2: '', 3: '' };
+    a.totales_jurado.forEach(function (t) { byJuror[t.jurado] = t.total; });
+    var notes = [];
+    if (a.ranking_status === RANKING_STATUS.TIE_REVIEW_REQUIRED) notes.push('Empate en el corte: requiere revisión humana (acta).');
+    Object.keys(applied).forEach(function (cut) { if (a.posicion <= Number(cut) + 5) notes.push('Acta ' + applied[cut] + ' (corte ' + cut + ')'); });
+    if (a.dq_pendiente) notes.push('Reporte de descalificación PENDIENTE de validar.');
     return {
-      code: r.code, artistic_name: r.artistic_name, full_name: r.full_name,
-      discipline: projectGenre(r),
-      audition_status: r.audition_status || r.attendance_status,
-      tarjetas: tarjetasPorCodigo[normalizarComparable(r.code)] || []
+      posicion: a.posicion, code: a.code, artistic_name: a.artistic_name, full_name: a.full_name, discipline: a.discipline,
+      jurado_1: byJuror[1], jurado_2: byJuror[2], jurado_3: byJuror[3], jurados_validos: a.jurados_validos,
+      artist_final: a.artist_final, tie_break: a.tie_break, ranking_status: a.ranking_status,
+      seleccionado: a.ranking_status === RANKING_STATUS.TOP10_SELECCIONADO ? 'SI' : 'NO',
+      requiere_comite: a.ranking_status === RANKING_STATUS.TIE_REVIEW_REQUIRED ? 'SI' : '',
+      dq: a.dq_pendiente ? DQ_STATUS.PENDIENTE : '', observacion: notes.join(' ')
     };
   });
-
-  var seleccion = seleccionarTop(artistas, {
-    top: cfgNumero('top_seleccionados', 7),
-    minimo_jurados: cfgNumero('minimo_jurados', 2),
-    deliberacion: currentDeliberation()
-  });
-
-  var enTop = {};
-  seleccion.top.forEach(function (a) { enTop[a.code] = true; });
-  var enEmpate = {};
-  seleccion.empates_sin_resolver.forEach(function (a) { enEmpate[a.code] = true; });
-
-  var datos = seleccion.ranking.map(function (a) {
-    var porJurado = { 1: '', 2: '', 3: '' };
-    a.totales_jurado.forEach(function (t) { porJurado[t.jurado] = t.total; });
-    return {
-      posicion: a.posicion, code: a.code, artistic_name: a.artistic_name,
-      full_name: a.full_name, discipline: a.discipline,
-      jurado_1: porJurado[1], jurado_2: porJurado[2], jurado_3: porJurado[3],
-      jurados_validos: a.jurados_validos, artist_final: a.artist_final,
-      seleccionado: enTop[a.code] ? 'SI' : 'NO',
-      requiere_comite: enEmpate[a.code] ? 'SI' : '',
-      observacion: seleccion.deliberacion_aplicada ? 'Desempate por ' + seleccion.deliberacion_aplicada : ''
-    };
-  });
-
-  seleccion.excluidos.forEach(function (e) {
+  sel.excluidos.forEach(function (e) {
     datos.push({
-      posicion: '', code: e.code, artistic_name: '', full_name: '', discipline: '',
-      jurado_1: '', jurado_2: '', jurado_3: '', jurados_validos: e.jurados_validos || 0,
-      artist_final: '', seleccionado: 'NO', requiere_comite: '', observacion: e.motivo
+      posicion: '', code: e.code, artistic_name: e.artistic_name || '', full_name: '', discipline: '',
+      jurado_1: '', jurado_2: '', jurado_3: '', jurados_validos: e.jurados_validos || 0, artist_final: '', tie_break: '',
+      ranking_status: RANKING_STATUS.SIN_RANKING, seleccionado: 'NO', requiere_comite: '',
+      dq: e.motivo === 'DESCALIFICADO' ? DQ_STATUS.VALIDADA : '', observacion: e.motivo
     });
   });
-  if (seleccion.deliberacion_descartada) {
-    registrar('sistema', '', 'DELIBERACION_NO_APLICA', '', seleccion.deliberacion_descartada);
-  }
-
+  sel.deliberaciones_descartadas.forEach(function (d) {
+    registrar('sistema', '', 'DELIBERACION_NO_APLICA', d.deliberation_id, 'corte ' + d.cut + ': ' + d.motivo);
+  });
   agregarFilas(HOJA.RESULTADOS, datos);
+
+  // Persist the per-project statuses (only rows that changed).
+  var ranking = {};
+  sel.ranking.forEach(function (a) { ranking[normalizarComparable(a.code)] = a.ranking_status; });
+  var jurors = cfgNumero('jurados', 3);
+  var closed = cfgBool('resultados_cerrados', false);
+  var updates = [];
+  filas.forEach(function (r) {
+    var code = normalizarComparable(r.code);
+    var evaluation = code ? evaluationStatusOf(cards[code] || [], { jurados: jurors, dq_status: normalizarComparable(r.dq_status),
+                                                                     resultados_cerrados: closed }) : '';
+    var rank = code ? (ranking[code] || RANKING_STATUS.SIN_RANKING) : '';
+    if (normalizarComparable(r.evaluation_status) !== evaluation || normalizarComparable(r.ranking_status) !== rank) {
+      updates.push({ fila: r._fila, cambios: { evaluation_status: evaluation, ranking_status: rank } });
+    }
+  });
+  actualizarFilasEnLote(HOJA.REGISTRO, updates);
   return datos.length;
 }
 
-/** Every indicator the brief asks for, written as label/value rows plus charts data. */
+/** BOLSA: every eligible project in priority order, plus the open offer of each substitute. */
+function reconstruirBolsa(filas) {
+  limpiarDatos(HOJA.BOLSA);
+  var offers = leerHoja(HOJA.OFERTAS);
+  var pool = computePool(filas, poolOptions());
+  var bySubmission = {};
+  filas.forEach(function (r) { bySubmission[r.submission_id] = r; });
+  var pending = {};
+  offers.forEach(function (o) { if (normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE) pending[o.submission_id] = o; });
+  var datos = pool.filas.slice().sort(function (a, b) {
+    return (Number(a.priority_rank) || 99999) - (Number(b.priority_rank) || 99999);
+  }).map(function (p) {
+    var r = bySubmission[p.submission_id] || {};
+    var o = pending[p.submission_id];
+    return {
+      priority_rank: p.priority_rank, pool_status: p.pool_status, code: r.code || '', submission_id: p.submission_id,
+      artistic_name: r.artistic_name || '', participation_mode: r.participation_mode || 'SOLISTA',
+      created_at: String(r.created_at || '').replace('T', ' ').slice(0, 19),
+      eligibility_status: normalizeEligibility(r.eligibility_status),
+      participation_status: participationStatus(r, !!o),
+      oferta: o ? o.slot_code + ' (vence ' + humanDateTime(o.expires_at) + ')' : '',
+      observacion: r.previous_code ? 'Tuvo el cupo ' + r.previous_code : ''
+    };
+  });
+  agregarFilas(HOJA.BOLSA, datos);
+  return datos.length;
+}
+
+/** SEGURO_MAYORCA: people of every project holding a slot, for the venue policy (private). */
+function reconstruirSeguro(filas) {
+  limpiarDatos(HOJA.SEGURO);
+  if (typeof insuranceRows !== 'function') return 0;
+  var datos = insuranceRows(filas, leerHoja(HOJA.INTEGRANTES));
+  agregarFilas(HOJA.SEGURO, datos);
+  return datos.length;
+}
+
+/** Every indicator the brief asks for, written as label/value rows. The dashboard is private. */
 function reconstruirDashboard(filas) {
   var m = calcularMetricas(filas);
   var h = limpiarDatos(HOJA.DASHBOARD);
@@ -237,39 +306,39 @@ function reconstruirDashboard(filas) {
   var bloque = [
     ['INDICADOR', 'VALOR'],
     ['Inscripciones recibidas (filas)', m.inscritos],
-    ['Válidas (aptas + en revisión)', m.validos],
-    ['Personas unicas (por documento)', m.unicos],
-    ['Duplicados marcados', m.duplicados],
-    ['Aptos', m.aptos],
-    ['Incompletos', m.incompletos],
-    ['No cumplen requisitos', m.no_cumplen],
-    ['En revisión', m.revision],
-    ['Solistas / duos / agrupaciones', m.solistas + ' / ' + m.duos + ' / ' + m.agrupaciones],
-    ['Con código definitivo', m.con_codigo],
-    ['Con horario asignado', m.horarios],
-    ['Cupos libres', m.cupos_libres],
+    ['Por revisar (RECIBIDO) / en revisión', m.recibidos + ' / ' + m.revision],
+    ['Aptos / no aptos / incompletos / duplicados', m.aptos + ' / ' + m.no_cumplen + ' / ' + m.incompletos + ' / ' + m.duplicados],
+    ['Personas únicas (por documento)', m.unicos],
+    ['Solistas / dúos / agrupaciones', m.solistas + ' / ' + m.duos + ' / ' + m.agrupaciones],
+    ['', ''],
+    ['Bolsa: principales con turno / suplentes / fuera de bolsa', m.bolsa.principales + ' / ' + m.bolsa.suplentes + ' / ' + m.bolsa.fuera],
+    ['Retirados / reemplazos aceptados', m.bolsa.retirados + ' / ' + m.bolsa.reemplazos],
+    ['Cupos: con titular / ofrecidos / liberados / vacantes / sin emitir',
+      m.cupos.ASIGNADO + ' / ' + m.cupos.OFRECIDO + ' / ' + m.cupos.LIBERADO + ' / ' + m.cupos.VACANTE_SIN_REEMPLAZO + ' / ' + m.cupos.SIN_EMITIR],
+    ['Confirmación final: sí / no / sin respuesta', m.confirmacion.si + ' / ' + m.confirmacion.no + ' / ' + m.confirmacion.sin_respuesta],
+    ['Lista oficial', m.lista_oficial],
     ['', ''],
     ['Cambios solicitados / aprobados / rechazados / pendientes',
       m.cambios.solicitados + ' / ' + m.cambios.aprobados + ' / ' + m.cambios.rechazados + ' / ' + m.cambios.pendientes],
-    ['Integrantes autorizados / registrados / declarados (con código)',
+    ['Intérpretes autorizados / registrados / declarados (con código)',
       m.integrantes.autorizados + ' / ' + m.integrantes.registrados + ' / ' + m.integrantes.declarados],
-    ['Agrupaciones con autorizaciones completas', m.integrantes.grupos_completos + ' de ' + m.integrantes.grupos_con_codigo],
+    ['Proyectos con firmas completas', m.integrantes.grupos_completos + ' de ' + m.integrantes.grupos_con_codigo],
+    ['Equipo de trabajo registrado (no ocupa cupo)', m.integrantes.equipo],
     ['Pistas pendientes / recibidas / validadas / con problema',
       (m.pistas['PISTA PENDIENTE'] || 0) + ' / ' + (m.pistas['PISTA RECIBIDA'] || 0) + ' / ' +
       (m.pistas['PISTA VALIDADA'] || 0) + ' / ' + (m.pistas['PISTA CON PROBLEMA'] || 0)],
-    ['Videos accesibles / no accesibles / por revisar',
-      (m.videos['ACCESIBLE'] || 0) + ' / ' + (m.videos['NO ACCESIBLE'] || 0) + ' / ' +
-      ((m.videos['NO VERIFICABLE'] || 0) + (m.videos['PENDIENTE'] || 0))],
+    ['Correos enviados / en cola / con error', m.correos.ENVIADO + ' / ' + m.correos.PENDIENTE + ' / ' + (m.correos.FALLIDO + m.correos.ERROR)],
     ['', ''],
     ['Confirmados (con turno, sin llegar)', m.confirmados],
     ['Check-in / precola / en audición', m.check_ins + ' / ' + m.precola + ' / ' + m.en_audicion],
     ['Audiciones realizadas', m.realizadas],
-    ['No show', m.no_show],
-    ['En contingencia', m.contingencia],
-    ['No audicionados', m.no_audicionados],
+    ['No show / contingencia / no audicionados', m.no_show + ' / ' + m.contingencia + ' / ' + m.no_audicionados],
     ['Avance de audiciones', m.avance_texto],
-    ['Promedio global (audiciones validas)', m.promedio_global === null ? 'sin datos' : m.promedio_global],
-    ['Requiere deliberacion del comite', m.requiere_comite ? 'SI' : 'NO'],
+    ['Evaluaciones completas / parciales / sin calificar', m.evaluaciones.COMPLETA + m.evaluaciones.BLOQUEADA + ' / ' + m.evaluaciones.PARCIAL + ' / ' + m.evaluaciones.SIN_CALIFICAR],
+    ['Descalificaciones pendientes / validadas', m.evaluaciones.DQ_PENDIENTE + ' / ' + m.evaluaciones.DESCALIFICADO],
+    ['Promedio global (proyectos con 3 jurados)', m.promedio_global === null ? 'sin datos' : m.promedio_global],
+    ['Empates que requieren acta', m.requiere_comite ? 'SI' : 'NO'],
+    ['Resultados cerrados', m.resultados_cerrados ? 'SI' : 'NO'],
     ['Actualizado', ahoraISO()]
   ];
   h.getRange(1, 1, bloque.length, 2).setValues(bloque);
@@ -285,13 +354,12 @@ function reconstruirDashboard(filas) {
     ['Check-in', m.operativo.check_in], ['Realizadas', m.operativo.realizadas],
     ['No show', m.operativo.no_show], ['Contingencia', m.operativo.contingencia]
   ]);
-  seccion('DISTRIBUCION DE PUNTAJES', [['Rango', 'Artistas']].concat(m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; })));
-  var top = [['Artista', 'Puntaje']].concat(m.top.map(function (t) { return [(t.artistic_name || t.code), t.artist_final]; }));
-  if (top.length === 1) top.push(['(sin resultados aún)', 0]);
-  seccion('TOP ' + cfgNumero('top_seleccionados', 7), top);
-  seccion('ESTADO DE PARTICIPANTES', [['Estado', 'Cantidad'],
-    ['Confirmados', m.confirmados], ['Check-in', m.check_ins], ['Precola', m.precola], ['En audición', m.en_audicion],
-    ['Realizadas', m.realizadas], ['No show', m.no_show], ['Contingencia', m.contingencia], ['No audicionados', m.no_audicionados]]);
+  seccion('DISTRIBUCIÓN DE PUNTAJES (promedio por proyecto)', [['Rango', 'Proyectos']].concat(m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; })));
+  var top = [['Posición', 'Proyecto', 'Puntaje final', 'Estado']].concat(m.top20.map(function (t) {
+    return [t.posicion, (t.artistic_name || t.code) + ' (' + t.code + ')', scoreText(t.artist_final), t.ranking_status];
+  }));
+  if (top.length === 1) top.push(['', '(sin resultados aún)', '', '']);
+  seccion('TOP ' + m.top_privado + ' PRIVADO (los primeros ' + m.top_n + ' son los seleccionados públicos)', top);
   seccion('AVANCE POR BLOQUE', [['Bloque', 'Realizadas', 'Asignados']].concat(m.por_bloque.map(function (b) {
     return ['Bloque ' + b.block_id + ' (' + b.ventana + ')', b.realizadas, b.asignados];
   })));
@@ -372,9 +440,10 @@ function calcularMetricas(filas, hora) {
     var ts = r.track_status || (esVerdadero(r.track_uses) ? TRACK_STATUS.PENDIENTE : TRACK_STATUS.NO_APLICA);
     pistas[ts] = (pistas[ts] || 0) + 1;
 
-    if (r.group_code) {
-      var s = groupSummary(r.group_code, members);
-      var declared = Number(r.members_declared) || 0;
+    var teamCode = teamCodeOf(r);
+    if (teamCode) {
+      var s = groupSummary(teamCode, members);
+      var declared = Number(r.members_declared) || 1;
       integrantes.grupos_con_codigo++;
       integrantes.declarados += declared;
       integrantes.registrados += s.registered;
@@ -405,29 +474,56 @@ function calcularMetricas(filas, hora) {
   var ranking = resultados
     .filter(function (r) { return r.posicion !== '' && r.posicion !== undefined; })
     .map(function (r) { return { code: r.code, artistic_name: r.artistic_name, artist_final: Number(r.artist_final),
-                                 posicion: Number(r.posicion), seleccionado: r.seleccionado }; })
+                                 posicion: Number(r.posicion), seleccionado: r.seleccionado,
+                                 ranking_status: r.ranking_status }; })
     .sort(function (a, b) { return a.posicion - b.posicion; });
+
+  var offers = leerHoja(HOJA.OFERTAS);
+  var pool = computePool(filas, poolOptions());
+  var slotCounts = { ASIGNADO: 0, OFRECIDO: 0, LIBERADO: 0, VACANTE_SIN_REEMPLAZO: 0, SIN_EMITIR: 0 };
+  slotStatuses(filas, offers, poolOptions()).forEach(function (sl) { slotCounts[sl.status] = (slotCounts[sl.status] || 0) + 1; });
+  var confirmation = { si: 0, no: 0, sin_respuesta: 0 };
+  var evaluations = { SIN_CALIFICAR: 0, PARCIAL: 0, COMPLETA: 0, BLOQUEADA: 0, DQ_PENDIENTE: 0, DESCALIFICADO: 0 };
+  filas.forEach(function (r) {
+    if (normalizarTexto(r.code)) {
+      var fc = normalizarComparable(r.final_confirmation);
+      if (fc === 'SI') confirmation.si++; else confirmation.sin_respuesta++;
+      var ev = normalizarComparable(r.evaluation_status);
+      if (evaluations[ev] !== undefined && normalizarEstado(r.audition_status || r.attendance_status) === ESTADO.REALIZADA) evaluations[ev]++;
+    } else if (normalizarComparable(r.final_confirmation) === 'NO') confirmation.no++;
+  });
+  var mailCounts = { ENVIADO: 0, PENDIENTE: 0, ERROR: 0, FALLIDO: 0, OMITIDO: 0, ENVIANDO: 0 };
+  leerHoja(HOJA.EMAIL_LOG).forEach(function (e) { var st = normalizarComparable(e.status); mailCounts[st] = (mailCounts[st] || 0) + 1; });
+  var crewCount = members.filter(function (mm) { return normalizePersonRole(mm.person_role) === PERSON_ROLE.EQUIPO_TRABAJO; }).length;
 
   var objetivo = resumen.con_codigo || cupo;
 
   return {
     inscritos: resumen.total, validos: resumen.validos, unicos: resumen.unicos, duplicados: resumen.duplicado,
-    aptos: resumen.apto, incompletos: resumen.incompleto, no_cumplen: resumen.no_cumple,
+    aptos: resumen.apto, incompletos: resumen.incompleto, no_cumplen: resumen.no_cumple, recibidos: resumen.recibido,
     revision: resumen.revision, con_codigo: resumen.con_codigo, horarios: conteo.horarios,
+    bolsa: { principales: pool.principales, suplentes: pool.suplentes, fuera: pool.fuera,
+             retirados: filas.filter(isWithdrawn).length,
+             reemplazos: filas.filter(function (r) { return /^reemplazo:/.test(String(r.issued_by || '')); }).length },
+    cupos: slotCounts, confirmacion: confirmation, evaluaciones: evaluations, correos: mailCounts,
+    lista_oficial: cfgBool('lista_oficial_bloqueada', false) ? 'CONSOLIDADA (' + cfg('lista_oficial_version', '') + ')' : 'ABIERTA',
+    resultados_cerrados: cfgBool('resultados_cerrados', false),
+    top20: ranking.filter(function (r) { return r.posicion <= cfgNumero('top_privado', 20); }),
+    top_privado: cfgNumero('top_privado', 20),
     solistas: resumen.solistas, duos: resumen.duos, agrupaciones: resumen.agrupaciones,
     cupos_libres: Math.max(0, cupo - resumen.con_codigo),
     confirmados: conteo.confirmados, check_ins: conteo.check_ins, precola: conteo.precola,
     en_audicion: conteo.en_audicion, realizadas: conteo.realizadas, no_show: conteo.no_show,
     contingencia: conteo.contingencia, no_audicionados: conteo.no_audicionados,
     reasignados: conteo.reasignados, cambios_pendientes: cambiosResumen.pendientes, cambios: cambiosResumen,
-    integrantes: integrantes, pistas: pistas, videos: videos,
+    integrantes: Object.assign(integrantes, { equipo: crewCount }), pistas: pistas, videos: videos,
     avance: objetivo ? redondear((conteo.realizadas / objetivo) * 100, 1) : 0,
     avance_texto: conteo.realizadas + ' de ' + objetivo + ' (' +
                   (objetivo ? redondear((conteo.realizadas / objetivo) * 100, 1) : 0) + '%)',
     promedio_global: promedio,
     distribucion: distribucionPuntajes(ranking),
     top: ranking.filter(function (r) { return normalizarComparable(r.seleccionado) === 'SI'; }),
-    top_n: cfgNumero('top_seleccionados', 7),
+    top_n: cfgNumero('top_seleccionados', 10),
     por_bloque: Object.keys(porBloque).map(function (k) { return porBloque[k]; }),
     operativo: operationalIndicator(filas, hora),
     requiere_comite: leerHoja(HOJA.RESULTADOS).some(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; }),
@@ -442,13 +538,34 @@ function accionDashboard(datos) {
 function accionResultados(datos, sesion) {
   refrescarVistas();
   var filas = leerHoja(HOJA.RESULTADOS);
+  var ranked = filas.filter(function (r) { return r.posicion !== '' && r.posicion !== undefined; });
+  var dq = accionListarDescalificaciones();
   return {
-    top: filas.filter(function (r) { return normalizarComparable(r.seleccionado) === 'SI'; }),
-    ranking: filas.filter(function (r) { return r.posicion !== '' && r.posicion !== undefined; }),
+    top_publico: cfgNumero('top_seleccionados', 10),
+    top_privado: cfgNumero('top_privado', 20),
+    top: ranked.filter(function (r) { return normalizarComparable(r.ranking_status) === RANKING_STATUS.TOP10_SELECCIONADO; }),
+    top20: ranked.filter(function (r) { return Number(r.posicion) <= cfgNumero('top_privado', 20); }),
+    ranking: ranked,
     excluidos: filas.filter(function (r) { return r.observacion && !r.posicion; }),
     requiere_comite: filas.some(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; }),
     empatados: filas.filter(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; })
-      .map(function (r) { return { code: r.code, artistic_name: r.artistic_name, artist_final: r.artist_final }; }),
-    deliberacion: currentDeliberation()
+      .map(function (r) { return { code: r.code, artistic_name: r.artistic_name, artist_final: r.artist_final,
+                                   tie_break: r.tie_break, posicion: r.posicion }; }),
+    cortes: tiedCuts(),
+    deliberaciones: currentDeliberations(),
+    metodos_desempate: TIE_METHODS,
+    descalificaciones: dq.reportes,
+    resultados_cerrados: cfgBool('resultados_cerrados', false),
+    rubrica_version: activeRubric().version
   };
+}
+
+/** The cuts (10 / 20) that currently hold an unresolved tie, with the tied codes of each. */
+function tiedCuts() {
+  var sel = computeResults(leerHoja(HOJA.REGISTRO));
+  return sel.cortes.map(function (c) {
+    return { cut: c.cut, empatados: c.empatados.map(function (a) {
+      return { code: a.code, artistic_name: a.artistic_name, artist_final: a.artist_final, tie_break: a.tie_break };
+    }) };
+  });
 }

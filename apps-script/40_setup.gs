@@ -137,6 +137,58 @@ function instalarDisparadores() {
   if (existentes.indexOf('verificarVideosPendientes') === -1) {
     ScriptApp.newTrigger('verificarVideosPendientes').timeBased().everyHours(1).create();
   }
+  if (existentes.indexOf('vencerOfertas') === -1) {
+    ScriptApp.newTrigger('vencerOfertas').timeBased().everyHours(1).create();
+  }
+  if (existentes.indexOf('procesarColaCorreos') === -1) {
+    ScriptApp.newTrigger('procesarColaCorreos').timeBased().everyMinutes(15).create();
+  }
+}
+
+/** Time triggers the system needs; systemHealth reports any that is missing. */
+var REQUIRED_TRIGGERS = ['respaldoAutomatico', 'refrescarVistas', 'verificarVideosPendientes', 'vencerOfertas', 'procesarColaCorreos'];
+
+/**
+ * Iteration-3 data migration of existing rows (idempotent): old eligibility words to the new
+ * states, a team code for every project (soloists get EQ-xxx), person_id, and the pool order.
+ * Never deletes, never changes a code.
+ */
+function migrateRowsToV3() {
+  return conBloqueo(function () {
+    var rows = leerHoja(HOJA.REGISTRO);
+    var nextTeam = nextTeamNumber(rows);
+    var updates = [];
+    rows.forEach(function (r) {
+      var changes = {};
+      var e = normalizeEligibility(r.eligibility_status);
+      if (e && e !== normalizarComparable(r.eligibility_status)) changes.eligibility_status = e;
+      var o = normalizeEligibility(r.eligibility_override);
+      if (o && o !== normalizarComparable(r.eligibility_override)) changes.eligibility_override = o;
+      if (!normalizarTexto(r.eligibility_auto) && e) changes.eligibility_auto = e === ESTADO_ELEGIBILIDAD.RECIBIDO ? '' : e;
+      if (!normalizarTexto(r.team_code)) {
+        changes.team_code = normalizarTexto(r.group_code) || formatTeamCode(nextTeam++);
+      }
+      if (!normalizarTexto(r.person_id) && normalizarCedula(r.id_number)) changes.person_id = personIdFor(normalizarCedula(r.id_number));
+      if (!normalizarTexto(r.document_type)) changes.document_type = 'CC';
+      if (Object.keys(changes).length) updates.push({ fila: r._fila, cambios: changes });
+    });
+    actualizarFilasEnLote(HOJA.REGISTRO, updates);
+    var members = leerHoja(HOJA.INTEGRANTES);
+    var memberUpdates = [];
+    members.forEach(function (m) {
+      var changes = {};
+      if (!normalizarTexto(m.person_role)) changes.person_role = PERSON_ROLE.INTERPRETE;
+      if (!normalizarTexto(m.person_id) && normalizarCedula(m.normalized_id_number || m.id_number)) {
+        changes.person_id = personIdFor(normalizarCedula(m.normalized_id_number || m.id_number));
+      }
+      if (!normalizarTexto(m.document_type)) changes.document_type = 'CC';
+      if (m.on_stage === '' || m.on_stage === undefined) changes.on_stage = true;
+      if (Object.keys(changes).length) memberUpdates.push({ fila: m._fila, cambios: changes });
+    });
+    actualizarFilasEnLote(HOJA.INTEGRANTES, memberUpdates);
+    var pool = refreshPoolLocked();
+    return { registros_actualizados: updates.length, integrantes_actualizados: memberUpdates.length, bolsa: pool };
+  });
 }
 
 /** Operating accounts: one link per person, never shared between roles. */
@@ -217,6 +269,8 @@ function migrarBase() {
   var schema = ensureSchema(book);
   var config = ensureConfig(book, true);
   invalidarCacheConfig();
+  invalidateRubricCache();
+  var rowsV3 = migrateRowsToV3();
   instalarDisparadores();
   refrescarVistas();
 
@@ -226,10 +280,11 @@ function migrarBase() {
   var report = {
     entorno: env, marca_hoja: marker, version: VERSION_SISTEMA,
     filas_antes: countsOnly(before), filas_despues: countsOnly(after),
-    datos_intactos: intact, respaldo_previo: safety, esquema: schema, config: config,
+    datos_intactos: intact, respaldo_previo: safety, esquema: schema, config: config, filas_v3: rowsV3,
+    rubrica: { version: activeRubric().version, valida: activeRubric().valida, origen: activeRubric().origen },
     cuentas_nuevas: accounts.map(function (a) { return a.alias; })
   };
-  registrar('sistema', 'admin', 'MIGRAR_V2', book.getId(), JSON.stringify({ intactos: intact, conflictos: config.conflictos.length }));
+  registrar('sistema', 'admin', 'MIGRAR_V3', book.getId(), JSON.stringify({ intactos: intact, conflictos: config.conflictos.length }));
   if (!intact) throw new Error('ATENCION: cambio el numero de filas durante la migracion. Revisa el respaldo ' + safety.json);
   return report;
 }
@@ -268,6 +323,16 @@ function systemHealth() {
   });
   var triggers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   var audit = auditTestData();
+  var rubric = activeRubric();
+  var foreignCards = [];
+  var cards = evaluationCards();
+  Object.keys(cards).forEach(function (code) {
+    cards[code].forEach(function (c) {
+      if (c.row.rubric_fingerprint && String(c.row.rubric_fingerprint) !== String(rubric.fingerprint)) foreignCards.push(code + '/J' + c.jurado);
+    });
+  });
+  var mail = {};
+  leerHoja(HOJA.EMAIL_LOG).forEach(function (e) { var st = normalizarComparable(e.status); mail[st] = (mail[st] || 0) + 1; });
   var legalPending = ['legal_name', 'nit', 'legal_address', 'data_protection_email', 'institutional_phone', 'terms_version']
     .filter(function (k) { return String(cfg(k, 'PENDIENTE')).indexOf('PENDIENTE') === 0; });
   return {
@@ -281,12 +346,19 @@ function systemHealth() {
     esquema_completo: Object.keys(missingColumns).length === 0,
     columnas_faltantes: missingColumns,
     disparadores: triggers,
+    disparadores_faltantes: REQUIRED_TRIGGERS.filter(function (t) { return triggers.indexOf(t) === -1; }),
+    rubrica: { version: rubric.version, origen: rubric.origen, valida: rubric.valida, errores: rubric.errores,
+               maximo: rubricMaxTotal(rubric.categorias), minimo: rubricMinTotal(rubric.categorias),
+               tarjetas_con_otra_rubrica: foreignCards },
+    correos: mail,
+    etapas: { lista_oficial_bloqueada: cfgBool('lista_oficial_bloqueada', false), resultados_cerrados: cfgBool('resultados_cerrados', false) },
     formularios: {
       inscripcion: cfgBool('inscripciones_abiertas', true), cambios: cfgBool('cambios_abiertos', true),
       integrantes: cfgBool('integrantes_abierto', true), pistas: cfgBool('pistas_abiertas', true)
     },
     evento: { fecha: cfgFecha('evento_fecha', ''), inicio: cfgHora('evento_hora_inicio', ''), sede: cfg('evento_sede', ''),
-              edades: cfgNumero('edad_minima', 18) + '-' + cfgNumero('edad_maxima', 30), top: cfgNumero('top_seleccionados', 7) },
+              edades: cfgNumero('edad_minima', 18) + '-' + cfgNumero('edad_maxima', 30), top: cfgNumero('top_seleccionados', 10),
+              top_privado: cfgNumero('top_privado', 20), bolsa: cfgNumero('bolsa_aptos', 200) },
     legal: { datos_verificados: cfgBool('datos_legales_verificados', false), pendientes: legalPending,
              terms_version: cfg('terms_version', ''), policy_version: cfg('policy_version', '') },
     datos_de_prueba: audit,
@@ -306,12 +378,27 @@ function borrarDatosDePrueba(confirmacion) {
   }
   return conBloqueo(function () {
     [HOJA.REGISTRO, HOJA.INTEGRANTES, HOJA.DELIBERACIONES, HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3,
-     HOJA.INCIDENTES, HOJA.CAMBIOS, HOJA.LOG, HOJA.IDEMPOTENCIA].forEach(limpiarDatos);
+     HOJA.INCIDENTES, HOJA.CAMBIOS, HOJA.LOG, HOJA.IDEMPOTENCIA, HOJA.OFERTAS, HOJA.SLOTS_HISTORIAL,
+     HOJA.EMAIL_LOG, HOJA.DESCALIFICACIONES, HOJA.BOLSA, HOJA.SEGURO].forEach(limpiarDatos);
+    removeRosterSnapshots();
+    ['lista_oficial_version', 'lista_oficial_at', 'lista_oficial_by'].forEach(function (k) { setConfigValue(k, ''); });
+    setConfigValue('lista_oficial_bloqueada', 'NO');
+    setConfigValue('resultados_cerrados', 'NO');
     var trashed = trashTestFiles();
     resetRehearsalState();
     refrescarVistas();
     registrar('sistema', 'admin', 'BORRAR_DATOS_PRUEBA', '', 'confirmado; archivos a la papelera=' + trashed);
     return { ok: true, archivos_a_papelera: trashed, mensaje: 'Datos operativos de PRUEBAS borrados. CONFIG y usuarios intactos.' };
+  });
+}
+
+/** Deletes the ROSTER_FINAL snapshot sheets (test environment reset only). */
+function removeRosterSnapshots() {
+  exigirEntornoPruebas('LIMPIAR');
+  var base = cfg('lista_oficial_nombre', 'ROSTER_FINAL_2026-10-22');
+  var book = libro();
+  book.getSheets().forEach(function (sh) {
+    if (sh.getName().indexOf(base) === 0 && book.getSheets().length > 1) book.deleteSheet(sh);
   });
 }
 
@@ -346,7 +433,9 @@ function quitarInscripciones(ids, confirmacion) {
     var groups = {}, codes = {};
     rows.forEach(function (r) {
       if (r.group_code) groups[normalizarComparable(r.group_code)] = true;
+      if (r.team_code) groups[normalizarComparable(r.team_code)] = true;
       if (r.code) codes[normalizarComparable(r.code)] = true;
+      String(r.previous_code || '').split(',').forEach(function (c) { if (normalizarTexto(c)) codes[normalizarComparable(c)] = true; });
     });
     var removeWhere = function (sheetName, test) {
       var sheet = libro().getSheetByName(sheetName);
@@ -357,8 +446,16 @@ function quitarInscripciones(ids, confirmacion) {
     };
     var removed = {
       registro: removeWhere(HOJA.REGISTRO, function (r) { return wanted[normalizarComparable(r.submission_id)]; }),
-      integrantes: removeWhere(HOJA.INTEGRANTES, function (m) { return groups[normalizarComparable(m.group_code)]; }),
-      cambios: removeWhere(HOJA.CAMBIOS, function (c) { return codes[normalizarComparable(c.code)]; })
+      integrantes: removeWhere(HOJA.INTEGRANTES, function (m) {
+        return groups[normalizarComparable(m.group_code)] || wanted[normalizarComparable(m.project_submission_id)];
+      }),
+      cambios: removeWhere(HOJA.CAMBIOS, function (c) { return codes[normalizarComparable(c.code)]; }),
+      ofertas: removeWhere(HOJA.OFERTAS, function (o) { return wanted[normalizarComparable(o.submission_id)]; }),
+      correos: removeWhere(HOJA.EMAIL_LOG, function (e) { return wanted[normalizarComparable(e.submission_id)]; }),
+      descalificaciones: removeWhere(HOJA.DESCALIFICACIONES, function (d) { return wanted[normalizarComparable(d.submission_id)]; }),
+      tarjetas: [HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3].reduce(function (n, sheetName) {
+        return n + removeWhere(sheetName, function (c) { return codes[normalizarComparable(c.code)]; });
+      }, 0)
     };
     registrar('sistema', 'admin', 'QUITAR_INSCRIPCIONES', rows.map(function (r) { return r.submission_id; }).join(','),
               JSON.stringify(removed) + ' respaldo=' + backup.json);

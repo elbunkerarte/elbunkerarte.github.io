@@ -14,13 +14,15 @@
     "anio": "2026",
     "hora_inicio": "3:00 p. m.",
     "hora_fin": "9:00 p. m.",
-    "lugar": "Centro Comercial Mayorca",
+    "lugar": "Centro Comercial Mayorca · Etapa 1",
     "municipio": "Sabaneta",
     "departamento": "Antioquia",
     "edad_minima": 18,
     "edad_maxima": 30,
     "cupos": 100,
-    "seleccionados": 7,
+    "suplentes_desde": 101,
+    "suplentes_hasta": 200,
+    "seleccionados": 10,
     "jurados": 3,
     "duracion_audicion_min": 3,
     "antelacion_llegada_min": 15,
@@ -32,6 +34,15 @@
     "contingencia": "8:30–9:00 p. m.",
     "cierre": "9:00 p. m."
   },
+  "calendario": {
+    "cambio_horario_limite_dia": "jueves 22 de octubre",
+    "cambio_horario_limite_hora": "6:00 p. m.",
+    "reemplazo_desde_dia": "viernes 16 de octubre",
+    "suplente_horas_para_aceptar": 24,
+    "confirmacion_final_dia": "jueves 22 de octubre",
+    "actualizacion_oficial_fecha": "29 de septiembre de 2026",
+    "actualizacion_oficial_iso": "2026-09-29"
+  },
   "legal": {
     "razon_social": "Corporación Socio cultural El Arte es la Solución",
     "nit": "901292696",
@@ -40,15 +51,18 @@
     "correo_datos": "El.arterslasolucion@gmail.com",
     "telefono": "3042328502",
     "canal_fisico": "Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia",
-    "terminos_version": "v1-2026-09-24",
-    "politica_version": "v2-2026-09-24",
+    "terminos_version": "v2-2026-09-29",
+    "politica_version": "v3-2026-09-29",
     "datos_verificados": true
   },
   "contacto": {
     "whatsapp_oficial": "3239836182",
     "whatsapp_oficial_texto": "323 983 6182",
     "whatsapp_nombre_contacto": "EL BÚNKER — Arte es la Solución",
-    "instagram": "aesproducciones_"
+    "instagram": "elarteeslasolucion_",
+    "instagram_url": "https://www.instagram.com/elarteeslasolucion_/",
+    "instagram_aes": "aesproducciones_",
+    "instagram_aes_url": "https://www.instagram.com/aesproducciones_/"
   },
   "enlaces": {
     "inscripcion": "https://script.google.com/macros/s/AKfycbzKtLSLUeXi5QnTjNa1yVZawOBSCRzMFwCwTw9hoal7K8fWMgnfli9Mk6RU76YkcNkW/exec?p=inscripcion",

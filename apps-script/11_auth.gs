@@ -144,14 +144,17 @@ function urlPanel(rol, token) {
 }
 
 /**
- * Six-character key that travels with a group code in the members link.
- * GRP numbers are sequential and easy to guess; the key (an HMAC of the code)
- * is what stops a stranger from adding people to someone else's group.
+ * Ten-character key that travels with a team code (GRP-xxx / EQ-xxx) in the "equipo y firmas"
+ * link. Team numbers are sequential and easy to guess; the key (an HMAC of the code, ~51 bits)
+ * is what stops a stranger from adding people to someone else's project. Failed attempts are
+ * rate limited per team code, and every link stops working after CONFIG enlaces_equipo_vencen.
  */
+var TEAM_KEY_LENGTH = 10;
+
 function groupAccessKey(groupCode) {
   var code = String(groupCode || '').trim().toUpperCase();
   if (!code) return '';
-  return firmar('grp:' + code).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
+  return firmar('grp:' + code).replace(/[^A-Za-z0-9]/g, '').slice(0, TEAM_KEY_LENGTH).toUpperCase();
 }
 
 function groupKeyMatches(groupCode, key) {

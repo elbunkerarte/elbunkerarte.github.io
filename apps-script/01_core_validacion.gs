@@ -6,14 +6,34 @@
  * must stay free of Apps Script globals.
  */
 
-/** Eligibility / duplicate vocabulary. Kept as constants so typos fail loudly. */
+/**
+ * Eligibility vocabulary (release QA, section 3). Kept as constants so typos fail loudly.
+ * RECIBIDO is what every new submission gets: the automatic check is stored apart
+ * (eligibility_auto) and only becomes APTO / NO_APTO / ... when staff confirm it, so a
+ * receipt can never be mistaken for a pass.
+ */
 var ESTADO_ELEGIBILIDAD = {
+  RECIBIDO: 'RECIBIDO',
+  EN_REVISION: 'EN_REVISION',
   APTO: 'APTO',
+  NO_APTO: 'NO_APTO',
   INCOMPLETO: 'INCOMPLETO',
-  NO_CUMPLE: 'NO_CUMPLE',
-  REVISION: 'REVISION',
   DUPLICADO: 'DUPLICADO'
 };
+
+/** Participant-facing wording of each eligibility state. */
+var ELIGIBILITY_LABELS = {
+  RECIBIDO: 'Recibida', EN_REVISION: 'En revisión', APTO: 'Apto', NO_APTO: 'No apto',
+  INCOMPLETO: 'Incompleta', DUPLICADO: 'Duplicada'
+};
+
+/** Iteration-1/2 values still found in old rows and backups. */
+function normalizeEligibility(value) {
+  var v = normalizarComparable(value).replace(/\s+/g, '_');
+  if (v === 'REVISION') return ESTADO_ELEGIBILIDAD.EN_REVISION;
+  if (v === 'NO_CUMPLE' || v === 'NOCUMPLE') return ESTADO_ELEGIBILIDAD.NO_APTO;
+  return v;
+}
 
 var MOTIVO_DUPLICADO = {
   NINGUNO: '',
@@ -315,11 +335,11 @@ function validarInscripcion(datos, opciones) {
   });
 
   if (tieneErrorDeRegla) {
-    estado = ESTADO_ELEGIBILIDAD.NO_CUMPLE;
+    estado = ESTADO_ELEGIBILIDAD.NO_APTO;
   } else if (errores.length > 0) {
     estado = ESTADO_ELEGIBILIDAD.INCOMPLETO;
   } else if (avisos.length > 0) {
-    estado = ESTADO_ELEGIBILIDAD.REVISION;
+    estado = ESTADO_ELEGIBILIDAD.EN_REVISION;
   } else {
     estado = ESTADO_ELEGIBILIDAD.APTO;
   }
@@ -507,6 +527,23 @@ function nextGroupNumber(rows) {
   return max + 1;
 }
 
+/** EQ-001 style team code of a soloist project (a group's team code is its GRP code). */
+function formatTeamCode(n) {
+  var s = String(n);
+  while (s.length < 3) s = '0' + s;
+  return 'EQ-' + s;
+}
+
+/** Next soloist team number: one above the highest ever issued, never reused. */
+function nextTeamNumber(rows) {
+  var max = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var m = String(rows[i].team_code || '').match(/^EQ-(\d+)$/i);
+    if (m && parseInt(m[1], 10) > max) max = parseInt(m[1], 10);
+  }
+  return max + 1;
+}
+
 var MEMBER_STATUS = {
   AUTORIZADO: 'AUTORIZADO',
   INCOMPLETO: 'INCOMPLETO',
@@ -523,10 +560,16 @@ function validateMember(datos, options) {
   var eventDate = options.fecha_evento || '2026-10-23';
   var requireSignature = options.firma_obligatoria !== false;
   var errors = [];
+  var crew = normalizePersonRole(datos.person_role) === PERSON_ROLE.EQUIPO_TRABAJO;
 
-  ['full_name', 'id_number', 'birth_date', 'artistic_role'].forEach(function (field) {
+  // Performers describe what they do on stage; crew members pick their role from the list.
+  ['full_name', 'id_number', 'birth_date'].concat(crew ? ['crew_role'] : ['artistic_role']).forEach(function (field) {
     if (!normalizarTexto(datos[field])) errors.push({ campo: field, codigo: 'FALTANTE', mensaje: 'Campo obligatorio.' });
   });
+  if (crew && normalizarTexto(datos.crew_role) &&
+      CREW_ROLES.indexOf(normalizarComparable(datos.crew_role).replace(/[^A-Z]/g, '')) === -1) {
+    errors.push({ campo: 'crew_role', codigo: 'FORMATO', mensaje: 'Rol de equipo no válido.' });
+  }
   ['adult_confirmation', 'accept_terms', 'accept_data_processing'].forEach(function (field) {
     if (!esVerdadero(datos[field])) errors.push({ campo: field, codigo: 'CONSENTIMIENTO', mensaje: 'Declaración o autorización obligatoria.' });
   });
@@ -552,7 +595,7 @@ function validateMember(datos, options) {
   var status = MEMBER_STATUS.AUTORIZADO;
   if (errors.some(function (e) { return e.codigo === 'EDAD'; })) status = MEMBER_STATUS.NO_CUMPLE;
   else if (errors.length) status = MEMBER_STATUS.INCOMPLETO;
-  return { status: status, age: age, errors: errors };
+  return { status: status, age: age, errors: errors, person_role: crew ? PERSON_ROLE.EQUIPO_TRABAJO : PERSON_ROLE.INTERPRETE };
 }
 
 /**
@@ -630,3 +673,45 @@ function maskPhone(value) {
   if (!phone) return '';
   return '*** *** ' + phone.slice(-4);
 }
+
+// ---------------------------------------------------------------------------
+// People and roles (release QA, section 2)
+// ---------------------------------------------------------------------------
+
+/** A person on stage (counts toward the project) or a crew member (never takes a seat, never ranked). */
+var PERSON_ROLE = { INTERPRETE: 'INTERPRETE', EQUIPO_TRABAJO: 'EQUIPO_TRABAJO' };
+
+var CREW_ROLES = ['MANAGER', 'PRODUCTOR', 'TECNICO', 'ASISTENTE', 'FOTOGRAFO', 'OTRO'];
+var CREW_ROLE_LABELS = {
+  MANAGER: 'Manager', PRODUCTOR: 'Productor(a)', TECNICO: 'Técnico(a)', ASISTENTE: 'Asistente',
+  FOTOGRAFO: 'Fotógrafo(a) / video', OTRO: 'Otro'
+};
+
+var DOCUMENT_TYPES = ['CC', 'CE', 'PPT', 'PASAPORTE'];
+var DOCUMENT_TYPE_LABELS = { CC: 'Cédula de ciudadanía', CE: 'Cédula de extranjería', PPT: 'PPT', PASAPORTE: 'Pasaporte' };
+
+function normalizePersonRole(value) {
+  var v = normalizarComparable(value).replace(/[^A-Z]/g, '');
+  if (v === 'EQUIPOTRABAJO' || v === 'EQUIPO' || v === 'CREW') return PERSON_ROLE.EQUIPO_TRABAJO;
+  return PERSON_ROLE.INTERPRETE;
+}
+
+function normalizeDocumentType(value) {
+  var v = normalizarComparable(value).replace(/[^A-Z]/g, '');
+  return DOCUMENT_TYPES.indexOf(v) !== -1 ? v : 'CC';
+}
+
+/**
+ * Stable person identifier derived from the ID number: the same person in two projects (or
+ * in two roles) is ONE person. Not reversible to the document number.
+ */
+function personIdFor(normalizedIdNumber) {
+  var doc = normalizarCedula(normalizedIdNumber);
+  if (!doc) return '';
+  var h = 5381;
+  for (var i = 0; i < doc.length; i++) h = ((h * 33) ^ doc.charCodeAt(i)) >>> 0;
+  var h2 = 52711;
+  for (var j = doc.length - 1; j >= 0; j--) h2 = ((h2 * 31) ^ doc.charCodeAt(j)) >>> 0;
+  return 'P-' + (h.toString(36) + h2.toString(36)).toUpperCase().slice(0, 10);
+}
+

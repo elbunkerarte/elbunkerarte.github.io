@@ -48,7 +48,7 @@ function procesarDataset() {
 
     let estado = veredicto.eligibility_status;
     if (dup.duplicate_flag) estado = 'DUPLICADO';
-    else if ((dup.alerta || groupMatch.match) && estado === 'APTO') estado = 'REVISION';
+    else if ((dup.alerta || groupMatch.match) && estado === 'APTO') estado = 'EN_REVISION';
 
     almacenadas.push(Object.assign({}, candidato, {
       participation_mode: mode,
@@ -93,14 +93,14 @@ describe('Dataset de prueba: estados de validacion', () => {
   it('detecta los 2 duplicados por documento', () => {
     expect(porEstado.DUPLICADO).toBe(2);
   });
-  it('flags exactly the 4 seeded NO_CUMPLE (too young, too old, outside Sabaneta, 31 on the day)', () => {
-    expect(porEstado.NO_CUMPLE).toBe(4);
+  it('flags exactly the 4 seeded NO_APTO (too young, too old, outside Sabaneta, 31 on the day)', () => {
+    expect(porEstado.NO_APTO).toBe(4);
   });
   it('flags exactly the 7 seeded INCOMPLETO (including a group without size and a duo of three)', () => {
     expect(porEstado.INCOMPLETO).toBe(7);
   });
-  it('sends to REVISION the dubious video, the e-mail/phone alerts and the repeated group name', () => {
-    expect(porEstado.REVISION).toBe(4);
+  it('sends to EN_REVISION the dubious video, the e-mail/phone alerts and the repeated group name', () => {
+    expect(porEstado.EN_REVISION).toBe(4);
   });
   it('leaves 113 APTO, more than the 100 seats, which is what makes the seat test meaningful', () => {
     expect(porEstado.APTO).toBe(113);
@@ -121,7 +121,7 @@ describe('Dataset de prueba: estados de validacion', () => {
     expect(codes[0]).toBe('GRP-001');
   });
   it('cada fila tiene exactamente un estado conocido', () => {
-    const conocidos = ['APTO', 'INCOMPLETO', 'NO_CUMPLE', 'REVISION', 'DUPLICADO'];
+    const conocidos = ['APTO', 'INCOMPLETO', 'NO_APTO', 'EN_REVISION', 'DUPLICADO'];
     const desconocidos = R.almacenadas.filter(r => conocidos.indexOf(r.eligibility_status) === -1);
     expect(desconocidos).toHaveLength(0);
   });
@@ -169,7 +169,7 @@ describe('Dataset de prueba: asignacion de los 100 codigos', () => {
   });
 });
 
-describe('Dataset de prueba: jornada completa y Top 7', () => {
+describe('Seed dataset: full day, official rubric, Top 10 / Top 20', () => {
   const asignacion = C.asignarCodigos(R.almacenadas, { cupo: 100 });
   const conCodigo = asignacion.asignados.map(a => a.code);
 
@@ -180,27 +180,31 @@ describe('Dataset de prueba: jornada completa y Top 7', () => {
     else if (idx % 23 === 0) estado = 'CONTINGENCIA';
 
     const semilla = (idx * 7919) % 100;
-    const nota = 4 + (semilla % 7);
+    const nota = 2 + (semilla % 3);
     const puntajes = {};
-    ['talento','performance','identidad','repertorio','profesionalismo','presencia','digital','proyecto']
-      .forEach((k, j) => { puntajes[k] = Math.max(1, Math.min(10, nota + ((idx + j) % 3) - 1)); });
+    C.RUBRIC_DEFAULT.map((c) => c.id)
+      .forEach((k, j) => { puntajes[k] = Math.max(1, Math.min(5, nota + ((idx + j) % 3) - 1)); });
 
     return {
       code, artistic_name: 'PRUEBA-' + code, audition_status: estado,
       tarjetas: [1, 2, 3].map(j => ({
         jurado: j,
         puntajes: Object.keys(puntajes).reduce((acc, k) => {
-          acc[k] = Math.max(1, Math.min(10, puntajes[k] + ((j + idx) % 3) - 1));
+          acc[k] = Math.max(1, Math.min(5, puntajes[k] + ((j + idx) % 3) - 1));
           return acc;
         }, {})
       }))
     };
   });
 
-  const seleccion = C.seleccionarTop(artistas, { top: 7, minimo_jurados: 2 });
+  const seleccion = C.seleccionarTop(artistas, { top_publico: 10, top_privado: 20, minimo_jurados: 3 });
 
-  it('selects exactly 7 projects', () => {
-    expect(seleccion.top).toHaveLength(7);
+  it('selects at most 10 publicly; every selected or tied project is inside the ranking', () => {
+    expect(seleccion.top.length + seleccion.empates_sin_resolver.filter((a) => a.posicion <= 10).length >= 10).toBe(true);
+    expect(seleccion.top.length <= 10).toBe(true);
+  });
+  it('every final score lives in 20-100 (official rubric)', () => {
+    seleccion.ranking.forEach((a) => expect(a.artist_final >= 20 && a.artist_final <= 100).toBe(true));
   });
   it('los 7 salen SOLO de audiciones REALIZADA', () => {
     const realizadas = new Set(artistas.filter(a => a.audition_status === 'REALIZADA').map(a => a.code));

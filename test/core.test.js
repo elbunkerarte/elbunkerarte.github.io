@@ -99,14 +99,14 @@ describe('Regla de edad 18-28 al dia del evento', () => {
     // Cumple 18 el 1 de octubre de 2026: elegible aunque al inscribirse tenga 17.
     expect(C.calcularEdad('2008-10-01', FECHA_EVENTO)).toBe(18);
   });
-  it('quien cumple 18 el dia siguiente al evento NO es elegible', () => {
+  it('someone turning 18 the day after the event is NO_APTO', () => {
     expect(C.calcularEdad('2008-10-03', FECHA_EVENTO)).toBe(17);
     const r = C.validarInscripcion(inscripcionValida({ birth_date: '2008-10-03' }), OPC);
-    expect(r.eligibility_status).toBe('NO_CUMPLE');
+    expect(r.eligibility_status).toBe('NO_APTO');
   });
-  it('quien cumple 29 antes del evento NO es elegible', () => {
+  it('someone already 29 before the event (range 18-28) is NO_APTO', () => {
     const r = C.validarInscripcion(inscripcionValida({ birth_date: '1997-01-15' }), OPC);
-    expect(r.eligibility_status).toBe('NO_CUMPLE');
+    expect(r.eligibility_status).toBe('NO_APTO');
   });
   it('el limite inferior exacto (18 el mismo dia) es elegible', () => {
     const r = C.validarInscripcion(inscripcionValida({ birth_date: '2008-10-02' }), OPC);
@@ -147,16 +147,16 @@ describe('QA: dato incompleto', () => {
 });
 
 describe('QA: no reside en Sabaneta', () => {
-  it('queda NO_CUMPLE', () => {
+  it('is NO_APTO', () => {
     const r = C.validarInscripcion(inscripcionValida({ resides_in_sabaneta: false }), OPC);
-    expect(r.eligibility_status).toBe('NO_CUMPLE');
+    expect(r.eligibility_status).toBe('NO_APTO');
   });
 });
 
 describe('QA: enlace de video invalido', () => {
-  it('pasa a REVISION, no se descarta', () => {
+  it('goes to EN_REVISION, never discarded', () => {
     const r = C.validarInscripcion(inscripcionValida({ video_url: 'mi video en el celular' }), OPC);
-    expect(r.eligibility_status).toBe('REVISION');
+    expect(r.eligibility_status).toBe('EN_REVISION');
   });
 });
 
@@ -457,124 +457,134 @@ describe('Maquina de estados', () => {
 });
 
 // ===========================================================================
-describe('Rubrica y consolidacion', () => {
-  const perfecto = { talento: 10, performance: 10, identidad: 10, repertorio: 10,
-                     profesionalismo: 10, presencia: 10, digital: 10, proyecto: 10 };
+describe('Official rubric (rubrica-jurado-daviarena.pdf): 7 categories, 1-5 x factor', () => {
+  const all = (v) => ({ afinacion: v, presencia: v, interpretacion: v, originalidad: v, ritmo: v, repertorio: v, arena: v });
 
-  it('los pesos suman 100', () => {
-    expect(C.pesoTotalRubrica()).toBe(100);
+  it('has 7 categories with factors 4-4-3-3-2-2-2 and passes its own validation', () => {
+    expect(C.RUBRIC_DEFAULT.map((c) => c.factor)).toEqual([4, 4, 3, 3, 2, 2, 2]);
+    expect(C.validateRubric(C.RUBRIC_DEFAULT).ok).toBe(true);
+    expect([C.rubricMinTotal(C.RUBRIC_DEFAULT), C.rubricMaxTotal(C.RUBRIC_DEFAULT)]).toEqual([20, 100]);
   });
-  it('todo en 10 da 100 puntos', () => {
-    expect(C.calcularPuntajeJurado(perfecto).total).toBe(100);
+  it('5 in every category is 100 and 1 in every category is 20', () => {
+    expect(C.calcularPuntajeJurado(all(5)).total).toBe(100);
+    expect(C.calcularPuntajeJurado(all(1)).total).toBe(20);
   });
-  it('todo en 5 da 50 puntos', () => {
-    const medio = {}; Object.keys(perfecto).forEach(k => medio[k] = 5);
-    expect(C.calcularPuntajeJurado(medio).total).toBe(50);
+  it('points are rating x factor, and the tie-break is presence + arena points', () => {
+    const r = C.calcularPuntajeJurado({ afinacion: 4, presencia: 5, interpretacion: 3, originalidad: 4, ritmo: 5, repertorio: 3, arena: 4 });
+    expect([r.total, r.desempate]).toEqual([81, 28]);
   });
-  it('aplica la formula (nota/10)*peso factor por factor', () => {
-    const p = Object.assign({}, perfecto, { talento: 5 });   // 20 -> 10
-    expect(C.calcularPuntajeJurado(p).total).toBe(90);
-  });
-  it('una tarjeta incompleta es INVALIDA, no un puntaje bajo', () => {
-    const p = Object.assign({}, perfecto); delete p.digital;
+  it('an incomplete card is INVALID, never a low score', () => {
+    const p = all(5); delete p.arena;
     const r = C.calcularPuntajeJurado(p);
-    expect(r.valido).toBe(false);
-    expect(r.total).toBeNull();
-    expect(r.faltantes).toContain('digital');
+    expect([r.valido, r.total, r.faltantes]).toEqual([false, null, ['arena']]);
   });
-  it('rechaza notas fuera de la escala 1-10', () => {
-    expect(C.calcularPuntajeJurado(Object.assign({}, perfecto, { talento: 0 })).valido).toBe(false);
-    expect(C.calcularPuntajeJurado(Object.assign({}, perfecto, { talento: 11 })).valido).toBe(false);
+  it('rejects ratings outside 1-5 and non-integers', () => {
+    expect(C.calcularPuntajeJurado(Object.assign(all(3), { presencia: 0 })).valido).toBe(false);
+    expect(C.calcularPuntajeJurado(Object.assign(all(3), { presencia: 6 })).valido).toBe(false);
+    expect(C.calcularPuntajeJurado(Object.assign(all(3), { presencia: 3.5 })).valido).toBe(false);
   });
-
-  it('QA: tres jurados -> el final es el promedio de los tres', () => {
-    const t = [
-      { jurado: 1, puntajes: perfecto },
-      { jurado: 2, puntajes: Object.assign({}, perfecto, { talento: 5 }) },   // 90
-      { jurado: 3, puntajes: Object.assign({}, perfecto, { performance: 5 }) } // 90
-    ];
-    const c = C.consolidarArtista(t);
+  it('the rubric round-trips through the PARAMETROS_RUBRICA rows unchanged', () => {
+    const back = C.rubricFromRows(C.rubricToRows(C.RUBRIC_DEFAULT, 'R1'));
+    expect(back.version).toBe('R1');
+    expect(C.rubricFingerprint(back.categorias)).toBe(C.rubricFingerprint(C.RUBRIC_DEFAULT));
+  });
+  it('a parameter sheet whose maximum is not 100 is reported invalid', () => {
+    const rows = C.rubricToRows(C.RUBRIC_DEFAULT, 'R1');
+    rows[0].factor = 5;
+    expect(C.validateRubric(C.rubricFromRows(rows).categorias).ok).toBe(false);
+  });
+  it('category 1 reads "voice/main instrument" for non-vocal formats only', () => {
+    const cat = C.RUBRIC_DEFAULT[0];
+    expect(C.categoryLabelFor(cat, 'INSTRUMENTAL')).toBe('Dominio técnico de la voz/instrumento principal');
+    expect(C.categoryLabelFor(cat, 'VOZ_PISTA')).toBe('Afinación y técnica vocal');
+  });
+  it('three jurors: the final score is the full-precision mean of the three totals', () => {
+    const c = C.consolidarArtista([
+      { jurado: 1, puntajes: all(5) }, { jurado: 2, puntajes: all(4) }, { jurado: 3, puntajes: all(4) }
+    ]);
     expect(c.jurados_validos).toBe(3);
-    expect(c.artist_final).toBeCloseTo((100 + 90 + 90) / 3, 2);
+    expect(c.artist_final).toBe((100 + 80 + 80) / 3);
   });
-
-  it('un jurado ausente NO cuenta como cero', () => {
-    const t = [
-      { jurado: 1, puntajes: perfecto },
-      { jurado: 2, puntajes: perfecto },
-      { jurado: 3, puntajes: {} }
-    ];
-    const c = C.consolidarArtista(t);
-    expect(c.jurados_validos).toBe(2);
-    expect(c.artist_final).toBe(100);
+  it('an absent juror never counts as zero', () => {
+    const c = C.consolidarArtista([{ jurado: 1, puntajes: all(5) }, { jurado: 2, puntajes: all(5) }, { jurado: 3, puntajes: {} }]);
+    expect([c.jurados_validos, c.artist_final]).toEqual([2, 100]);
   });
 });
 
 // ===========================================================================
-describe('Seleccion del Top 7', () => {
-  function artista(code, nota, extra) {
-    const p = {}; ['talento','performance','identidad','repertorio','profesionalismo','presencia','digital','proyecto']
-      .forEach(k => p[k] = nota);
-    return Object.assign({
-      code, artistic_name: code, audition_status: 'REALIZADA',
-      tarjetas: [{ jurado: 1, puntajes: p }, { jurado: 2, puntajes: p }, { jurado: 3, puntajes: p }]
-    }, extra || {});
+describe('Selection: Top 10 public, Top 20 private', () => {
+  const all = (v) => ({ afinacion: v, presencia: v, interpretacion: v, originalidad: v, ritmo: v, repertorio: v, arena: v });
+  function artist(code, cards, extra) {
+    return Object.assign({ code, artistic_name: code, audition_status: 'REALIZADA',
+      tarjetas: cards.map((p, i) => ({ jurado: i + 1, puntajes: p })) }, extra || {});
+  }
+  const code = (i) => 'B-' + String(i).padStart(3, '0');
+  // 25 distinct scores: artist i has jurors (5,5,5) minus a different total per artist.
+  function field(n) {
+    const out = [];
+    for (let i = 1; i <= n; i++) {
+      const a = all(5); a.ritmo = 1 + ((i - 1) % 5); a.repertorio = 5 - Math.floor((i - 1) / 5) % 5;
+      out.push(artist(code(i), [a, a, a]));
+    }
+    return out;
   }
 
-  it('devuelve exactamente 7 y ordenados de mayor a menor', () => {
-    const lista = [];
-    for (let i = 0; i < 12; i++) lista.push(artista('B-' + String(i + 1).padStart(3, '0'), 10 - i * 0.5));
-    const r = C.seleccionarTop(lista, { top: 7 });
-    expect(r.top).toHaveLength(7);
-    expect(r.top[0].code).toBe('B-001');
-    expect(r.top[0].artist_final > r.top[6].artist_final).toBe(true);
+  it('marks 10 TOP10_SELECCIONADO and positions 11-20 TOP20, in score order', () => {
+    const r = C.seleccionarTop(field(25).map((a, i) => Object.assign(a, { tarjetas: a.tarjetas.map((t) => ({ jurado: t.jurado,
+      puntajes: Object.assign({}, t.puntajes, { interpretacion: 5 - Math.floor(i / 5), originalidad: 5 - (i % 5) }) })) })));
+    expect(r.top10.length + r.empates_sin_resolver.length >= 10).toBe(true);
+    const statuses = r.ranking.map((a) => a.ranking_status);
+    expect(statuses.filter((s) => s === 'TOP10_SELECCIONADO').length <= 10).toBe(true);
+    for (let i = 1; i < r.ranking.length; i++) expect(r.ranking[i - 1].artist_final >= r.ranking[i].artist_final).toBe(true);
   });
-
-  it('QA: quien NO audiciono queda fuera de la seleccion', () => {
-    const lista = [artista('B-001', 10, { audition_status: 'NO AUDICIONADO' }), artista('B-002', 5)];
-    const r = C.seleccionarTop(lista, { top: 7 });
-    expect(r.top).toHaveLength(1);
-    expect(r.top[0].code).toBe('B-002');
+  it('someone who did not audition is excluded', () => {
+    const r = C.seleccionarTop([artist('B-001', [all(5), all(5), all(5)], { audition_status: 'NO AUDICIONADO' }),
+                                artist('B-002', [all(3), all(3), all(3)])]);
+    expect(r.top10.map((a) => a.code)).toEqual(['B-002']);
     expect(r.excluidos[0].motivo).toBe('AUDICION_NO_REALIZADA');
   });
-
-  it('QA: empate se resuelve por Performance (primer criterio)', () => {
-    const base = { talento: 8, performance: 8, identidad: 8, repertorio: 8,
-                   profesionalismo: 8, presencia: 8, digital: 8, proyecto: 8 };
-    // Mismo total 80, pero A tiene mas Performance y menos Talento.
-    const a = { talento: 6, performance: 10, identidad: 8, repertorio: 8, profesionalismo: 8, presencia: 8, digital: 8, proyecto: 8 };
-    const b = { talento: 10, performance: 6, identidad: 8, repertorio: 8, profesionalismo: 8, presencia: 8, digital: 8, proyecto: 8 };
-    const mk = (code, p) => ({ code, artistic_name: code, audition_status: 'REALIZADA',
-      tarjetas: [{ jurado: 1, puntajes: p }, { jurado: 2, puntajes: p }, { jurado: 3, puntajes: p }] });
-
-    const totalA = C.calcularPuntajeJurado(a).total;
-    const totalB = C.calcularPuntajeJurado(b).total;
-    expect(totalA).toBe(totalB);                       // empate real
-
-    const r = C.seleccionarTop([mk('B-002', b), mk('B-001', a)], { top: 1 });
-    expect(r.top[0].code).toBe('B-001');               // gana el de mas Performance
+  it('fewer than 3 submitted cards keeps a project out of the ranking by default', () => {
+    const r = C.seleccionarTop([artist('B-001', [all(5), all(5)]), artist('B-002', [all(3), all(3), all(3)])]);
+    expect(r.excluidos.map((e) => [e.code, e.motivo])).toEqual([['B-001', 'JURADOS_INSUFICIENTES']]);
   });
-
-  it('QA: empate irresoluble en el corte se marca para el comite', () => {
-    const lista = [];
-    for (let i = 1; i <= 9; i++) lista.push(artista('B-' + String(i).padStart(3, '0'), 8));
-    const r = C.seleccionarTop(lista, { top: 7 });
-    expect(r.requiere_comite).toBe(true);
-    expect(r.empates_sin_resolver.length > 0).toBe(true);
+  it('a validated disqualification excludes; a pending one only flags', () => {
+    const r = C.seleccionarTop([artist('B-001', [all(5), all(5), all(5)], { dq_status: 'VALIDADA' }),
+                                artist('B-002', [all(4), all(4), all(4)], { dq_status: 'PENDIENTE' })]);
+    expect(r.excluidos.map((e) => e.motivo)).toEqual(['DESCALIFICADO']);
+    expect(r.dq_pendientes).toEqual(['B-002']);
   });
-
-  it('sin empate en el corte NO se convoca al comite', () => {
-    const lista = [];
-    for (let i = 0; i < 9; i++) lista.push(artista('B-' + String(i + 1).padStart(3, '0'), 10 - i));
-    const r = C.seleccionarTop(lista, { top: 7 });
-    expect(r.requiere_comite).toBe(false);
+  it('equal totals are broken by presence + arena before anything else', () => {
+    const a = Object.assign(all(4), { presencia: 5, afinacion: 3 });   // same total, more presence
+    const b = Object.assign(all(4), { presencia: 3, afinacion: 5 });
+    expect(C.calcularPuntajeJurado(a).total).toBe(C.calcularPuntajeJurado(b).total);
+    const r = C.seleccionarTop([artist('B-002', [b, b, b]), artist('B-001', [a, a, a])], { top_publico: 1, top_privado: 1 });
+    expect([r.ranking[0].code, r.requiere_comite]).toEqual(['B-001', false]);
   });
-
-  it('excluye a quien tiene menos de 2 tarjetas validas', () => {
-    const solo = artista('B-001', 9);
-    solo.tarjetas = [solo.tarjetas[0]];
-    const r = C.seleccionarTop([solo, artista('B-002', 5)], { minimo_jurados: 2 });
-    expect(r.excluidos.some(e => e.motivo === 'JURADOS_INSUFICIENTES')).toBe(true);
+  it('a tie that survives the tie-break across the cut is TIE_REVIEW_REQUIRED, never decided silently', () => {
+    const list = [];
+    for (let i = 1; i <= 12; i++) list.push(artist(code(i), i <= 8 ? [all(5), all(5), all(5)] : [all(4), all(4), all(4)]));
+    const tied = C.seleccionarTop(list.slice(0, 9).concat([artist('B-010', [all(4), all(4), all(4)]), artist('B-011', [all(4), all(4), all(4)])]),
+                                  { top_publico: 9 });
+    expect(tied.requiere_comite).toBe(true);
+    expect(tied.cortes[0].cut).toBe(9);
+    expect(tied.ranking.filter((a) => a.ranking_status === 'TIE_REVIEW_REQUIRED').map((a) => a.code)).toEqual(['B-009', 'B-010', 'B-011']);
+  });
+  it('the minuted decision orders exactly the tied projects and closes the tie', () => {
+    const list = [artist('B-001', [all(5), all(5), all(5)]), artist('B-002', [all(4), all(4), all(4)]), artist('B-003', [all(4), all(4), all(4)])];
+    const open = C.seleccionarTop(list, { top_publico: 2, top_privado: 3 });
+    expect(open.cortes.map((c) => c.cut)).toEqual([2]);
+    const closed = C.seleccionarTop(list, { top_publico: 2, top_privado: 3,
+      deliberaciones: [{ deliberation_id: 'ACTA-1', cut_position: 2, codes_in_order: 'B-003,B-002' }] });
+    expect([closed.requiere_comite, closed.top10.map((a) => a.code)]).toEqual([false, ['B-001', 'B-003']]);
+    const wrong = C.seleccionarTop(list, { top_publico: 2, top_privado: 3,
+      deliberaciones: [{ deliberation_id: 'ACTA-2', cut_position: 2, codes_in_order: 'B-001,B-002' }] });
+    expect(wrong.requiere_comite).toBe(true);
+  });
+  it('closing the results turns every ranked project outside the Top 20 into NO_SELECCIONADO', () => {
+    const list = [];
+    for (let i = 1; i <= 3; i++) list.push(artist(code(i), [Object.assign(all(3), { ritmo: i }), all(3), all(3)]));
+    const r = C.seleccionarTop(list, { top_publico: 1, top_privado: 2, resultados_cerrados: true });
+    expect(r.ranking.map((a) => a.ranking_status)).toEqual(['TOP10_SELECCIONADO', 'TOP20', 'NO_SELECCIONADO']);
   });
 });
 

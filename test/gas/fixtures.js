@@ -7,6 +7,9 @@
 const { createAccount } = require('./index');
 
 const DEFAULT_NOW = '2026-09-20T10:00:00-05:00';
+
+/** A 1x1 PNG: the drawn signature Form 1 and the team form require. */
+const SIGNATURE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 const ADMIN_SESSION = { ok: true, rol: 'admin', alias: 'integration-test' };
 
 /**
@@ -41,6 +44,8 @@ function validSubmission(overrides) {
     accept_data_processing: true,
     accept_whatsapp_operational: true,
     accept_image_voice: true,
+    document_type: 'CC',
+    signature_png: SIGNATURE_PNG,
     form_elapsed_ms: 120000,
     source: 'web'
   }, overrides || {});
@@ -117,16 +122,20 @@ function setConfig(project, key, value) {
   });
 }
 
-/** Registers `count` distinct participants and issues their codes. Returns the REGISTRO records. */
+/**
+ * Registers `count` distinct participants, applies the aptitude review (RECIBIDO -> APTO) and
+ * issues their codes. Returns the REGISTRO records.
+ */
 function registerAndIssueCodes(project, count) {
   // A bulk load arrives faster than the per-minute anti-abuse limit allows a real crowd to.
   setConfig(project, 'limite_envios_minuto', '100000');
   for (let i = 1; i <= count; i++) project.run('accionInscribir', uniqueSubmission(i));
+  project.run('accionAplicarVerificacion', {}, ADMIN_SESSION);
   project.run('accionAsignarCodigos', {}, ADMIN_SESSION);
   return project.records('REGISTRO');
 }
 
 module.exports = {
-  DEFAULT_NOW, ADMIN_SESSION, validSubmission, uniqueSubmission, newAccount, tokenFromUrl, tokensByAlias,
+  DEFAULT_NOW, ADMIN_SESSION, SIGNATURE_PNG, validSubmission, uniqueSubmission, newAccount, tokenFromUrl, tokensByAlias,
   installProduction, installTest, masterSheet, setConfig, registerAndIssueCodes
 };

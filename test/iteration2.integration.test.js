@@ -68,11 +68,12 @@ describe('Groups: seats, keys, repeated names and the leader row', () => {
     return { account, test, duo, band, repeated, other };
   });
 
-  it('a duo and a group each get their own GRP code and a 6-character key', () => {
+  it('a duo and a group each get their own GRP code and a 10-character team key', () => {
     const { duo, band } = env();
     expect([duo.eligibility_status, duo.group_code, band.eligibility_status, band.group_code])
-      .toEqual(['APTO', 'GRP-001', 'APTO', 'GRP-002']);
-    expect(duo.group_key).toMatch(/^[A-Z0-9]{6}$/);
+      .toEqual(['RECIBIDO', 'GRP-001', 'RECIBIDO', 'GRP-002']);
+    expect(duo.group_key).toMatch(/^[A-Z0-9]{10}$/);
+    expect(duo.team_code).toBe('GRP-001');
     expect(duo.members_link).toContain('g=GRP-001');
     expect(duo.members_link).toContain('k=' + duo.group_key);
   });
@@ -83,8 +84,8 @@ describe('Groups: seats, keys, repeated names and the leader row', () => {
   });
   it('a group whose name only differs in case, spaces or punctuation is flagged, never merged', () => {
     const { repeated, test } = env();
-    expect([repeated.group_repeated, repeated.eligibility_status]).toEqual([true, 'REVISION']);
     const row = test.project.records('REGISTRO').find((r) => r.submission_id === repeated.submission_id);
+    expect([repeated.eligibility_status, row.eligibility_auto]).toEqual(['RECIBIDO', 'EN_REVISION']);
     expect([row.group_code, row.group_match_status, row.group_display_name]).toEqual(['GRP-003', 'POSIBLE_REPETIDA', 'LOS DEL BARRIO']);
   });
   it('the operator decides: MISMO leaves one seat, DISTINTO keeps both', () => {
@@ -107,6 +108,7 @@ describe('Groups: seats, keys, repeated names and the leader row', () => {
   });
   it('a group takes exactly one code however many members it has', () => {
     const { test } = env();
+    test.project.run('accionAplicarVerificacion', {}, F.ADMIN_SESSION);
     test.project.run('accionAsignarCodigos', {}, F.ADMIN_SESSION);
     const coded = test.project.records('REGISTRO').filter((r) => r.code);
     expect(coded.map((r) => r.group_code).sort()).toEqual(['GRP-001', 'GRP-002', 'GRP-004']);
@@ -167,7 +169,7 @@ describe('Group members: individual authorization with a drawn signature', () =>
     const { test } = env();
     const d = test.project.run('constanciaData', 'GRP-001');
     expect(d.members.length + d.blank_lines).toBe(4);
-    expect(d.terms_version).toBe('v1-2026-09-24');
+    expect(d.terms_version).toBe('v2-2026-09-29');
   });
 });
 
@@ -177,6 +179,7 @@ describe('Backing tracks: upload, validation and replacement', () => {
     const account = F.newAccount();
     const test = F.installTest(account, 'pruebas');
     test.project.run('accionInscribir', F.uniqueSubmission(1, Object.assign({ artistic_name: 'Maca Ríos', song_name: 'Mi Canción' }, HUMAN)));
+    test.project.run('accionAplicarVerificacion', {}, F.ADMIN_SESSION);
     test.project.run('accionAsignarCodigos', {}, F.ADMIN_SESSION);
     const row = test.project.records('REGISTRO')[0];
     const mp3 = test.project.execute('mp3', (g) => g.buildTestTrackBase64());
@@ -312,9 +315,9 @@ describe('Migration of a live iteration-1 base (the production path)', () => {
     const cfg = {};
     next.records('CONFIG').forEach((r) => { cfg[r.clave] = r.valor; });
     expect([cfg.evento_fecha, cfg.evento_hora_inicio, cfg.edad_maxima, cfg.top_seleccionados, cfg.cierre_audiciones])
-      .toEqual(['2026-10-23', '15:00', '30', '7', '21:00']);
-    expect([cfg.legal_name, cfg.nit, cfg.datos_legales_verificados, cfg.terms_version])
-      .toEqual(['Corporación Socio cultural El Arte es la Solución', '901292696', 'SI', 'v1-2026-09-24']);
+      .toEqual(['2026-10-23', '15:00', '30', '10', '21:00']);
+    expect([cfg.legal_name, cfg.nit, cfg.datos_legales_verificados, cfg.terms_version, cfg.policy_version])
+      .toEqual(['Corporación Socio cultural El Arte es la Solución', '901292696', 'SI', 'v2-2026-09-29', 'v3-2026-09-29']);
     expect(Object.keys(cfg).filter((k) => /^PENDIENTE/.test(String(cfg[k])))).toEqual([]);
   });
   it('takes a raw backup before touching anything and marks the base as production', () => {
@@ -344,7 +347,7 @@ describe('Migration of a live iteration-1 base (the production path)', () => {
     const test = next.run('accionInscribir', F.uniqueSubmission(90, Object.assign({ email: 'someone@bunker.test' }, HUMAN)));
     expect([test.ok, test.motivo]).toEqual([false, 'DATO_DE_PRUEBA']);
     const real = next.run('accionInscribir', F.uniqueSubmission(91, HUMAN));
-    expect(real.eligibility_status).toBe('APTO');
+    expect(real.eligibility_status).toBe('RECIBIDO');
   });
 });
 
@@ -516,7 +519,7 @@ describe('Rows appended by the API keep what the person typed (appendRow ignores
 
   it('a registration row stores document, phone, birth date, artistic name and song as the typed text', () => {
     const { test, solo } = env();
-    expect(solo.eligibility_status).toBe('APTO');
+    expect(solo.eligibility_status).toBe('RECIBIDO');
     const row = test.project.records('REGISTRO').find((r) => r.submission_id === solo.submission_id);
     expect([row.id_number, row.whatsapp, row.birth_date, row.artistic_name, row.song_name])
       .toEqual(['10034567', '3010000009', '2001-04-12', '1999', '4:20']);
@@ -529,6 +532,7 @@ describe('Rows appended by the API keep what the person typed (appendRow ignores
   });
   it('a change request stores the original time as "15:00"', () => {
     const { test } = env();
+    test.project.run('accionAplicarVerificacion', {}, F.ADMIN_SESSION);
     test.project.run('accionAsignarCodigos', {}, F.ADMIN_SESSION);
     const who = test.project.records('REGISTRO').find((r) => r.code === 'B-001');
     const req = test.project.run('accionSolicitarCambio', { participant_code: 'B-001', full_name: who.full_name, reason_short: 'Work',
@@ -583,7 +587,7 @@ describe('Event-day screens show people with a seat, in words', () => {
 
   it('the track lists only hold people with a code (a track cannot be sent without one)', () => {
     const { test, late } = env();
-    expect(late.eligibility_status).toBe('APTO');
+    expect(late.eligibility_status).toBe('RECIBIDO');
     for (const fn of ['accionListarPistas', 'accionPistasEvento']) {
       const r = test.project.run(fn, {}, F.ADMIN_SESSION);
       expect([fn, r.total, r.pistas.every((p) => /^B-\d{3}$/.test(p.code))]).toEqual([fn, 2, true]);
@@ -601,17 +605,18 @@ describe('Event-day screens show people with a seat, in words', () => {
 
 // ===========================================================================
 describe('The printable acceptance record shows the drawn signatures', () => {
-  it('a member who signed on line appears with the signature image, not an escaped URL', () => {
+  it('the leader (Form 1) and a member who signed on line appear with their signature images, not escaped URLs', () => {
     const account = F.newAccount();
     const test = F.installTest(account, 'pruebas');
     const band = test.project.run('accionInscribir', groupSubmission(3, 'AGRUPACION', 'La Banda Firmas', 3));
+    test.project.run('accionAplicarVerificacion', {}, F.ADMIN_SESSION);
     test.project.run('accionAsignarCodigos', {}, F.ADMIN_SESSION);
     const png = test.project.execute('png', (g) => g.TEST_SIGNATURE_PNG);
     const member = test.project.run('accionRegistrarIntegrante', memberSubmission('GRP-001', band.group_key, 1, { signature_png: png }));
     expect(member.member_status).toBe('AUTORIZADO');
     const body = test.project.get({ p: 'constancia', g: 'GRP-001', t: test.tokens.admin }).body;
     expect(body).not.toContain('#ZautoescZ');
-    expect((body.match(/<img alt="Firma" src="data:image\/png;base64,[A-Za-z0-9+\/=]+">/g) || []).length).toBe(1);
+    expect((body.match(/<img alt="Firma" src="data:image\/png;base64,[A-Za-z0-9+\/=]+">/g) || []).length).toBe(2);
   });
 });
 
@@ -711,11 +716,14 @@ describe('Approved schedule changes go to the 8:00 p. m. margin when the ten blo
 
 // ===========================================================================
 describe('Selection size', () => {
-  it('seven projects are selected (confirmed by the organization)', () => {
+  it('ten projects are selected publicly and the Top 20 stays private (release QA 2026-09-29)', () => {
     const account = F.newAccount();
     const test = F.installTest(account, 'pruebas');
-    expect(test.project.post({ accion: 'config_publica' }).json().evento.top).toBe(7);
-    expect(test.project.clientCall('api', { accion: 'dashboard', t: test.tokens.direccion }).metricas.top_n).toBe(7);
+    const pub = test.project.post({ accion: 'config_publica' }).json();
+    expect(pub.evento.top).toBe(10);
+    expect(JSON.stringify(pub).indexOf('top_privado')).toBe(-1);
+    const m = test.project.clientCall('api', { accion: 'dashboard', t: test.tokens.direccion }).metricas;
+    expect([m.top_n, m.top_privado]).toEqual([10, 20]);
   });
 });
 

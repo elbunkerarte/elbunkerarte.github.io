@@ -360,9 +360,12 @@ describe('Setup: production project', () => {
     const users = setup().project.records('_USUARIOS');
     expect(users.map((u) => [u.email_o_alias, u.rol, u.activo])).toEqual([['admin', 'admin', 'SI']]);
   });
-  it('installs the daily backup and the view-refresh triggers', () => {
+  it('installs the backup, view-refresh, offer-expiry and e-mail queue triggers', () => {
     const { project } = setup();
-    expect(project.triggers.map((t) => t.handler).sort()).toEqual(['refrescarVistas', 'respaldoAutomatico', 'verificarVideosPendientes']);
+    expect(project.triggers.map((t) => t.handler).sort())
+      .toEqual(['procesarColaCorreos', 'refrescarVistas', 'respaldoAutomatico', 'vencerOfertas', 'verificarVideosPendientes']);
+    expect(project.triggers.find((t) => t.handler === 'vencerOfertas').spec).toEqual({ everyHours: 1 });
+    expect(project.triggers.find((t) => t.handler === 'procesarColaCorreos').spec).toEqual({ everyMinutes: 15 });
     expect(project.triggers.find((t) => t.handler === 'respaldoAutomatico').spec).toEqual({ everyDays: 1, atHour: 23 });
     expect(project.triggers.find((t) => t.handler === 'verificarVideosPendientes').spec).toEqual({ everyHours: 1 });
     expect(project.missingTriggerHandlers()).toEqual([]);
@@ -390,14 +393,14 @@ describe('Registration (Form 1)', () => {
     return { account, project };
   });
 
-  it('stores exactly one row with eligibility APTO for a valid submission', () => {
+  it('stores exactly one row as RECIBIDO (never APTO at the door) with the automatic verdict kept apart', () => {
     const { project } = env();
     const r = project.run('accionInscribir', F.validSubmission());
-    expect(r.eligibility_status).toBe('APTO');
+    expect(r.eligibility_status).toBe('RECIBIDO');
     const rows = project.records('REGISTRO');
     expect(rows).toHaveLength(1);
-    expect([rows[0].submission_id, rows[0].eligibility_status, rows[0].code, rows[0].source])
-      .toEqual([r.submission_id, 'APTO', '', 'web']);
+    expect([rows[0].submission_id, rows[0].eligibility_status, rows[0].eligibility_auto, rows[0].code, rows[0].source])
+      .toEqual([r.submission_id, 'RECIBIDO', 'APTO', '', 'web']);
   });
   it('stores one row for a repeated client_submission_id and marks the second answer repetido', () => {
     const { project } = env();
@@ -406,11 +409,11 @@ describe('Registration (Form 1)', () => {
     expect(second.submission_id).toBe(project.records('REGISTRO')[0].submission_id);
     expect(project.records('REGISTRO')).toHaveLength(1);
   });
-  it('takes the script lock exactly once per submission and never nests it', () => {
+  it('takes the script lock once for the row and twice for the receipt e-mail (claim + result), never nested', () => {
     const { project } = env();
     const before = project.lockState.script.acquisitions;
     project.run('accionInscribir', F.uniqueSubmission(2));
-    expect(project.lockState.script.acquisitions - before).toBe(1);
+    expect(project.lockState.script.acquisitions - before).toBe(3);
     expect(project.lockState.script.nestedAttempts).toBe(0);
     expect(project.lockState.script.leakedAtEnd).toBe(0);
   });
@@ -436,11 +439,12 @@ describe('Registration (Form 1)', () => {
     expect(r.cerrado).toBe(true);
     expect(project.records('REGISTRO').length).toBe(rows);
   });
-  it('labels an under-age submission NO_CUMPLE but still stores it', () => {
+  it('stores an under-age submission as RECIBIDO with the automatic verdict NO_APTO', () => {
     const { project } = env();
     const r = project.run('accionInscribir', F.uniqueSubmission(5, { birth_date: '2012-05-10' }));
-    expect(r.eligibility_status).toBe('NO_CUMPLE');
-    expect(project.records('REGISTRO').some((x) => x.submission_id === r.submission_id)).toBe(true);
+    expect(r.eligibility_status).toBe('RECIBIDO');
+    const row = project.records('REGISTRO').find((x) => x.submission_id === r.submission_id);
+    expect(row.eligibility_auto).toBe('NO_APTO');
   });
 });
 
@@ -562,16 +566,17 @@ describe('Isolation: PRUEBAS project in the same Google account', () => {
 
 // ===========================================================================
 describe('Shared account resources: mail quota', () => {
-  it('email sent from PRUEBAS consumes the same daily quota production uses', () => {
+  it('email sent from PRUEBAS consumes the same daily quota production uses, and what does not fit waits in the queue', () => {
     const account = F.newAccount();
     const prod = F.installProduction(account, 'prod').project;
     const test = F.installTest(account, 'pruebas').project;
-    F.registerAndIssueCodes(test, 3);
     account.setMailQuota(3);
-    const sent = test.run('accionEnviarCorreos', { plantilla: 'ASIGNACION' }, F.ADMIN_SESSION);
-    expect(sent.enviados).toBe(3);
+    F.registerAndIssueCodes(test, 3);
+    expect(account.outbox.length).toBe(3);
     expect(prod.execute('quota', (g) => g.MailApp.getRemainingDailyQuota())).toBe(0);
     expect(account.outbox.every((m) => m.project === 'pruebas')).toBe(true);
+    const waiting = test.records('_EMAIL_LOG').filter((e) => e.status === 'PENDIENTE').map((e) => e.template_key).sort();
+    expect(waiting).toEqual(['APTITUD', 'APTITUD', 'APTITUD', 'ASIGNACION', 'ASIGNACION', 'ASIGNACION']);
   });
 });
 
@@ -723,7 +728,7 @@ describe('Web app: doPost and google.script.run', () => {
     const { prod } = env();
     const before = prod.project.records('REGISTRO').length;
     const r = prod.project.post({ accion: 'inscribir', ...F.uniqueSubmission(50) }).json();
-    expect([r.ok, r.eligibility_status]).toEqual([true, 'APTO']);
+    expect([r.ok, r.eligibility_status]).toEqual([true, 'RECIBIDO']);
     expect(prod.project.records('REGISTRO').length).toBe(before + 1);
   });
   it('every read action returns values google.script.run can deliver (no Dates reach the browser)', () => {
@@ -851,24 +856,30 @@ describe('Schedule change (Form 2)', () => {
 
 // ===========================================================================
 describe('Event day: check-in, jury and results through real tokens', () => {
-  it('a performed audition scored by a juror reaches RESULTADOS', () => {
+  it('three submitted juror cards reach RESULTADOS with the official rubric (1-5 x factor, 20-100)', () => {
     const account = F.newAccount();
     const test = F.installTest(account, 'pruebas');
     F.registerAndIssueCodes(test.project, 3);
     const call = (payload) => test.project.clientCall('api', payload);
     expect(call({ accion: 'registrar_estado', t: test.tokens['checkin-1'], code: 'B-001', estado: 'CHECK-IN' }).hacia).toBe('CHECK-IN');
     expect(call({ accion: 'registrar_estado', t: test.tokens['checkin-1'], code: 'B-001', estado: 'REALIZADA' }).hacia).toBe('REALIZADA');
-    // (score / 10) * weight: 16 + 18 + 10.5 + 8 + 9 + 8 + 3 + 7 = 79.5
-    const scores = { talento: 8, performance: 9, identidad: 7, repertorio: 8, profesionalismo: 9, presencia: 8, digital: 6, proyecto: 7 };
-    const saved = call(Object.assign({ accion: 'guardar_evaluacion', t: test.tokens['jurado-1'], code: 'B-001' }, scores));
-    expect([saved.ok, saved.hoja, saved.total]).toEqual([true, 'JURADO_1', 79.5]);
-    const perfect = { talento: 10, performance: 10, identidad: 10, repertorio: 10, profesionalismo: 10, presencia: 10, digital: 10, proyecto: 10 };
-    expect(call(Object.assign({ accion: 'guardar_evaluacion', t: test.tokens['jurado-2'], code: 'B-001' }, perfect)).hoja).toBe('JURADO_2');
+    // rating x factor: 4x4 + 5x4 + 3x3 + 4x3 + 5x2 + 3x2 + 4x2 = 16 + 20 + 9 + 12 + 10 + 6 + 8 = 81
+    const scores = { afinacion: 4, presencia: 5, interpretacion: 3, originalidad: 4, ritmo: 5, repertorio: 3, arena: 4 };
+    const draft = call(Object.assign({ accion: 'guardar_evaluacion', t: test.tokens['jurado-1'], code: 'B-001' }, scores));
+    expect([draft.ok, draft.hoja, draft.estado, draft.total]).toEqual([true, 'JURADO_1', 'BORRADOR', 81]);
+    const sent = call(Object.assign({ accion: 'guardar_evaluacion', t: test.tokens['jurado-1'], code: 'B-001', enviar: true }, scores));
+    expect([sent.estado, sent.total]).toEqual(['ENVIADA', 81]);
+    const locked = call(Object.assign({ accion: 'guardar_evaluacion', t: test.tokens['jurado-1'], code: 'B-001', enviar: true }, scores));
+    expect([locked.ok, locked.bloqueada]).toEqual([false, true]);
+    const all = (v) => ({ afinacion: v, presencia: v, interpretacion: v, originalidad: v, ritmo: v, repertorio: v, arena: v });
+    expect(call(Object.assign({ accion: 'guardar_evaluacion', t: test.tokens['jurado-2'], code: 'B-001', enviar: true }, all(5))).total).toBe(100);
+    expect(call(Object.assign({ accion: 'guardar_evaluacion', t: test.tokens['jurado-3'], code: 'B-001', enviar: true }, all(1))).total).toBe(20);
     const denied = call({ accion: 'guardar_evaluacion', t: test.tokens['checkin-1'], code: 'B-001' });
     expect(denied.codigo_http).toBe(403);
     test.project.run('refrescarVistas');
     const row = test.project.records('RESULTADOS').find((r) => r.code === 'B-001');
-    expect([row.posicion, row.jurado_1, row.jurado_2, row.jurados_validos, row.artist_final]).toEqual([1, 79.5, 100, 2, 89.75]);
+    expect([row.posicion, row.jurado_1, row.jurado_2, row.jurado_3, row.jurados_validos, row.artist_final])
+      .toEqual([1, 81, 100, 20, 3, 67]);
   });
 });
 
@@ -907,16 +918,19 @@ describe('Regression: duplicate detection at submission time', () => {
     return { account, project };
   });
 
-  it('a second submission with the same document number is labelled DUPLICADO', () => {
+  it('a second submission with the same document number gets the automatic verdict DUPLICADO', () => {
     // normalized_id_number used to read back as a Number and was compared to a String with ===.
-    const r = env().project.run('accionInscribir', F.validSubmission({
+    const { project } = env();
+    const r = project.run('accionInscribir', F.validSubmission({
       client_submission_id: 'same-document', email: 'other@example.com', whatsapp: '3019998877' }));
-    expect([r.eligibility_status, r.duplicado]).toEqual(['DUPLICADO', true]);
+    const row = project.records('REGISTRO').find((x) => x.submission_id === r.submission_id);
+    expect([r.eligibility_status, row.eligibility_auto, row.duplicate_flag]).toEqual(['RECIBIDO', 'DUPLICADO', true]);
   });
-  it('a submission that only shares the WhatsApp number raises the REVISION alert', () => {
-    const r = env().project.run('accionInscribir', F.validSubmission({
+  it('a submission that only shares the WhatsApp number is sent to EN_REVISION for a person to decide', () => {
+    const { project } = env();
+    const r = project.run('accionInscribir', F.validSubmission({
       client_submission_id: 'same-phone', id_number: '55667788', email: 'third@example.com' }));
-    expect(r.eligibility_status).toBe('REVISION');
+    expect(project.records('REGISTRO').find((x) => x.submission_id === r.submission_id).eligibility_auto).toBe('EN_REVISION');
   });
 });
 
@@ -979,6 +993,7 @@ describe('Regression: participant free text is not re-interpreted by Sheets', ()
     test.project.run('accionInscribir', F.uniqueSubmission(1, { full_name: '=HYPERLINK("https://evil.test","Ana Gomez")' }));
     test.project.run('accionInscribir', F.uniqueSubmission(2, { whatsapp: '+57 311 000 0002' }));
     test.project.run('accionInscribir', F.uniqueSubmission(3, { audition_description: '- Sings a cappella and dances' }));
+    test.project.run('accionAplicarVerificacion', {}, F.ADMIN_SESSION);
     test.project.run('accionAsignarCodigos', {}, F.ADMIN_SESSION);
     return { account, test };
   });

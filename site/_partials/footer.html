@@ -6,8 +6,10 @@
           <img src="assets/brand/logo-badge-128.png" width="64" height="64" alt="Logo de la {{legal.razon_social}}">
           <span>{{evento.nombre}}<br>{{evento.marca}}</span>
         </a>
-        <p class="footer-social">Instagram:
-          <a href="https://www.instagram.com/{{contacto.instagram}}/" rel="noopener">@{{contacto.instagram}}</a></p>
+        <p class="footer-social">Instagram oficial:
+          <a href="{{contacto.instagram_url}}" rel="noopener">@{{contacto.instagram}}</a></p>
+        <p class="footer-social footer-social--secondary">También:
+          <a href="{{contacto.instagram_aes_url}}" rel="noopener">@{{contacto.instagram_aes}}</a></p>
       </div>
       <nav class="footer-nav" aria-label="Documentos de la convocatoria">
         <p class="footer-title">La convocatoria</p>

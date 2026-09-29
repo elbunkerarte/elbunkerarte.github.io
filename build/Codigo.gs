@@ -4,8 +4,8 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-25T15:43:31.554Z
- * Modulos: 22 .gs + 14 .html
+ * Generado: 2026-09-29T13:28:09.909Z
+ * Modulos: 23 .gs + 14 .html
  */
 
 /** Pantallas HTML. Las lee hayRegistroPlantillas() en 20_web.gs. */
@@ -108,6 +108,8 @@ function MIGRAR() {
     'CONFIG actualizada: ' + (r.config.actualizadas.join(' | ') || 'nada'),
     'CONFIG agregada: ' + (r.config.agregadas.join(', ') || 'nada'),
     'CONFIG en conflicto (se conserva lo que habia): ' + (r.config.conflictos.join(' | ') || 'ninguno'),
+    'Filas migradas a v3: ' + JSON.stringify(r.filas_v3),
+    'Rubrica: ' + JSON.stringify(r.rubrica),
     'Cuentas nuevas: ' + (r.cuentas_nuevas.join(', ') || 'ninguna'),
     'SIGUIENTE PASO: Gestionar implementaciones > lapiz > Version nueva > Implementar.',
     '===================================================='
@@ -146,12 +148,17 @@ function LIMPIAR() {
 }
 
 /**
- * The two registrations made in production before launch were tests (confirmed
- * by the organization on 2026-09-24). Removes exactly those rows, after a raw
- * backup, and logs it. Running it again finds nothing and changes nothing.
+ * Registrations made in production before the public launch were tests: two confirmed by the
+ * organization on 2026-09-24 and five made by the organization between 2026-09-25 and 2026-09-27
+ * (release QA reset, 2026-09-29). Removes exactly those rows (with their team members, change
+ * requests, offers, e-mail log and cards), after a raw backup, and logs it. Any other row is
+ * treated as real and kept. Running it again finds nothing and changes nothing.
  */
+var PRELAUNCH_TEST_SUBMISSIONS = ['S-07BE9C53', 'S-E780AA04',
+  'S-5F23127D', 'S-67ACAFA8', 'S-2B643606', 'S-494D927B', 'S-433834E6'];
+
 function QUITAR_PRUEBAS_PRELANZAMIENTO() {
-  var r = quitarInscripciones(['S-07BE9C53', 'S-E780AA04'], 'SI-QUITAR');
+  var r = quitarInscripciones(PRELAUNCH_TEST_SUBMISSIONS, 'SI-QUITAR');
   console.log(JSON.stringify(r, null, 2));
   return r;
 }
@@ -167,7 +174,7 @@ function QUITAR_PRUEBAS_PRELANZAMIENTO() {
  * CONFIG sheet so a non-technical operator can change it without touching code.
  */
 
-var VERSION_SISTEMA = '2.0.0';
+var VERSION_SISTEMA = '3.0.0';
 
 /** Script Properties keys (the Apps Script equivalent of environment vars). */
 var PROP = {
@@ -277,7 +284,15 @@ var HOJA = {
   CAMBIOS: '_CAMBIOS',
   USUARIOS: '_USUARIOS',
   LOG: '_LOG',
-  IDEMPOTENCIA: '_IDEMPOTENCIA'
+  IDEMPOTENCIA: '_IDEMPOTENCIA',
+  // ---- iteration 3 ----
+  PARAMETROS_RUBRICA: 'PARAMETROS_RUBRICA',   // the official rubric as editable parameters
+  BOLSA: 'BOLSA',                             // view: principal + substitute pool in priority order
+  SEGURO: 'SEGURO_MAYORCA',                   // view: people for the venue insurance policy (private)
+  OFERTAS: '_OFERTAS',                        // substitute offers per freed slot
+  SLOTS_HISTORIAL: '_SLOTS_HISTORIAL',        // append-only history of every slot hand-over
+  EMAIL_LOG: '_EMAIL_LOG',                    // one row per e-mail attempt, idempotent by key
+  DESCALIFICACIONES: '_DESCALIFICACIONES'     // disqualification reports and their validation
 };
 
 /**
@@ -317,7 +332,14 @@ var COLUMNAS_REGISTRO = [
   'video_check_status', 'video_checked_at', 'video_check_detail',
   'consent_at', 'terms_version', 'policy_version', 'data_controller', 'capture_source',
   'precola_at', 'stage_at', 'done_at',
-  'eligibility_override', 'override_by', 'override_at'
+  'eligibility_override', 'override_by', 'override_at',
+  // ---- iteration 3 ----
+  'eligibility_auto', 'eligibility_decided_at', 'eligibility_decided_by', 'aptitude_notified_at',
+  'team_code', 'document_type', 'person_id', 'signature_file_id', 'signature_sha256', 'signature_at',
+  'priority_rank', 'pool_status',
+  'withdrawal_status', 'withdrawn_at', 'withdrawn_by', 'withdrawal_reason', 'previous_code',
+  'final_confirmation', 'final_confirmation_at',
+  'participation_status', 'evaluation_status', 'ranking_status', 'dq_status'
 ];
 
 /** Group members. One row per person; the project row lives in REGISTRO. */
@@ -328,7 +350,9 @@ var COLUMNAS_INTEGRANTES = [
   'consent_terms', 'consent_data', 'consent_image', 'consent_at',
   'terms_version', 'policy_version', 'data_controller', 'capture_source',
   'signature_file_id', 'signature_sha256', 'signature_at',
-  'member_status', 'member_alert', 'notes'
+  'member_status', 'member_alert', 'notes',
+  // ---- iteration 3: every project (also a soloist) lists its people here ----
+  'person_role', 'crew_role', 'on_stage', 'document_type', 'person_id'
 ];
 
 /** Operator view: one master row per group, its members nested (collapsible) below. */
@@ -347,7 +371,8 @@ var COLUMNAS_PISTAS = [
 ];
 
 var COLUMNAS_DELIBERACIONES = [
-  'deliberation_id', 'at', 'by', 'codes_in_order', 'cut_position', 'minutes', 'status'
+  'deliberation_id', 'at', 'by', 'codes_in_order', 'cut_position', 'minutes', 'status',
+  'method', 'participants', 'result'
 ];
 
 var COLUMNAS_AGENDA = [
@@ -363,17 +388,23 @@ var COLUMNAS_CHECK_IN = [
   'precola_at', 'stage_at', 'done_at'
 ];
 
-var COLUMNAS_JURADO = [
-  'code', 'artistic_name', 'discipline',
-  'talento', 'performance', 'identidad', 'repertorio',
-  'profesionalismo', 'presencia', 'digital', 'proyecto',
-  'total', 'valido', 'observaciones', 'evaluado_at', 'evaluado_by'
-];
+/**
+ * One row per project per juror. The rating columns are the rubric category ids (1-5 each);
+ * `total` is the weighted sum (20-100) and `estado` is BORRADOR until the juror submits and
+ * locks it (ENVIADA). Only ENVIADA cards count.
+ */
+function juryColumns(rubric) {
+  // Evaluated at call time: RUBRIC_DEFAULT lives in a file loaded after this one.
+  return ['code', 'artistic_name', 'discipline', 'presentation_format', 'rubric_version', 'rubric_fingerprint']
+    .concat((rubric || RUBRIC_DEFAULT).map(function (c) { return c.id; }))
+    .concat(['total', 'desempate', 'estado', 'observaciones', 'dq_flag', 'dq_causa', 'dq_nota',
+             'evaluado_at', 'enviado_at', 'evaluado_by', 'reabierta_at', 'reabierta_by', 'reabierta_motivo']);
+}
 
 var COLUMNAS_RESULTADOS = [
   'posicion', 'code', 'artistic_name', 'full_name', 'discipline',
   'jurado_1', 'jurado_2', 'jurado_3', 'jurados_validos',
-  'artist_final', 'seleccionado', 'requiere_comite', 'observacion'
+  'artist_final', 'tie_break', 'ranking_status', 'seleccionado', 'requiere_comite', 'dq', 'observacion'
 ];
 
 var COLUMNAS_INCIDENTES = [
@@ -383,7 +414,36 @@ var COLUMNAS_INCIDENTES = [
 var COLUMNAS_CAMBIOS = [
   'solicitud_id', 'at', 'code', 'full_name', 'original_block', 'original_time',
   'can_attend_original', 'reason_short', 'contact', 'acceptance',
-  'estado', 'nuevo_bloque', 'nueva_hora', 'resuelto_at', 'resuelto_by', 'observacion'
+  'estado', 'nuevo_bloque', 'nueva_hora', 'resuelto_at', 'resuelto_by', 'observacion',
+  'notificacion_estado'
+];
+
+var COLUMNAS_OFERTAS = [
+  'oferta_id', 'slot_code', 'slot_block', 'slot_arrival', 'slot_time', 'submission_id', 'priority_rank',
+  'estado', 'created_at', 'expires_at', 'responded_at', 'actor', 'released_by', 'notas'
+];
+
+var COLUMNAS_SLOTS_HISTORIAL = ['at', 'slot_code', 'evento', 'submission_id', 'actor', 'detalle'];
+
+var COLUMNAS_EMAIL_LOG = [
+  'email_id', 'at', 'template_key', 'template_version', 'trigger', 'idempotency_key', 'recipient',
+  'submission_id', 'person_id', 'code', 'status', 'provider_message_id', 'retry_count', 'last_attempt_at',
+  'error', 'subject', 'payload'
+];
+
+var COLUMNAS_DESCALIFICACIONES = [
+  'dq_id', 'code', 'submission_id', 'causa', 'nota', 'reportado_por', 'reportado_at',
+  'estado', 'resuelto_por', 'resuelto_at', 'motivo'
+];
+
+var COLUMNAS_BOLSA = [
+  'priority_rank', 'pool_status', 'code', 'submission_id', 'artistic_name', 'participation_mode',
+  'created_at', 'eligibility_status', 'participation_status', 'oferta', 'observacion'
+];
+
+var COLUMNAS_SEGURO = [
+  'code', 'artistic_name', 'participation_mode', 'person_type', 'full_name', 'document_type', 'id_number',
+  'role_detail', 'on_stage', 'authorization_status', 'signature_at', 'person_id', 'alerta'
 ];
 
 var COLUMNAS_USUARIOS = ['email_o_alias', 'rol', 'token', 'activo', 'creado_at', 'nota'];
@@ -400,9 +460,9 @@ function sheetDefinitions() {
     [HOJA.AGENDA, COLUMNAS_AGENDA],
     [HOJA.CHECK_IN, COLUMNAS_CHECK_IN],
     [HOJA.PISTAS, COLUMNAS_PISTAS],
-    [HOJA.JURADO_1, COLUMNAS_JURADO],
-    [HOJA.JURADO_2, COLUMNAS_JURADO],
-    [HOJA.JURADO_3, COLUMNAS_JURADO],
+    [HOJA.JURADO_1, juryColumns(activeRubricCategories())],
+    [HOJA.JURADO_2, juryColumns(activeRubricCategories())],
+    [HOJA.JURADO_3, juryColumns(activeRubricCategories())],
     [HOJA.RESULTADOS, COLUMNAS_RESULTADOS],
     [HOJA.DASHBOARD, ['INDICADOR', 'VALOR']],
     [HOJA.INCIDENTES, COLUMNAS_INCIDENTES],
@@ -412,7 +472,14 @@ function sheetDefinitions() {
     [HOJA.CAMBIOS, COLUMNAS_CAMBIOS],
     [HOJA.USUARIOS, COLUMNAS_USUARIOS],
     [HOJA.LOG, COLUMNAS_LOG],
-    [HOJA.IDEMPOTENCIA, COLUMNAS_IDEMPOTENCIA]
+    [HOJA.IDEMPOTENCIA, COLUMNAS_IDEMPOTENCIA],
+    [HOJA.PARAMETROS_RUBRICA, RUBRIC_PARAM_COLUMNS],
+    [HOJA.BOLSA, COLUMNAS_BOLSA],
+    [HOJA.SEGURO, COLUMNAS_SEGURO],
+    [HOJA.OFERTAS, COLUMNAS_OFERTAS],
+    [HOJA.SLOTS_HISTORIAL, COLUMNAS_SLOTS_HISTORIAL],
+    [HOJA.EMAIL_LOG, COLUMNAS_EMAIL_LOG],
+    [HOJA.DESCALIFICACIONES, COLUMNAS_DESCALIFICACIONES]
   ];
 }
 
@@ -433,9 +500,11 @@ var ROL = {
  */
 var PERMISOS = {
   admin:     ['*'],
-  direccion: ['dashboard', 'resultados', 'registro_enmascarado', 'exportar', 'incidentes', 'deliberar'],
+  direccion: ['dashboard', 'resultados', 'registro_enmascarado', 'exportar', 'incidentes', 'deliberar',
+              'validar_dq', 'reabrir_evaluacion', 'cerrar_resultados', 'seguro'],
   logistica: ['dashboard', 'registro_lectura', 'registro_escritura', 'codigos', 'agenda',
-              'cambios', 'incidentes', 'exportar', 'comunicacion', 'agrupaciones', 'pistas', 'pistas_lectura', 'videos'],
+              'cambios', 'incidentes', 'exportar', 'comunicacion', 'agrupaciones', 'pistas', 'pistas_lectura', 'videos',
+              'reemplazos', 'consolidar', 'seguro'],
   checkin:   ['checkin', 'registro_lectura_minimo', 'incidentes', 'pistas_lectura'],
   jurado:    ['evaluar', 'lista_audicion_minima']
 };
@@ -453,7 +522,7 @@ function configuracionPorDefecto() {
     ['evento_fecha', '2026-10-23', 'Fecha de audiciones (AAAA-MM-DD). Base del calculo de edad.'],
     ['evento_hora_inicio', '15:00', 'Inicio de la jornada (HH:MM, 24 h). El primer bloque empieza a esta hora.'],
     ['evento_hora_fin', '21:00', 'Fin de la jornada (HH:MM, 24 h).'],
-    ['evento_sede', 'Centro Comercial Mayorca', 'Lugar de las audiciones.'],
+    ['evento_sede', 'Centro Comercial Mayorca · Etapa 1', 'Lugar de las audiciones.'],
     ['evento_municipio_sede', 'Sabaneta, Antioquia', 'Municipio del lugar.'],
     ['evento_direccion', '', 'Punto exacto dentro del lugar (plazoleta, piso, entrada). Vacio = no se muestra.'],
     ['cupo_total', '100', 'Numero de codigos definitivos B-001..B-100. Una agrupacion = un cupo.'],
@@ -468,9 +537,23 @@ function configuracionPorDefecto() {
     ['contingencia_inicio', '20:30', 'Inicio de la ventana de contingencia (HH:MM).'],
     ['cierre_audiciones', '21:00', 'Cierre definitivo de audiciones (HH:MM).'],
     ['cierre_cambios', '2026-10-22T18:00:00-05:00', 'Fecha y hora limite del Formulario 2 (cambio de horario).'],
-    ['top_seleccionados', '7', 'Numero de artistas/proyectos seleccionados (confirmado por la organizacion: 7).'],
+    ['top_seleccionados', '10', 'Seleccionados PUBLICOS (Top 10). Release QA 2026-09-29.'],
+    ['top_privado', '20', 'Ranking PRIVADO (Top 20): nunca se publica.'],
     ['jurados', '3', 'Numero de jurados.'],
-    ['minimo_jurados', '2', 'Tarjetas validas minimas para entrar al ranking.'],
+    ['minimo_jurados', '3', 'Evaluaciones ENVIADAS necesarias para entrar al ranking (promedio de los 3 jurados).'],
+    ['bolsa_aptos', '200', 'Tamano de la bolsa interna de aptos: 1-100 principales, 101-200 suplentes.'],
+    ['reemplazos_desde', '2026-10-16T00:00:00-05:00', 'Desde aqui el participante ve "NO PUEDO ASISTIR - SOLICITAR REEMPLAZO".'],
+    ['reemplazo_limite', '2026-10-22T12:00:00-05:00', 'Despues de esta hora un cupo liberado queda VACANTE_SIN_REEMPLAZO (no se ofrece).'],
+    ['suplente_horas_respuesta', '24', 'Horas que tiene un suplente para aceptar un cupo ofrecido.'],
+    ['confirmacion_final_desde', '2026-10-22T00:00:00-05:00', 'Inicio de la CONFIRMACION FINAL DE ASISTENCIA.'],
+    ['confirmacion_final_hasta', '2026-10-22T20:00:00-05:00', 'Fin de la confirmacion final.'],
+    ['lista_oficial_bloqueada', 'NO', 'SI = lista oficial consolidada: no hay cambios ordinarios. Lo pone el boton CONSOLIDAR.'],
+    ['lista_oficial_version', '', 'Version de la lista oficial consolidada (la escribe el sistema).'],
+    ['lista_oficial_at', '', 'Fecha y hora de la consolidacion (la escribe el sistema).'],
+    ['lista_oficial_by', '', 'Quien consolido la lista (lo escribe el sistema).'],
+    ['lista_oficial_nombre', 'ROSTER_FINAL_2026-10-22', 'Nombre de la hoja que guarda la foto de la lista oficial consolidada.'],
+    ['resultados_cerrados', 'NO', 'SI = resultados cerrados: evaluaciones bloqueadas y Top 10 definitivo.'],
+    ['enlaces_equipo_vencen', '2026-10-24', 'Ultimo dia en que abren los enlaces de equipo y firmas de cada proyecto.'],
     ['inscripciones_abiertas', 'SI', 'SI / NO. Cierra el Formulario 1 sin tocar codigo.'],
     ['cambios_abiertos', 'SI', 'SI / NO. Cierra el Formulario 2 sin tocar codigo.'],
     ['integrantes_abierto', 'SI', 'SI / NO. Cierra el formulario de integrantes.'],
@@ -480,6 +563,7 @@ function configuracionPorDefecto() {
     ['integrantes_max', '15', 'Maximo de integrantes en escena de una agrupacion.'],
     ['integrantes_edad_minima', '18', 'Edad minima de cada integrante (el documento legal exige mayoria de edad).'],
     ['firma_integrantes', 'SI', 'SI pide firma dibujada a cada integrante (evidencia, no firma electronica calificada).'],
+    ['firma_inscripcion', 'SI', 'SI pide la firma dibujada de quien inscribe el proyecto al final del Formulario 1 (solista, lider de duo o agrupacion).'],
     ['pista_max_mb', '15', 'Tamano maximo de una pista en MB.'],
     ['pista_formatos', 'mp3,wav,m4a,aac,ogg,flac', 'Extensiones de audio aceptadas.'],
     ['correo_confirmacion_automatico', 'SI', 'SI envia un correo al recibir cada inscripcion (cuota Gmail ~100/dia).'],
@@ -495,8 +579,8 @@ function configuracionPorDefecto() {
     ['institutional_phone', '3042328502', 'Telefono informado.'],
     ['canal_fisico_reclamos', 'Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia', 'Canal fisico para derechos y reclamos (la direccion del responsable).'],
     ['datos_legales_verificados', 'SI', 'Datos legales confirmados por la organizacion (2026-09-24).'],
-    ['terms_version', 'v1-2026-09-24', 'Version de los Terminos y Condiciones publicados (legal/TERMINOS_Y_CONDICIONES_v1.md).'],
-    ['policy_version', 'v2-2026-09-24', 'Version de la politica de tratamiento de datos.'],
+    ['terms_version', 'v2-2026-09-29', 'Version de los Terminos y Condiciones publicados (legal/TERMINOS_Y_CONDICIONES_v2.md).'],
+    ['policy_version', 'v3-2026-09-29', 'Version de la politica de tratamiento de datos (v3: equipo de trabajo y lista para la poliza del C.C. Mayorca).'],
     ['consent_version', 'v2', 'Version del formulario de autorizaciones.'],
     ['domain', '', 'Dominio propio del sitio, cuando exista. Vacio = se usa sitio_url.'],
     ['sitio_url', 'https://elbunkerarte.github.io/', 'Direccion publica del sitio informativo.'],
@@ -509,7 +593,8 @@ function configuracionPorDefecto() {
     ['whatsapp_oficial', '3239836182', 'Numero oficial desde el que se envian codigos y horarios.'],
     ['whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución', 'Nombre con el que el participante debe guardar el numero.'],
     ['contacto_whatsapp', '3239836182', 'WhatsApp de dudas operativas.'],
-    ['instagram', 'aesproducciones_', 'Instagram de la convocatoria.']
+    ['instagram', 'elarteeslasolucion_', 'Instagram principal de la convocatoria.'],
+    ['instagram_aes', 'aesproducciones_', 'Instagram de AES (secundario).']
   ];
 }
 
@@ -529,7 +614,14 @@ var CONFIG_ITERATION1_VALUES = {
   cierre_audiciones: ['21:30', '1899-12-30T21:30:00'],
   contingencia_inicio: ['21:00', '1899-12-30T21:00:00'],
   consent_version: ['v1-PENDIENTE'],
-  datos_legales_verificados: ['NO']
+  datos_legales_verificados: ['NO'],
+  // Iteration-2 defaults superseded by the release QA (2026-09-29): replaced only if still untouched.
+  top_seleccionados: ['7'],
+  minimo_jurados: ['2'],
+  evento_sede: ['Centro Comercial Mayorca'],
+  terms_version: ['v1-2026-09-24'],
+  policy_version: ['v2-2026-09-24'],
+  instagram: ['aesproducciones_']
 };
 
 /** Reads CONFIG into a plain object, cached per execution. */
@@ -598,6 +690,21 @@ function agendaConfigurada() {
   };
 }
 
+/** Calendar of the replacement and confirmation stages, read from CONFIG. */
+function operationCalendar() {
+  return {
+    reemplazos_desde: cfg('reemplazos_desde', ''),
+    reemplazo_limite: cfg('reemplazo_limite', ''),
+    confirmacion_final_desde: cfg('confirmacion_final_desde', ''),
+    confirmacion_final_hasta: cfg('confirmacion_final_hasta', ''),
+    lista_bloqueada: cfgBool('lista_oficial_bloqueada', false)
+  };
+}
+
+function poolOptions() {
+  return { cupo: cfgNumero('cupo_total', 100), bolsa: cfgNumero('bolsa_aptos', 200) };
+}
+
 function opcionesValidacion() {
   return {
     fecha_evento: cfgFecha('evento_fecha', '2026-10-23'),
@@ -625,14 +732,34 @@ function dataControllerStamp() {
  * must stay free of Apps Script globals.
  */
 
-/** Eligibility / duplicate vocabulary. Kept as constants so typos fail loudly. */
+/**
+ * Eligibility vocabulary (release QA, section 3). Kept as constants so typos fail loudly.
+ * RECIBIDO is what every new submission gets: the automatic check is stored apart
+ * (eligibility_auto) and only becomes APTO / NO_APTO / ... when staff confirm it, so a
+ * receipt can never be mistaken for a pass.
+ */
 var ESTADO_ELEGIBILIDAD = {
+  RECIBIDO: 'RECIBIDO',
+  EN_REVISION: 'EN_REVISION',
   APTO: 'APTO',
+  NO_APTO: 'NO_APTO',
   INCOMPLETO: 'INCOMPLETO',
-  NO_CUMPLE: 'NO_CUMPLE',
-  REVISION: 'REVISION',
   DUPLICADO: 'DUPLICADO'
 };
+
+/** Participant-facing wording of each eligibility state. */
+var ELIGIBILITY_LABELS = {
+  RECIBIDO: 'Recibida', EN_REVISION: 'En revisión', APTO: 'Apto', NO_APTO: 'No apto',
+  INCOMPLETO: 'Incompleta', DUPLICADO: 'Duplicada'
+};
+
+/** Iteration-1/2 values still found in old rows and backups. */
+function normalizeEligibility(value) {
+  var v = normalizarComparable(value).replace(/\s+/g, '_');
+  if (v === 'REVISION') return ESTADO_ELEGIBILIDAD.EN_REVISION;
+  if (v === 'NO_CUMPLE' || v === 'NOCUMPLE') return ESTADO_ELEGIBILIDAD.NO_APTO;
+  return v;
+}
 
 var MOTIVO_DUPLICADO = {
   NINGUNO: '',
@@ -934,11 +1061,11 @@ function validarInscripcion(datos, opciones) {
   });
 
   if (tieneErrorDeRegla) {
-    estado = ESTADO_ELEGIBILIDAD.NO_CUMPLE;
+    estado = ESTADO_ELEGIBILIDAD.NO_APTO;
   } else if (errores.length > 0) {
     estado = ESTADO_ELEGIBILIDAD.INCOMPLETO;
   } else if (avisos.length > 0) {
-    estado = ESTADO_ELEGIBILIDAD.REVISION;
+    estado = ESTADO_ELEGIBILIDAD.EN_REVISION;
   } else {
     estado = ESTADO_ELEGIBILIDAD.APTO;
   }
@@ -1126,6 +1253,23 @@ function nextGroupNumber(rows) {
   return max + 1;
 }
 
+/** EQ-001 style team code of a soloist project (a group's team code is its GRP code). */
+function formatTeamCode(n) {
+  var s = String(n);
+  while (s.length < 3) s = '0' + s;
+  return 'EQ-' + s;
+}
+
+/** Next soloist team number: one above the highest ever issued, never reused. */
+function nextTeamNumber(rows) {
+  var max = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var m = String(rows[i].team_code || '').match(/^EQ-(\d+)$/i);
+    if (m && parseInt(m[1], 10) > max) max = parseInt(m[1], 10);
+  }
+  return max + 1;
+}
+
 var MEMBER_STATUS = {
   AUTORIZADO: 'AUTORIZADO',
   INCOMPLETO: 'INCOMPLETO',
@@ -1142,10 +1286,16 @@ function validateMember(datos, options) {
   var eventDate = options.fecha_evento || '2026-10-23';
   var requireSignature = options.firma_obligatoria !== false;
   var errors = [];
+  var crew = normalizePersonRole(datos.person_role) === PERSON_ROLE.EQUIPO_TRABAJO;
 
-  ['full_name', 'id_number', 'birth_date', 'artistic_role'].forEach(function (field) {
+  // Performers describe what they do on stage; crew members pick their role from the list.
+  ['full_name', 'id_number', 'birth_date'].concat(crew ? ['crew_role'] : ['artistic_role']).forEach(function (field) {
     if (!normalizarTexto(datos[field])) errors.push({ campo: field, codigo: 'FALTANTE', mensaje: 'Campo obligatorio.' });
   });
+  if (crew && normalizarTexto(datos.crew_role) &&
+      CREW_ROLES.indexOf(normalizarComparable(datos.crew_role).replace(/[^A-Z]/g, '')) === -1) {
+    errors.push({ campo: 'crew_role', codigo: 'FORMATO', mensaje: 'Rol de equipo no válido.' });
+  }
   ['adult_confirmation', 'accept_terms', 'accept_data_processing'].forEach(function (field) {
     if (!esVerdadero(datos[field])) errors.push({ campo: field, codigo: 'CONSENTIMIENTO', mensaje: 'Declaración o autorización obligatoria.' });
   });
@@ -1171,7 +1321,7 @@ function validateMember(datos, options) {
   var status = MEMBER_STATUS.AUTORIZADO;
   if (errors.some(function (e) { return e.codigo === 'EDAD'; })) status = MEMBER_STATUS.NO_CUMPLE;
   else if (errors.length) status = MEMBER_STATUS.INCOMPLETO;
-  return { status: status, age: age, errors: errors };
+  return { status: status, age: age, errors: errors, person_role: crew ? PERSON_ROLE.EQUIPO_TRABAJO : PERSON_ROLE.INTERPRETE };
 }
 
 /**
@@ -1250,6 +1400,47 @@ function maskPhone(value) {
   return '*** *** ' + phone.slice(-4);
 }
 
+// ---------------------------------------------------------------------------
+// People and roles (release QA, section 2)
+// ---------------------------------------------------------------------------
+
+/** A person on stage (counts toward the project) or a crew member (never takes a seat, never ranked). */
+var PERSON_ROLE = { INTERPRETE: 'INTERPRETE', EQUIPO_TRABAJO: 'EQUIPO_TRABAJO' };
+
+var CREW_ROLES = ['MANAGER', 'PRODUCTOR', 'TECNICO', 'ASISTENTE', 'FOTOGRAFO', 'OTRO'];
+var CREW_ROLE_LABELS = {
+  MANAGER: 'Manager', PRODUCTOR: 'Productor(a)', TECNICO: 'Técnico(a)', ASISTENTE: 'Asistente',
+  FOTOGRAFO: 'Fotógrafo(a) / video', OTRO: 'Otro'
+};
+
+var DOCUMENT_TYPES = ['CC', 'CE', 'PPT', 'PASAPORTE'];
+var DOCUMENT_TYPE_LABELS = { CC: 'Cédula de ciudadanía', CE: 'Cédula de extranjería', PPT: 'PPT', PASAPORTE: 'Pasaporte' };
+
+function normalizePersonRole(value) {
+  var v = normalizarComparable(value).replace(/[^A-Z]/g, '');
+  if (v === 'EQUIPOTRABAJO' || v === 'EQUIPO' || v === 'CREW') return PERSON_ROLE.EQUIPO_TRABAJO;
+  return PERSON_ROLE.INTERPRETE;
+}
+
+function normalizeDocumentType(value) {
+  var v = normalizarComparable(value).replace(/[^A-Z]/g, '');
+  return DOCUMENT_TYPES.indexOf(v) !== -1 ? v : 'CC';
+}
+
+/**
+ * Stable person identifier derived from the ID number: the same person in two projects (or
+ * in two roles) is ONE person. Not reversible to the document number.
+ */
+function personIdFor(normalizedIdNumber) {
+  var doc = normalizarCedula(normalizedIdNumber);
+  if (!doc) return '';
+  var h = 5381;
+  for (var i = 0; i < doc.length; i++) h = ((h * 33) ^ doc.charCodeAt(i)) >>> 0;
+  var h2 = 52711;
+  for (var j = doc.length - 1; j >= 0; j--) h2 = ((h2 * 31) ^ doc.charCodeAt(j)) >>> 0;
+  return 'P-' + (h.toString(36) + h2.toString(36)).toUpperCase().slice(0, 10);
+}
+
 // ========================================================================
 // 02_core_codigos.gs
 // ========================================================================
@@ -1290,9 +1481,10 @@ function esCodigoValido(codigo, cupo) {
  *  1. Only APTO + non-duplicate rows receive a code.
  *  2. Order is submission order (created_at, tie-broken by submission_id) so the
  *     assignment is deterministic and reproducible from a backup.
- *  3. A row that ALREADY has a code keeps it forever - a code is never reused,
- *     never renumbered and never freed, even if the row is later disqualified.
- *  4. At most `cupo` codes exist. Overflow rows get LISTA_ESPERA, never a code.
+ *  3. A row that ALREADY has a code keeps it - codes are never renumbered.
+ *     A number that was ever issued (and later freed by a withdrawal) is NOT handed out
+ *     here: a freed slot only changes hands through a substitute offer, with history.
+ *  4. At most `cupo` codes exist. Overflow rows become substitutes (computePool), never get a code here.
  *  5. The function is idempotent: running it twice changes nothing.
  *
  * @returns {{asignados:Array, sin_cupo:Array, ya_tenian:number, siguiente:number}}
@@ -1317,11 +1509,14 @@ function asignarCodigos(registros, opciones) {
     yaTenian++;
     if (n > maximoUsado) maximoUsado = n;
   }
+  var everIssued = issuedSlotNumbers(registros);
+  Object.keys(everIssued).forEach(function (k) { ocupados[k] = true; });
 
   // --- 2. Candidates, in submission order. ----------------------------------
   var candidatos = registros.filter(function (r) {
     if (normalizarTexto(r.code)) return false;                       // already has one
     if (r.duplicate_flag === true || normalizarComparable(r.duplicate_flag) === 'TRUE') return false;
+    if (isWithdrawn(r) || normalizarComparable(r.pool_status) === POOL_STATUS.DECLINO) return false;
     return normalizarComparable(r.eligibility_status) === ESTADO_ELEGIBILIDAD.APTO;
   });
 
@@ -1366,6 +1561,245 @@ function asignarCodigos(registros, opciones) {
     cupo: cupo,
     total_con_codigo: yaTenian + asignados.length
   };
+}
+
+// ---------------------------------------------------------------------------
+// Pool of eligible projects: 100 principal slots + substitutes up to 200
+// ---------------------------------------------------------------------------
+
+var POOL_SIZE = 200;
+
+var POOL_STATUS = {
+  PRINCIPAL: 'PRINCIPAL',           // holds a slot code B-001..B-100
+  SUPLENTE: 'SUPLENTE',             // eligible, inside the pool, no slot yet
+  FUERA_DE_BOLSA: 'FUERA_DE_BOLSA', // eligible but past position 200
+  DECLINO: 'DECLINO',               // a substitute who turned down (or let expire) an offer
+  RETIRADO: 'RETIRADO'              // withdrew; keeps its history, never offered again
+};
+
+var WITHDRAWAL = { RETIRADO: 'RETIRADO', RETIRO_FINAL: 'RETIRO_FINAL' };
+
+var OFFER_STATUS = {
+  PENDIENTE: 'PENDIENTE',
+  ACEPTADA: 'ACEPTADA',
+  RECHAZADA: 'RECHAZADA',
+  VENCIDA: 'VENCIDA',
+  CANCELADA: 'CANCELADA',
+  VACANTE: 'VACANTE_SIN_REEMPLAZO'   // the slot was closed without a substitute
+};
+
+var SLOT_STATUS = {
+  ASIGNADO: 'ASIGNADO',
+  OFRECIDO: 'OFRECIDO',
+  LIBERADO: 'LIBERADO',
+  VACANTE_SIN_REEMPLAZO: 'VACANTE_SIN_REEMPLAZO',
+  SIN_EMITIR: 'SIN_EMITIR'
+};
+
+function byCreatedAt(a, b) {
+  var ta = String(a.created_at || '');
+  var tb = String(b.created_at || '');
+  if (ta < tb) return -1;
+  if (ta > tb) return 1;
+  return String(a.submission_id || '') < String(b.submission_id || '') ? -1 : 1;
+}
+
+function isWithdrawn(r) {
+  return !!normalizarComparable(r.withdrawal_status);
+}
+
+/** Eligible for the pool: APTO, not a duplicate, not withdrawn. The order is objective: submission time. */
+function poolCandidates(registros) {
+  return (registros || []).filter(function (r) {
+    if (r.duplicate_flag === true || normalizarComparable(r.duplicate_flag) === 'TRUE') return false;
+    if (isWithdrawn(r)) return false;
+    return normalizarComparable(r.eligibility_status) === ESTADO_ELEGIBILIDAD.APTO;
+  }).sort(byCreatedAt);
+}
+
+/**
+ * Objective pool order (no score is ever used before the audition).
+ * priority_rank = position among eligible projects by submission time.
+ * Slot holders are PRINCIPAL; the next (poolSize - cupo) non-holders are SUPLENTE in
+ * priority order; the rest are FUERA_DE_BOLSA. Substitutes who declined keep DECLINO.
+ * @returns {{filas:Array<{submission_id,priority_rank,pool_status}>, principales:number, suplentes:number, fuera:number}}
+ */
+function computePool(registros, opciones) {
+  opciones = opciones || {};
+  var cupo = opciones.cupo || CUPO_MAXIMO;
+  var poolSize = Math.max(opciones.bolsa || POOL_SIZE, cupo);
+  var candidates = poolCandidates(registros);
+  var substituteSeats = poolSize - cupo;
+  var rows = [];
+  var principals = 0, substitutes = 0, outside = 0;
+
+  candidates.forEach(function (r, i) {
+    var status;
+    if (normalizarTexto(r.code)) { status = POOL_STATUS.PRINCIPAL; principals++; }
+    else if (normalizarComparable(r.pool_status) === POOL_STATUS.DECLINO) status = POOL_STATUS.DECLINO;
+    else if (substitutes < substituteSeats) { status = POOL_STATUS.SUPLENTE; substitutes++; }
+    else { status = POOL_STATUS.FUERA_DE_BOLSA; outside++; }
+    rows.push({ submission_id: r.submission_id, priority_rank: i + 1, pool_status: status });
+  });
+
+  var ranked = {};
+  rows.forEach(function (p) { ranked[p.submission_id] = true; });
+  (registros || []).forEach(function (r) {
+    if (isWithdrawn(r)) { rows.push({ submission_id: r.submission_id, priority_rank: '', pool_status: POOL_STATUS.RETIRADO }); return; }
+    // A slot holder whose eligibility was reopened keeps its seat until staff decide: still PRINCIPAL.
+    if (!ranked[r.submission_id] && normalizarTexto(r.code)) {
+      rows.push({ submission_id: r.submission_id, priority_rank: '', pool_status: POOL_STATUS.PRINCIPAL });
+      principals++;
+    }
+  });
+  return { filas: rows, principales: principals, suplentes: substitutes, fuera: outside };
+}
+
+/** Numbers that were ever issued (current holders and previous holders): a released slot is only re-given through an offer. */
+function issuedSlotNumbers(registros) {
+  var issued = {};
+  (registros || []).forEach(function (r) {
+    [r.code, r.previous_code].forEach(function (c) {
+      String(c || '').split(/[,\s]+/).forEach(function (one) {
+        var n = numeroDeCodigo(one);
+        if (n !== null && normalizarTexto(one)) issued[n] = true;
+      });
+    });
+  });
+  return issued;
+}
+
+/**
+ * Slot status for B-001..B-cupo from the registry (holder = row whose `code` is the slot)
+ * and the offer ledger (latest offer row of each slot).
+ */
+function slotStatuses(registros, ofertas, opciones) {
+  opciones = opciones || {};
+  var cupo = opciones.cupo || CUPO_MAXIMO;
+  var holders = {};
+  (registros || []).forEach(function (r) {
+    if (normalizarTexto(r.code)) holders[normalizarComparable(r.code)] = r;
+  });
+  var latest = {};
+  (ofertas || []).forEach(function (o) {
+    var slot = normalizarComparable(o.slot_code);
+    if (!slot) return;
+    if (!latest[slot] || String(o.created_at || '') >= String(latest[slot].created_at || '')) latest[slot] = o;
+  });
+  var issued = issuedSlotNumbers(registros);
+  var out = [];
+  for (var n = 1; n <= cupo; n++) {
+    var code = formatearCodigo(n);
+    var holder = holders[code];
+    var offer = latest[code];
+    var status;
+    if (holder) status = SLOT_STATUS.ASIGNADO;
+    else if (offer && normalizarComparable(offer.estado) === OFFER_STATUS.PENDIENTE) status = SLOT_STATUS.OFRECIDO;
+    else if (offer && normalizarComparable(offer.estado) === OFFER_STATUS.VACANTE) status = SLOT_STATUS.VACANTE_SIN_REEMPLAZO;
+    else if (issued[n]) status = SLOT_STATUS.LIBERADO;
+    else status = SLOT_STATUS.SIN_EMITIR;
+    out.push({
+      slot_code: code, status: status,
+      holder_submission_id: holder ? holder.submission_id : '',
+      offer_id: offer ? offer.oferta_id : '', offered_to: offer && status === SLOT_STATUS.OFRECIDO ? offer.submission_id : ''
+    });
+  }
+  return out;
+}
+
+/**
+ * Next substitute to offer a freed slot to: SUPLENTE by priority, without a pending offer,
+ * never someone who already declined or withdrew. Never two open offers for one person.
+ */
+function nextSubstitute(registros, ofertas, opciones) {
+  var pool = computePool(registros, opciones);
+  var pending = {};
+  (ofertas || []).forEach(function (o) {
+    if (normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE) pending[normalizarComparable(o.submission_id)] = true;
+  });
+  var bySubmission = {};
+  (registros || []).forEach(function (r) { bySubmission[r.submission_id] = r; });
+  var candidates = pool.filas.filter(function (p) {
+    return p.pool_status === POOL_STATUS.SUPLENTE && !pending[normalizarComparable(p.submission_id)];
+  }).sort(function (a, b) { return a.priority_rank - b.priority_rank; });
+  return candidates.length ? Object.assign({}, bySubmission[candidates[0].submission_id], candidates[0]) : null;
+}
+
+/** Offer expiry: `hours` after `from`, never later than the replacement deadline. */
+function offerExpiry(fromIso, hours, deadlineIso) {
+  var expires = new Date(new Date(fromIso).getTime() + (Number(hours) || 24) * 3600000);
+  if (deadlineIso) {
+    var deadline = new Date(deadlineIso);
+    if (!isNaN(deadline.getTime()) && deadline.getTime() < expires.getTime()) expires = deadline;
+  }
+  return expires.toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// Calendar windows (all dates come from CONFIG)
+// ---------------------------------------------------------------------------
+
+/**
+ * Which participant-side operations are open at `now`.
+ * - withdrawal button ("NO PUEDO ASISTIR"): from reemplazos_desde until the list is consolidated
+ * - automatic substitute offers: until reemplazo_limite (after it a freed slot stays vacant)
+ * - final confirmation: from confirmacion_final_desde until confirmacion_final_hasta
+ * - the consolidated official list freezes every ordinary change
+ */
+function operationWindows(nowIso, calendar) {
+  var now = new Date(nowIso || new Date().toISOString()).getTime();
+  var c = calendar || {};
+  function at(v) { var d = v ? new Date(v) : null; return d && !isNaN(d.getTime()) ? d.getTime() : null; }
+  var locked = !!c.lista_bloqueada;
+  var from = at(c.reemplazos_desde);
+  var limit = at(c.reemplazo_limite);
+  var confFrom = at(c.confirmacion_final_desde);
+  var confTo = at(c.confirmacion_final_hasta);
+  return {
+    lista_bloqueada: locked,
+    retiro_abierto: !locked && from !== null && now >= from,
+    reemplazo_viable: !locked && (limit === null || now < limit),
+    confirmacion_abierta: !locked && confFrom !== null && now >= confFrom && (confTo === null || now <= confTo)
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Participation status (derived, one function, used by every screen and export)
+// ---------------------------------------------------------------------------
+
+var PARTICIPATION = {
+  SIN_TURNO: 'SIN_TURNO',
+  INVITADO: 'INVITADO',
+  CONFIRMADO: 'CONFIRMADO',
+  CAMBIO_PENDIENTE: 'CAMBIO_PENDIENTE',
+  CAMBIO_APROBADO: 'CAMBIO_APROBADO',
+  NO_CONFIRMADO: 'NO_CONFIRMADO',
+  NO_SHOW: 'NO_SHOW',
+  CONTINGENCIA: 'CONTINGENCIA',
+  AUDICIONADO: 'AUDICIONADO',
+  NO_AUDICIONADO: 'NO_AUDICIONADO',
+  RETIRADO: 'RETIRADO',
+  RETIRO_FINAL: 'RETIRO_FINAL'
+};
+
+/** `offerPending` = this project holds an open substitute offer. */
+function participationStatus(r, offerPending) {
+  var attendance = normalizarComparable(r.attendance_status).replace(/[_-]+/g, ' ');
+  if (attendance === 'REALIZADA') return PARTICIPATION.AUDICIONADO;
+  if (attendance === 'NO AUDICIONADO') return PARTICIPATION.NO_AUDICIONADO;
+  if (attendance === 'NO SHOW') return PARTICIPATION.NO_SHOW;
+  if (attendance === 'CONTINGENCIA') return PARTICIPATION.CONTINGENCIA;
+  var withdrawal = normalizarComparable(r.withdrawal_status);
+  if (withdrawal === WITHDRAWAL.RETIRO_FINAL) return PARTICIPATION.RETIRO_FINAL;
+  if (withdrawal === WITHDRAWAL.RETIRADO) return PARTICIPATION.RETIRADO;
+  if (offerPending) return PARTICIPATION.INVITADO;
+  if (!normalizarTexto(r.code)) return PARTICIPATION.SIN_TURNO;
+  if (normalizarComparable(r.final_confirmation) === 'NO') return PARTICIPATION.NO_CONFIRMADO;
+  var change = normalizarComparable(r.change_status);
+  if (change === 'PENDIENTE') return PARTICIPATION.CAMBIO_PENDIENTE;
+  if (normalizarComparable(r.final_confirmation) === 'SI') return PARTICIPATION.CONFIRMADO;
+  if (change === 'APROBADO') return PARTICIPATION.CAMBIO_APROBADO;
+  return PARTICIPATION.INVITADO;
 }
 
 // ========================================================================
@@ -1690,273 +2124,551 @@ function deadlineText(value) {
 // ========================================================================
 
 /**
- * EL BUNKER - Core: scoring rubric, consolidation and final selection.
+ * EL BUNKER - Core: official jury rubric, per-juror scoring, consolidation and ranking.
  * PURE FUNCTIONS ONLY.
+ *
+ * Source of the rubric: "rubrica-jurado-daviarena.pdf" (the organization's official jury
+ * rubric, adopted for this call on 2026-09-29). The venue named in that PDF is NOT this
+ * event's venue; only the categories, factors, scale and level anchors are used, verbatim.
+ *
+ * The rubric is a parameter, not code: the PARAMETROS_RUBRICA sheet holds it (see
+ * rubricFromRows) and RUBRIC_DEFAULT only seeds that sheet and backs the tests.
  */
 
-/** Weights sum to 100. Order matters: it is the tie-break order's source. */
-var RUBRICA = [
-  { id: 'talento',       etiqueta: 'Talento / ejecución',        peso: 20 },
-  { id: 'performance',   etiqueta: 'Performance',                peso: 20 },
-  { id: 'identidad',     etiqueta: 'Identidad artística',        peso: 15 },
-  { id: 'repertorio',    etiqueta: 'Repertorio / originalidad',  peso: 10 },
-  { id: 'profesionalismo', etiqueta: 'Profesionalismo',          peso: 10 },
-  { id: 'presencia',     etiqueta: 'Presencia escénica',         peso: 10 },
-  { id: 'digital',       etiqueta: 'Presencia digital / comunidad', peso: 5 },
-  { id: 'proyecto',      etiqueta: 'Proyecto / compromiso',      peso: 10 }
+var RUBRIC_VERSION_DEFAULT = 'R1-2026-09-29 (rubrica-jurado-daviarena.pdf)';
+var RATING_MIN = 1;
+var RATING_MAX = 5;
+var RUBRIC_TOTAL_MAX = 100;
+
+/** Level names of the 1-5 scale, as printed in the PDF. */
+var RUBRIC_SCALE = [
+  { nota: 1, etiqueta: 'Insuficiente' },
+  { nota: 2, etiqueta: 'Regular' },
+  { nota: 3, etiqueta: 'Bueno' },
+  { nota: 4, etiqueta: 'Muy bueno' },
+  { nota: 5, etiqueta: 'Nivel arena' }
 ];
 
-/** Documented tie-break ladder: Performance > Talento > Identidad > committee. */
-var ORDEN_DESEMPATE = ['performance', 'talento', 'identidad'];
-
-var ESCALA = [
-  { desde: 1, hasta: 3,  etiqueta: 'Deficiente / evidencia insuficiente' },
-  { desde: 4, hasta: 6,  etiqueta: 'Base con limitaciones' },
-  { desde: 7, hasta: 8,  etiqueta: 'Buen nivel consistente' },
-  { desde: 9, hasta: 10, etiqueta: 'Sobresaliente / diferenciado' }
+/**
+ * Seven categories, factors 4-4-3-3-2-2-2: rating (1-5) x factor = points, so a juror's total
+ * runs from 20 (all 1) to 100 (all 5). `desempate` marks the two categories whose combined
+ * points break ties (PDF: "Mayor puntaje en Presencia escénica y Factor arena combinados").
+ */
+var RUBRIC_DEFAULT = [
+  {
+    id: 'afinacion', orden: 1, factor: 4, desempate: false,
+    categoria: 'Afinación y técnica vocal',
+    corta: 'Afinación y técnica vocal',
+    categoria_no_vocal: 'Dominio técnico de la voz/instrumento principal',
+    descripcion: 'Control de tono, respiración, registro y estabilidad de la voz en vivo — sin autotune ni “salvavidas” de pista.',
+    niveles: [
+      'Desafinaciones frecuentes, se queda sin aire, pierde el control en notas sostenidas.',
+      'Afina la mayor parte, pero se nota inseguridad técnica en los pasajes difíciles.',
+      'Técnica sólida y consistente, maneja bien su registro natural.',
+      'Control técnico notable, domina matices, dinámica y respiración con soltura.',
+      'Técnica impecable incluso bajo la exigencia física de un show en vivo largo.'
+    ]
+  },
+  {
+    id: 'presencia', orden: 2, factor: 4, desempate: true,
+    categoria: 'Presencia escénica y dominio del escenario',
+    corta: 'Presencia escénica',
+    categoria_no_vocal: '',
+    descripcion: 'Uso del espacio, lenguaje corporal, seguridad frente al público y capacidad de “llenar” un escenario grande.',
+    niveles: [
+      'Rígido, de espaldas al público, no sabe qué hacer con las manos o el cuerpo.',
+      'Presencia tímida, se mueve poco, le cuesta ocupar el espacio disponible.',
+      'Se desenvuelve con naturalidad, mantiene contacto visual y buena postura.',
+      'Carisma claro, se mueve con intención, transmite seguridad sostenida.',
+      'Magnetismo escénico real: podría sostener solo un escenario grande sin apoyo visual extra.'
+    ]
+  },
+  {
+    id: 'interpretacion', orden: 3, factor: 3, desempate: false,
+    categoria: 'Interpretación y conexión emocional',
+    corta: 'Interpretación y conexión',
+    categoria_no_vocal: '',
+    descripcion: 'Qué tan creíble es lo que canta: fraseo, intención, matices actorales, si “cuenta algo” o solo ejecuta notas.',
+    niveles: [
+      'Interpretación plana, sin matices ni conexión con la letra.',
+      'Hay algo de intención, pero se siente mecánico o forzado.',
+      'Transmite la emoción de la canción de forma creíble.',
+      'Fraseo personal, matices claros, genera una reacción real en quien escucha.',
+      'Interpretación que eriza la piel; el jurado olvida que está calificando.'
+    ]
+  },
+  {
+    id: 'originalidad', orden: 4, factor: 3, desempate: false,
+    categoria: 'Originalidad y propuesta artística',
+    corta: 'Originalidad y propuesta',
+    categoria_no_vocal: '',
+    descripcion: 'Identidad propia: arreglos, versión personal de un cover, imagen coherente con su sonido.',
+    niveles: [
+      'Copia genérica de referentes, cero sello propio.',
+      'Algún intento de diferenciarse, pero poco definido.',
+      'Propuesta identificable, se nota una dirección artística clara.',
+      'Sonido o puesta en escena distintivos, se recuerda después del show.',
+      'Propuesta tan propia que podría ser su marca personal como artista.'
+    ]
+  },
+  {
+    id: 'ritmo', orden: 5, factor: 2, desempate: false,
+    categoria: 'Ritmo, sincronía y trabajo con banda/pista',
+    corta: 'Ritmo y sincronía',
+    categoria_no_vocal: '',
+    descripcion: 'Precisión rítmica, sincronía con músicos o pista, entradas y cortes limpios.',
+    niveles: [
+      'Se descuadra con la música, entradas y cortes desordenados.',
+      'Mantiene el tiempo casi siempre, con algunos desfases.',
+      'Sincronía sólida con banda o pista durante toda la presentación.',
+      'Groove natural, ajusta y responde a la banda en tiempo real.',
+      'Precisión de sesión profesional, cero margen de error visible.'
+    ]
+  },
+  {
+    id: 'repertorio', orden: 6, factor: 2, desempate: false,
+    categoria: 'Repertorio: elección y dificultad',
+    corta: 'Repertorio',
+    categoria_no_vocal: '',
+    descripcion: 'Si la canción elegida exige y muestra el rango real del artista, y si encaja con el público del evento.',
+    niveles: [
+      'Canción muy fácil o inadecuada para el formato del evento.',
+      'Elección correcta pero segura, no reta al artista.',
+      'Repertorio bien elegido, exige y a la vez encaja con el público.',
+      'Canción exigente que el artista domina y usa a su favor.',
+      'Elección estratégica: reta, encaja y “calienta” perfecto para lo que viene después.'
+    ]
+  },
+  {
+    id: 'arena', orden: 7, factor: 2, desempate: true,
+    categoria: 'Factor arena: capacidad de calentar al público',
+    corta: 'Factor arena',
+    categoria_no_vocal: '',
+    descripcion: 'Lo específico de ser telonero: ¿logra activar a un público que en realidad vino a ver a otro artista?',
+    niveles: [
+      'No genera reacción, el público queda indiferente.',
+      'Genera algo de energía, pero se pierde o no la sostiene.',
+      'Logra enganchar a buena parte del público en pocos minutos.',
+      'Sube la energía de la sala de forma clara y sostenida.',
+      'Deja al público listo y con hambre de más — exactamente el trabajo de un telonero.'
+    ]
+  }
 ];
 
-function pesoTotalRubrica(rubrica) {
-  return (rubrica || RUBRICA).reduce(function (s, f) { return s + f.peso; }, 0);
+/** Disqualification causes, verbatim from the PDF ("Descalifica automáticamente"). */
+var DQ_CAUSES = [
+  { id: 'PLAYBACK', etiqueta: 'Uso de playback sin avisarlo, en formato que exige voz en vivo.' },
+  { id: 'SOUNDCHECK', etiqueta: 'Incumplimiento grave de tiempos de soundcheck o ensayo sin justificación.' },
+  { id: 'CONTENIDO', etiqueta: 'Contenido discriminatorio u ofensivo en repertorio o comportamiento en tarima.' }
+];
+
+/** Tie-break methods after the automatic criterion (PDF "Criterios de desempate"). */
+var TIE_METHODS = [
+  { id: 'REPETIR_CANCION', etiqueta: 'Se repite una canción corta a criterio del jurado' },
+  { id: 'VOTO_CALIDAD', etiqueta: 'Voto de calidad del jurado musical' }
+];
+
+/** Presentation formats where category 1 is read as voice OR main instrument. */
+var NON_VOCAL_FORMATS = ['INSTRUMENTAL', 'DJ_SET', 'OTRA'];
+
+var EVALUATION_STATE = {
+  BORRADOR: 'BORRADOR',       // per card: saved, still editable by the juror
+  ENVIADA: 'ENVIADA'          // per card: submitted and locked
+};
+
+/** Per-project evaluation status (prompt section 3). */
+var EVALUATION_STATUS = {
+  SIN_CALIFICAR: 'SIN_CALIFICAR',
+  PARCIAL: 'PARCIAL',
+  COMPLETA: 'COMPLETA',
+  BLOQUEADA: 'BLOQUEADA',
+  DQ_PENDIENTE: 'DQ_PENDIENTE',
+  DESCALIFICADO: 'DESCALIFICADO'
+};
+
+var RANKING_STATUS = {
+  SIN_RANKING: 'SIN_RANKING',
+  RANKED: 'RANKED',
+  TOP20: 'TOP20',
+  TOP10_SELECCIONADO: 'TOP10_SELECCIONADO',
+  TIE_REVIEW_REQUIRED: 'TIE_REVIEW_REQUIRED',
+  NO_SELECCIONADO: 'NO_SELECCIONADO'
+};
+
+var DQ_STATUS = { PENDIENTE: 'PENDIENTE', VALIDADA: 'VALIDADA', DESCARTADA: 'DESCARTADA' };
+
+// ---------------------------------------------------------------------------
+// The rubric as a parameter
+// ---------------------------------------------------------------------------
+
+/** Header of the PARAMETROS_RUBRICA sheet: one row per category. */
+var RUBRIC_PARAM_COLUMNS = [
+  'version', 'orden', 'id', 'categoria', 'categoria_corta', 'categoria_no_vocal', 'descripcion',
+  'factor', 'puntos_max', 'nivel_1', 'nivel_2', 'nivel_3', 'nivel_4', 'nivel_5', 'desempate'
+];
+
+function rubricToRows(rubric, version) {
+  return (rubric || RUBRIC_DEFAULT).map(function (c) {
+    return {
+      version: version || RUBRIC_VERSION_DEFAULT, orden: c.orden, id: c.id, categoria: c.categoria,
+      categoria_corta: c.corta, categoria_no_vocal: c.categoria_no_vocal || '', descripcion: c.descripcion,
+      factor: c.factor, puntos_max: c.factor * RATING_MAX,
+      nivel_1: c.niveles[0], nivel_2: c.niveles[1], nivel_3: c.niveles[2], nivel_4: c.niveles[3], nivel_5: c.niveles[4],
+      desempate: c.desempate ? 'SI' : 'NO'
+    };
+  });
 }
 
-function esPuntajeValido(valor) {
-  var n = Number(valor);
-  return isFinite(n) && n >= 1 && n <= 10;
+/** Builds the rubric from sheet rows (already read as objects), ordered by `orden`. */
+function rubricFromRows(rows) {
+  var list = (rows || []).filter(function (r) { return normalizarTexto(r.id); }).map(function (r) {
+    return {
+      id: normalizarTexto(r.id).toLowerCase(),
+      orden: Number(r.orden) || 0,
+      factor: Number(r.factor),
+      desempate: normalizarComparable(r.desempate) === 'SI',
+      categoria: normalizarTexto(r.categoria),
+      corta: normalizarTexto(r.categoria_corta) || normalizarTexto(r.categoria),
+      categoria_no_vocal: normalizarTexto(r.categoria_no_vocal),
+      descripcion: normalizarTexto(r.descripcion),
+      niveles: [r.nivel_1, r.nivel_2, r.nivel_3, r.nivel_4, r.nivel_5].map(function (n) { return normalizarTexto(n); })
+    };
+  });
+  list.sort(function (a, b) { return a.orden - b.orden; });
+  var version = rows && rows.length ? normalizarTexto(rows[0].version) : '';
+  return { version: version, categorias: list };
 }
 
 /**
- * One juror's score for one artist.
- * factor_points = (score / 10) * weight  ->  juror_total is on a 0-100 scale.
- * Returns { valido, total, detalle, faltantes } - an incomplete card is INVALID
- * and must not silently count as a low score.
+ * Structural checks. A rubric that fails any of them must not be used to score:
+ * the caller surfaces the errors instead of silently falling back to defaults.
+ */
+function validateRubric(rubric) {
+  var r = rubric || RUBRIC_DEFAULT;
+  var errors = [];
+  if (!r.length) errors.push('La rúbrica no tiene categorías.');
+  var seen = {};
+  var hasTieBreak = false;
+  r.forEach(function (c, i) {
+    var where = 'Categoría ' + (i + 1) + (c.id ? ' (' + c.id + ')' : '');
+    if (!/^[a-z][a-z0-9_]*$/.test(c.id || '')) errors.push(where + ': id inválido (minúsculas, sin espacios).');
+    if (seen[c.id]) errors.push(where + ': id repetido.');
+    seen[c.id] = true;
+    if (!(c.factor > 0) || Math.floor(c.factor) !== c.factor) errors.push(where + ': el factor debe ser un entero mayor que 0.');
+    if (!c.categoria) errors.push(where + ': falta el nombre.');
+    if (!c.niveles || c.niveles.length !== RATING_MAX || c.niveles.some(function (n) { return !n; })) {
+      errors.push(where + ': faltan los textos de los ' + RATING_MAX + ' niveles.');
+    }
+    if (c.desempate) hasTieBreak = true;
+  });
+  var max = rubricMaxTotal(r);
+  if (r.length && max !== RUBRIC_TOTAL_MAX) {
+    errors.push('Los factores suman un máximo de ' + max + ' puntos; deben sumar ' + RUBRIC_TOTAL_MAX + '.');
+  }
+  if (r.length && !hasTieBreak) errors.push('Ninguna categoría está marcada como criterio de desempate.');
+  return { ok: errors.length === 0, errores: errors };
+}
+
+function rubricMaxTotal(rubric) {
+  return (rubric || RUBRIC_DEFAULT).reduce(function (s, c) { return s + c.factor * RATING_MAX; }, 0);
+}
+
+function rubricMinTotal(rubric) {
+  return (rubric || RUBRIC_DEFAULT).reduce(function (s, c) { return s + c.factor * RATING_MIN; }, 0);
+}
+
+/** Short fingerprint of what changes a score (ids + factors), stamped on every card. */
+function rubricFingerprint(rubric) {
+  return (rubric || RUBRIC_DEFAULT).map(function (c) { return c.id + 'x' + c.factor; }).join('|');
+}
+
+/** Category name the juror reads for this participant (category 1 adapts to non-vocal formats). */
+function categoryLabelFor(category, presentationFormat) {
+  var format = normalizarComparable(presentationFormat).replace(/[\s-]+/g, '_');
+  if (category.categoria_no_vocal && NON_VOCAL_FORMATS.indexOf(format) !== -1) return category.categoria_no_vocal;
+  return category.categoria;
+}
+
+// ---------------------------------------------------------------------------
+// One juror's card
+// ---------------------------------------------------------------------------
+
+function esPuntajeValido(valor) {
+  if (valor === '' || valor === null || valor === undefined) return false;
+  var n = Number(valor);
+  return isFinite(n) && Math.floor(n) === n && n >= RATING_MIN && n <= RATING_MAX;
+}
+
+/**
+ * points = rating x factor; total = sum of the categories (20-100 with the official rubric).
+ * An incomplete card is INVALID (total null), never a low score.
  */
 function calcularPuntajeJurado(puntajes, rubrica) {
-  var r = rubrica || RUBRICA;
+  var r = rubrica || RUBRIC_DEFAULT;
   var detalle = [];
   var faltantes = [];
   var total = 0;
+  var tieBreak = 0;
 
   for (var i = 0; i < r.length; i++) {
-    var factor = r[i];
-    var bruto = puntajes ? puntajes[factor.id] : undefined;
-
-    if (!esPuntajeValido(bruto)) {
-      faltantes.push(factor.id);
-      detalle.push({ id: factor.id, score: null, peso: factor.peso, puntos: 0 });
+    var c = r[i];
+    var raw = puntajes ? puntajes[c.id] : undefined;
+    if (!esPuntajeValido(raw)) {
+      faltantes.push(c.id);
+      detalle.push({ id: c.id, rating: null, factor: c.factor, puntos: 0 });
       continue;
     }
-    var puntos = (Number(bruto) / 10) * factor.peso;
-    total += puntos;
-    detalle.push({ id: factor.id, score: Number(bruto), peso: factor.peso, puntos: redondear(puntos, 4) });
+    var points = Number(raw) * c.factor;
+    total += points;
+    if (c.desempate) tieBreak += points;
+    detalle.push({ id: c.id, rating: Number(raw), factor: c.factor, puntos: points });
   }
 
+  var valid = faltantes.length === 0;
   return {
-    valido: faltantes.length === 0,
-    total: faltantes.length === 0 ? redondear(total, 4) : null,
+    valido: valid,
+    total: valid ? total : null,
+    desempate: valid ? tieBreak : null,
     detalle: detalle,
     faltantes: faltantes
   };
 }
 
-function redondear(n, decimales) {
-  var f = Math.pow(10, decimales === undefined ? 2 : decimales);
-  return Math.round(n * f) / f;
-}
+// ---------------------------------------------------------------------------
+// Consolidation (one project, several jurors)
+// ---------------------------------------------------------------------------
 
 /**
- * Consolidates the three jurors for one artist.
- * artist_final = mean of the VALID juror totals. Invalid/absent cards are
- * excluded from the denominator, never counted as zero.
+ * `tarjetas` are the SUBMITTED cards of one project: [{ jurado, puntajes }].
+ * artist_final = mean of the valid juror totals, kept at full precision (round only to show).
+ * desempate    = mean of the jurors' tie-break points (presence + arena).
  */
 function consolidarArtista(tarjetas, rubrica) {
-  var validas = [];
-  var porFactor = {};
-  var r = rubrica || RUBRICA;
-  for (var f = 0; f < r.length; f++) porFactor[r[f].id] = [];
+  var r = rubrica || RUBRIC_DEFAULT;
+  var valid = [];
+  var ratings = {};
+  r.forEach(function (c) { ratings[c.id] = []; });
 
-  for (var i = 0; i < tarjetas.length; i++) {
-    var calculo = calcularPuntajeJurado(tarjetas[i].puntajes, r);
-    if (!calculo.valido) continue;
-    validas.push({ jurado: tarjetas[i].jurado, total: calculo.total });
-    for (var d = 0; d < calculo.detalle.length; d++) {
-      var det = calculo.detalle[d];
-      porFactor[det.id].push(det.score);
-    }
-  }
+  (tarjetas || []).forEach(function (t) {
+    var calc = calcularPuntajeJurado(t.puntajes, r);
+    if (!calc.valido) return;
+    valid.push({ jurado: t.jurado, total: calc.total, desempate: calc.desempate });
+    calc.detalle.forEach(function (d) { ratings[d.id].push(d.rating); });
+  });
 
-  var promedioFactor = {};
-  for (var key in porFactor) {
-    if (!porFactor.hasOwnProperty(key)) continue;
-    promedioFactor[key] = porFactor[key].length
-      ? redondear(porFactor[key].reduce(function (s, v) { return s + v; }, 0) / porFactor[key].length, 4)
-      : null;
-  }
+  var meanRatings = {};
+  Object.keys(ratings).forEach(function (id) {
+    var list = ratings[id];
+    meanRatings[id] = list.length ? list.reduce(function (s, v) { return s + v; }, 0) / list.length : null;
+  });
 
-  var suma = validas.reduce(function (s, v) { return s + v.total; }, 0);
-
+  var n = valid.length;
   return {
-    jurados_validos: validas.length,
-    totales_jurado: validas,
-    artist_final: validas.length ? redondear(suma / validas.length, 2) : null,
-    promedio_por_factor: promedioFactor
+    jurados_validos: n,
+    totales_jurado: valid,
+    artist_final: n ? valid.reduce(function (s, v) { return s + v.total; }, 0) / n : null,
+    tie_break: n ? valid.reduce(function (s, v) { return s + v.desempate; }, 0) / n : null,
+    promedio_por_factor: meanRatings
   };
 }
 
+/** Per-project evaluation status from its cards and disqualification state. */
+function evaluationStatusOf(cards, opciones) {
+  opciones = opciones || {};
+  var jurors = opciones.jurados || 3;
+  if (opciones.dq_status === DQ_STATUS.VALIDADA) return EVALUATION_STATUS.DESCALIFICADO;
+  if (opciones.dq_status === DQ_STATUS.PENDIENTE) return EVALUATION_STATUS.DQ_PENDIENTE;
+  var sent = (cards || []).filter(function (c) { return normalizarComparable(c.estado) === EVALUATION_STATE.ENVIADA; }).length;
+  var drafts = (cards || []).length - sent;
+  if (sent >= jurors) return opciones.resultados_cerrados ? EVALUATION_STATUS.BLOQUEADA : EVALUATION_STATUS.COMPLETA;
+  if (sent === 0 && drafts === 0) return EVALUATION_STATUS.SIN_CALIFICAR;
+  return EVALUATION_STATUS.PARCIAL;
+}
+
+// ---------------------------------------------------------------------------
+// Ranking, cuts, ties
+// ---------------------------------------------------------------------------
+
+var SCORE_EPSILON = 1e-9;
+
+function sameScore(a, b) {
+  return Math.abs(a - b) < SCORE_EPSILON;
+}
+
+/** Final score DESC, then tie-break points DESC. 0 = genuinely tied -> human review. */
+function compararArtistas(a, b) {
+  if (!sameScore(a.artist_final, b.artist_final)) return b.artist_final - a.artist_final;
+  if (!sameScore(a.tie_break, b.tie_break)) return b.tie_break - a.tie_break;
+  return 0;
+}
+
+/** Artists tied with the one at position `cut` AND with the one right after it (the only ties that matter). */
+function detectarEmpateEnCorte(ranking, cut) {
+  if (ranking.length <= cut) return [];
+  var inside = ranking[cut - 1];
+  var outside = ranking[cut];
+  if (compararArtistas(inside, outside) !== 0) return [];
+  return ranking.filter(function (a) { return compararArtistas(a, inside) === 0; }).map(function (a) {
+    return { code: a.code, artistic_name: a.artistic_name, artist_final: a.artist_final,
+             tie_break: a.tie_break, posicion: a.posicion };
+  });
+}
+
 /**
- * Ranks artists and returns the top N.
- *
- * Only auditions marked REALIZADA with at least `minimo_jurados` valid cards
- * enter the ranking - the spec is explicit that a participant who did not
- * audition cannot be selected.
- *
- * Ties are broken by the documented ladder; anything still tied afterwards is
- * surfaced in `empates_sin_resolver` for a minuted committee decision. The
- * function never invents a winner.
+ * Ranks the auditioned projects.
+ * Enter the ranking: audition REALIZADA, at least `minimo_jurados` submitted cards, not disqualified.
+ * Output statuses: TOP10_SELECCIONADO (1-10), TOP20 (11-20, private), RANKED (21+),
+ * TIE_REVIEW_REQUIRED (a persistent tie across position 10 or 20), SIN_RANKING (excluded).
+ * The software never decides a persistent tie: a minuted deliberation for that exact cut and
+ * that exact set of tied projects is required (see applyDeliberation).
  */
 function seleccionarTop(artistas, opciones) {
   opciones = opciones || {};
-  var n = opciones.top || 7;
-  var minimoJurados = opciones.minimo_jurados === undefined ? 2 : opciones.minimo_jurados;
-  var rubrica = opciones.rubrica || RUBRICA;
+  var topPublic = opciones.top_publico || opciones.top || 10;
+  var topPrivate = Math.max(opciones.top_privado || 20, topPublic);
+  var minJurors = opciones.minimo_jurados === undefined ? 3 : opciones.minimo_jurados;
+  var rubric = opciones.rubrica || RUBRIC_DEFAULT;
+  var deliberations = opciones.deliberaciones || (opciones.deliberacion ? [opciones.deliberacion] : []);
 
-  var elegibles = [];
-  var excluidos = [];
+  var eligible = [];
+  var excluded = [];
 
-  for (var i = 0; i < artistas.length; i++) {
-    var a = artistas[i];
-    var estado = normalizarComparable(a.audition_status);
-    if (estado !== 'REALIZADA') {
-      excluidos.push({ code: a.code, motivo: 'AUDICION_NO_REALIZADA', estado: a.audition_status || '' });
-      continue;
+  (artistas || []).forEach(function (a) {
+    var state = normalizarComparable(a.audition_status);
+    if (state !== 'REALIZADA') {
+      excluded.push({ code: a.code, artistic_name: a.artistic_name, motivo: 'AUDICION_NO_REALIZADA', estado: a.audition_status || '' });
+      return;
     }
-    var c = consolidarArtista(a.tarjetas || [], rubrica);
-    if (c.jurados_validos < minimoJurados) {
-      excluidos.push({ code: a.code, motivo: 'JURADOS_INSUFICIENTES', jurados_validos: c.jurados_validos });
-      continue;
+    if (a.dq_status === DQ_STATUS.VALIDADA) {
+      excluded.push({ code: a.code, artistic_name: a.artistic_name, motivo: 'DESCALIFICADO' });
+      return;
     }
-    elegibles.push({
+    var c = consolidarArtista(a.tarjetas || [], rubric);
+    if (c.jurados_validos < minJurors) {
+      excluded.push({ code: a.code, artistic_name: a.artistic_name, motivo: 'JURADOS_INSUFICIENTES', jurados_validos: c.jurados_validos });
+      return;
+    }
+    eligible.push({
       code: a.code,
       artistic_name: a.artistic_name || '',
       full_name: a.full_name || '',
       discipline: a.discipline || '',
       artist_final: c.artist_final,
+      tie_break: c.tie_break,
       jurados_validos: c.jurados_validos,
       promedio_por_factor: c.promedio_por_factor,
-      totales_jurado: c.totales_jurado
+      totales_jurado: c.totales_jurado,
+      dq_pendiente: a.dq_status === DQ_STATUS.PENDIENTE
     });
-  }
+  });
 
-  elegibles.sort(function (a, b) { return compararArtistas(a, b); });
+  eligible.sort(function (a, b) {
+    var cmp = compararArtistas(a, b);
+    return cmp !== 0 ? cmp : (String(a.code) < String(b.code) ? -1 : 1);   // stable display only
+  });
+  eligible.forEach(function (a, i) { a.posicion = i + 1; });
 
-  for (var p = 0; p < elegibles.length; p++) elegibles[p].posicion = p + 1;
-
-  var top = elegibles.slice(0, n);
-  var empatesSinResolver = detectarEmpateEnCorte(elegibles, n);
-
-  var resultado = {
-    top: top,
-    ranking: elegibles,
-    excluidos: excluidos,
-    empates_sin_resolver: empatesSinResolver,
-    requiere_comite: empatesSinResolver.length > 0,
-    deliberacion_aplicada: '',
-    deliberacion_descartada: ''
+  var result = {
+    ranking: eligible,
+    excluidos: excluded,
+    cortes: [],
+    deliberaciones_aplicadas: [],
+    deliberaciones_descartadas: []
   };
-  if (opciones.deliberacion && resultado.requiere_comite) {
-    return applyDeliberation(resultado, opciones.deliberacion, n);
-  }
-  return resultado;
+
+  [topPublic, topPrivate].forEach(function (cut) {
+    var tied = detectarEmpateEnCorte(result.ranking, cut);
+    if (!tied.length) return;
+    var decision = deliberations.filter(function (d) { return Number(d.cut_position) === cut; }).pop();
+    if (decision) {
+      var applied = applyDeliberation(result.ranking, tied, decision);
+      if (applied.ok) {
+        result.ranking = applied.ranking;
+        result.deliberaciones_aplicadas.push({ cut: cut, deliberation_id: decision.deliberation_id || 'ACTA' });
+        return;
+      }
+      result.deliberaciones_descartadas.push({ cut: cut, deliberation_id: decision.deliberation_id || '', motivo: applied.motivo });
+    }
+    result.cortes.push({ cut: cut, empatados: tied });
+  });
+
+  var tiedCodes = {};
+  result.cortes.forEach(function (c) { c.empatados.forEach(function (a) { tiedCodes[normalizarComparable(a.code)] = true; }); });
+
+  result.ranking.forEach(function (a) {
+    if (tiedCodes[normalizarComparable(a.code)]) a.ranking_status = RANKING_STATUS.TIE_REVIEW_REQUIRED;
+    else if (a.posicion <= topPublic) a.ranking_status = RANKING_STATUS.TOP10_SELECCIONADO;
+    else if (a.posicion <= topPrivate) a.ranking_status = RANKING_STATUS.TOP20;
+    else a.ranking_status = opciones.resultados_cerrados ? RANKING_STATUS.NO_SELECCIONADO : RANKING_STATUS.RANKED;
+  });
+  excluded.forEach(function (e) { e.ranking_status = RANKING_STATUS.SIN_RANKING; });
+
+  result.top10 = result.ranking.filter(function (a) { return a.ranking_status === RANKING_STATUS.TOP10_SELECCIONADO; });
+  result.top20 = result.ranking.filter(function (a) { return a.posicion <= topPrivate && a.ranking_status !== RANKING_STATUS.TIE_REVIEW_REQUIRED; });
+  result.top = result.top10;
+  result.empates_sin_resolver = result.cortes.reduce(function (all, c) { return all.concat(c.empatados); }, []);
+  result.requiere_comite = result.cortes.length > 0;
+  result.dq_pendientes = result.ranking.filter(function (a) { return a.dq_pendiente; }).map(function (a) { return a.code; });
+  result.top_publico = topPublic;
+  result.top_privado = topPrivate;
+  return result;
 }
 
 /**
- * Applies a minuted committee decision to an unresolved tie at the cut.
- *
- * The decision only counts if it covers EXACTLY the artists that are tied now:
- * if scores changed after the committee met, the tie is different and the old
- * minutes must not silently decide it. In that case the tie stays open and the
- * reason is reported.
+ * Applies a minuted decision (repeated short song or the music juror's casting vote) to one
+ * persistent tie. It only counts if it lists EXACTLY the projects tied now: if scores changed
+ * after the committee met, the tie is a different one and must be decided again.
  */
-function applyDeliberation(selection, deliberation, n) {
-  var order = (deliberation.codes_in_order || []).map(function (c) { return normalizarComparable(c); });
-  var tied = selection.empates_sin_resolver.map(function (a) { return normalizarComparable(a.code); });
-  var sameSet = order.length === tied.length && tied.every(function (c) { return order.indexOf(c) !== -1; });
-  if (!sameSet) {
-    return Object.assign({}, selection, {
-      deliberacion_descartada: (deliberation.deliberation_id || '') + ' no corresponde al empate actual'
-    });
-  }
+function applyDeliberation(ranking, tied, decision) {
+  var order = String(decision.codes_in_order || '').split(/[,\s]+/).filter(Boolean)
+    .map(function (c) { return normalizarComparable(c); });
+  if (Array.isArray(decision.codes_in_order)) order = decision.codes_in_order.map(function (c) { return normalizarComparable(c); });
+  var tiedCodes = tied.map(function (a) { return normalizarComparable(a.code); });
+  var sameSet = order.length === tiedCodes.length && tiedCodes.every(function (c) { return order.indexOf(c) !== -1; });
+  if (!sameSet) return { ok: false, motivo: 'El acta no corresponde a los empatados actuales (' + tiedCodes.join(', ') + ').' };
 
   var tiedSet = {};
-  tied.forEach(function (c) { tiedSet[c] = true; });
-  var firstTied = -1;
-  for (var i = 0; i < selection.ranking.length; i++) {
-    if (tiedSet[normalizarComparable(selection.ranking[i].code)]) { firstTied = i; break; }
+  tiedCodes.forEach(function (c) { tiedSet[c] = true; });
+  var first = -1;
+  for (var i = 0; i < ranking.length; i++) {
+    if (tiedSet[normalizarComparable(ranking[i].code)]) { first = i; break; }
   }
   var byCode = {};
-  selection.ranking.forEach(function (a) { byCode[normalizarComparable(a.code)] = a; });
-  var reordered = selection.ranking.filter(function (a) { return !tiedSet[normalizarComparable(a.code)]; });
-  var decided = order.map(function (c) { return byCode[c]; });
-  Array.prototype.splice.apply(reordered, [firstTied, 0].concat(decided));
-  reordered.forEach(function (a, idx) { a.posicion = idx + 1; });
-
-  return Object.assign({}, selection, {
-    ranking: reordered,
-    top: reordered.slice(0, n),
-    empates_sin_resolver: [],
-    requiere_comite: false,
-    deliberacion_aplicada: deliberation.deliberation_id || 'ACTA'
-  });
+  ranking.forEach(function (a) { byCode[normalizarComparable(a.code)] = a; });
+  var rest = ranking.filter(function (a) { return !tiedSet[normalizarComparable(a.code)]; });
+  Array.prototype.splice.apply(rest, [first, 0].concat(order.map(function (c) { return byCode[c]; })));
+  rest.forEach(function (a, idx) { a.posicion = idx + 1; });
+  return { ok: true, ranking: rest };
 }
 
-/** Descending by final score, then down the documented tie-break ladder. */
-function compararArtistas(a, b) {
-  if (b.artist_final !== a.artist_final) return b.artist_final - a.artist_final;
-
-  for (var i = 0; i < ORDEN_DESEMPATE.length; i++) {
-    var id = ORDEN_DESEMPATE[i];
-    var va = a.promedio_por_factor[id];
-    var vb = b.promedio_por_factor[id];
-    if (va === null || vb === null || va === undefined || vb === undefined) continue;
-    if (vb !== va) return vb - va;
-  }
-  return 0;                                   // genuinely tied -> committee
-}
-
-/**
- * Detects a tie straddling the cut line (position n / n+1) that the ladder
- * could not break. That is the only tie that actually changes the outcome.
- */
-function detectarEmpateEnCorte(ranking, n) {
-  if (ranking.length <= n) return [];
-  var dentro = ranking[n - 1];
-  var fuera = ranking[n];
-  if (compararArtistas(dentro, fuera) !== 0) return [];
-
-  var empatados = ranking.filter(function (a) { return compararArtistas(a, dentro) === 0; });
-  return empatados.map(function (a) {
-    return { code: a.code, artistic_name: a.artistic_name, artist_final: a.artist_final, posicion: a.posicion };
-  });
-}
-
-/** Buckets for the distribution chart on the dashboard. */
+/** Buckets for the dashboard chart (a juror total lives in 20-100). */
 function distribucionPuntajes(ranking, rangos) {
-  var bandas = rangos || [
-    { etiqueta: '0-39', desde: 0,  hasta: 39.999 },
+  var bands = rangos || [
+    { etiqueta: '20-39', desde: 20, hasta: 39.999 },
     { etiqueta: '40-59', desde: 40, hasta: 59.999 },
     { etiqueta: '60-69', desde: 60, hasta: 69.999 },
     { etiqueta: '70-79', desde: 70, hasta: 79.999 },
     { etiqueta: '80-89', desde: 80, hasta: 89.999 },
     { etiqueta: '90-100', desde: 90, hasta: 100 }
   ];
-  return bandas.map(function (b) {
+  return bands.map(function (b) {
     return {
       etiqueta: b.etiqueta,
-      conteo: ranking.filter(function (a) {
-        return a.artist_final >= b.desde && a.artist_final <= b.hasta;
-      }).length
+      conteo: ranking.filter(function (a) { return a.artist_final >= b.desde && a.artist_final <= b.hasta; }).length
     };
   });
+}
+
+/** Rounds for DISPLAY only (dashboard averages, percentages). Never used inside the ranking. */
+function redondear(value, decimals) {
+  var f = Math.pow(10, decimals === undefined ? 2 : decimals);
+  return Math.round(Number(value) * f) / f;
+}
+
+/** Two decimals for screens and exports; the ranking itself always uses full precision. */
+function scoreText(value) {
+  if (value === null || value === undefined || value === '') return '';
+  return (Math.round(Number(value) * 100) / 100).toFixed(2);
 }
 
 // ========================================================================
@@ -2469,13 +3181,20 @@ function invalidateHeaderCache() { _headerCache = {}; }
  */
 var PLAIN_TEXT_COLUMNS = {
   'REGISTRO': ['id_number', 'normalized_id_number', 'whatsapp', 'normalized_phone', 'birth_date', 'group_code', 'code',
-               'original_time', 'arrival_time', 'final_time', 'artistic_name', 'song_name'],
-  '_INTEGRANTES': ['id_number', 'normalized_id_number', 'birth_date', 'group_code'],
+               'original_time', 'arrival_time', 'final_time', 'artistic_name', 'song_name',
+               'team_code', 'person_id', 'signature_sha256', 'previous_code'],
+  '_INTEGRANTES': ['id_number', 'normalized_id_number', 'birth_date', 'group_code', 'person_id', 'signature_sha256'],
   '_CAMBIOS': ['code', 'contact', 'original_time', 'nueva_hora'],
   'AGENDA': ['arrival_time', 'audition_time', 'limite_tolerancia'],
   'CHECK-IN': ['arrival_time', 'final_time', 'check_in_time'],
   'PISTAS': ['final_time'],
-  'CONFIG': ['valor']
+  'CONFIG': ['valor'],
+  '_OFERTAS': ['slot_code', 'slot_arrival', 'slot_time'],
+  '_SLOTS_HISTORIAL': ['slot_code'],
+  '_EMAIL_LOG': ['code', 'recipient'],
+  'BOLSA': ['code'],
+  'SEGURO_MAYORCA': ['code', 'id_number'],
+  'PARAMETROS_RUBRICA': ['version', 'id']
 };
 
 /**
@@ -2511,7 +3230,56 @@ function ensureSchema(book) {
     applyPlainTextColumns(sheet, name);
   });
   invalidateHeaderCache();
+  var rubric = seedRubricParameters(book);
+  if (rubric.sembrada) report.rubrica_sembrada = rubric.version;
+  var juryHeaders = resetEmptyJuryHeaders(book);
+  if (juryHeaders.length) report.encabezados_jurado_rehechos = juryHeaders;
+  invalidateHeaderCache();
   return report;
+}
+
+/**
+ * Writes the official rubric into PARAMETROS_RUBRICA when the sheet has no rows.
+ * Existing rows are never touched: once staff edit the parameters, they are the rubric.
+ * The sheet gets a warning-only protection so an accidental edit asks for confirmation.
+ */
+function seedRubricParameters(book) {
+  var sheet = book.getSheetByName(HOJA.PARAMETROS_RUBRICA);
+  if (!sheet) return { sembrada: false };
+  if (!sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).length) {
+    sheet.protect().setDescription('Rúbrica oficial de jurados. Cambiarla durante el evento altera los puntajes.').setWarningOnly(true);
+  }
+  if (sheet.getLastRow() > 1) return { sembrada: false };
+  var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(function (c) { return String(c).trim(); });
+  var rows = rubricToRows(RUBRIC_DEFAULT, RUBRIC_VERSION_DEFAULT).map(function (o) {
+    return header.map(function (c) { return cellValue(o[c]); });
+  });
+  sheet.getRange(2, 1, rows.length, header.length).setValues(rows);
+  if (typeof invalidateRubricCache === 'function') invalidateRubricCache();
+  return { sembrada: true, version: RUBRIC_VERSION_DEFAULT };
+}
+
+/**
+ * A jury sheet with no cards is re-headed with exactly the columns of the rubric in force,
+ * so the columns of an older rubric do not linger next to the new ones. A sheet that already
+ * holds cards is never rewritten (ensureSchema only appends to it).
+ */
+function resetEmptyJuryHeaders(book) {
+  var expected = juryColumns(activeRubricCategories());
+  var rewritten = [];
+  [HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3].forEach(function (name) {
+    var sheet = book.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() > 1) return;
+    var lastCol = sheet.getLastColumn();
+    var current = lastCol ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (c) { return String(c).trim(); }) : [];
+    while (current.length && current[current.length - 1] === '') current.pop();
+    if (current.join('|') === expected.join('|')) return;
+    if (lastCol) sheet.getRange(1, 1, 1, lastCol).clearContent();
+    sheet.getRange(1, 1, 1, expected.length).setValues([expected])
+      .setFontWeight('bold').setBackground('#1D1D1B').setFontColor('#FFFFFF');
+    rewritten.push(name);
+  });
+  return rewritten;
 }
 
 function applyPlainTextColumns(sheet, name) {
@@ -2763,6 +3531,31 @@ function nuevoId(prefijo) {
   return prefijo + '-' + Utilities.getUuid().split('-')[0].toUpperCase();
 }
 
+/**
+ * Writes one CONFIG value (the system's own stage flags: official list lock, results closed).
+ * Adds the key when it is missing. Clears the per-execution config cache.
+ */
+function setConfigValue(key, value) {
+  var sheet = hoja(HOJA.CONFIG);
+  var last = sheet.getLastRow();
+  var keys = last > 1 ? sheet.getRange(2, 1, last - 1, 1).getValues() : [];
+  var text = value === undefined || value === null ? '' : String(value);
+  for (var i = 0; i < keys.length; i++) {
+    if (String(keys[i][0]).trim() === key) {
+      sheet.getRange(i + 2, 2).setNumberFormat('@').setValue(text);
+      invalidarCacheConfig();
+      return;
+    }
+  }
+  sheet.getRange(last + 1, 1, 1, 3).setValues([[key, text, '']]);
+  invalidarCacheConfig();
+}
+
+/** Timestamp with the explicit -05:00 offset: Sheets keeps it as text and `new Date()` parses it exactly. */
+function isoWithOffset(date) {
+  return Utilities.formatDate(date || new Date(), zonaHoraria(), "yyyy-MM-dd'T'HH:mm:ssXXX");
+}
+
 // ========================================================================
 // 11_auth.gs
 // ========================================================================
@@ -2913,14 +3706,17 @@ function urlPanel(rol, token) {
 }
 
 /**
- * Six-character key that travels with a group code in the members link.
- * GRP numbers are sequential and easy to guess; the key (an HMAC of the code)
- * is what stops a stranger from adding people to someone else's group.
+ * Ten-character key that travels with a team code (GRP-xxx / EQ-xxx) in the "equipo y firmas"
+ * link. Team numbers are sequential and easy to guess; the key (an HMAC of the code, ~51 bits)
+ * is what stops a stranger from adding people to someone else's project. Failed attempts are
+ * rate limited per team code, and every link stops working after CONFIG enlaces_equipo_vencen.
  */
+var TEAM_KEY_LENGTH = 10;
+
 function groupAccessKey(groupCode) {
   var code = String(groupCode || '').trim().toUpperCase();
   if (!code) return '';
-  return firmar('grp:' + code).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
+  return firmar('grp:' + code).replace(/[^A-Za-z0-9]/g, '').slice(0, TEAM_KEY_LENGTH).toUpperCase();
 }
 
 function groupKeyMatches(groupCode, key) {
@@ -3080,6 +3876,9 @@ function tablaAcciones() {
     'mi_inscripcion':     { capacidad: null, fn: accionMiInscripcion },
     'subir_pista':        { capacidad: null, fn: accionSubirPista },
     'verificar_video':    { capacidad: null, fn: accionVerificarVideo },
+    'retirarme':          { capacidad: null, fn: accionRetirarme },
+    'confirmacion_final': { capacidad: null, fn: accionConfirmacionFinal },
+    'responder_oferta':   { capacidad: null, fn: accionResponderOferta },
 
     // ---- logistics / admin ------------------------------------------------
     'listar_registro':    { capacidad: 'registro_lectura',   fn: accionListarRegistro },
@@ -3108,6 +3907,22 @@ function tablaAcciones() {
     'mensajes':           { capacidad: 'comunicacion',       fn: accionMensajes },
     'enviar_correos':     { capacidad: 'comunicacion',       fn: accionEnviarCorreos },
     'crear_usuario':      { capacidad: '*',                  fn: accionCrearUsuario },
+    'aplicar_verificacion': { capacidad: 'registro_escritura', fn: accionAplicarVerificacion },
+    'notificar_aptitud':  { capacidad: 'comunicacion',       fn: accionNotificarAptitud },
+    'registro_correos':   { capacidad: 'comunicacion',       fn: accionRegistroCorreos },
+    'reintentar_correos': { capacidad: 'comunicacion',       fn: accionReintentarCorreos },
+    'exportar_excel':     { capacidad: 'exportar',           fn: function (d, s) { return accionExportarExcel(d, s); } },
+    'exportar_seguro':    { capacidad: 'seguro',             fn: function (d, s) { return accionExportarSeguro(d, s); } },
+
+    // ---- pool, substitutes and the official list -------------------------
+    'bolsa':              { capacidad: 'reemplazos', fn: accionBolsa },
+    'refrescar_bolsa':    { capacidad: 'reemplazos', fn: accionRefrescarBolsa },
+    'retirar_participante': { capacidad: 'reemplazos', fn: accionRetirarParticipante },
+    'ofrecer_cupo':       { capacidad: 'reemplazos', fn: accionOfrecerCupo },
+    'cerrar_vacante':     { capacidad: 'reemplazos', fn: accionCerrarVacante },
+    'vista_previa_lista': { capacidad: 'consolidar', fn: accionVistaPreviaLista },
+    'consolidar_lista':   { capacidad: 'consolidar', fn: accionConsolidarLista },
+    'desbloquear_lista':  { capacidad: '*',          fn: accionDesbloquearLista },
 
     // ---- check-in desk ----------------------------------------------------
     'buscar_participante':{ capacidad: 'checkin',   fn: accionBuscarParticipante },
@@ -3126,7 +3941,12 @@ function tablaAcciones() {
     // ---- results / dashboard ---------------------------------------------
     'dashboard':          { capacidad: 'dashboard', fn: accionDashboard },
     'resultados':         { capacidad: 'resultados', fn: accionResultados },
-    'registrar_deliberacion': { capacidad: 'deliberar', fn: accionRegistrarDeliberacion }
+    'registrar_deliberacion': { capacidad: 'deliberar', fn: accionRegistrarDeliberacion },
+    'reabrir_evaluacion': { capacidad: 'reabrir_evaluacion', fn: accionReabrirEvaluacion },
+    'listar_descalificaciones': { capacidad: 'validar_dq', fn: accionListarDescalificaciones },
+    'resolver_descalificacion': { capacidad: 'validar_dq', fn: accionResolverDescalificacion },
+    'cerrar_resultados':  { capacidad: 'cerrar_resultados', fn: accionCerrarResultados },
+    'reabrir_resultados': { capacidad: '*',           fn: accionReabrirResultados }
   };
 }
 
@@ -3324,8 +4144,41 @@ function webAppUrl() {
   try { return ScriptApp.getService().getUrl() || ''; } catch (e) { return ''; }
 }
 
-function membersLink(groupCode) {
-  return webAppUrl() + '?p=integrantes&g=' + encodeURIComponent(groupCode) + '&k=' + groupAccessKey(groupCode);
+function membersLink(teamCode) {
+  return webAppUrl() + '?p=integrantes&g=' + encodeURIComponent(teamCode) + '&k=' + groupAccessKey(teamCode);
+}
+
+/** True while the "equipo y firmas" links are valid (CONFIG enlaces_equipo_vencen, inclusive). */
+function teamLinksOpen() {
+  var until = cfgFecha('enlaces_equipo_vencen', '');
+  if (!until) return true;
+  return Utilities.formatDate(new Date(), zonaHoraria(), 'yyyy-MM-dd') <= until;
+}
+
+/** Brute-force guard on team keys: 10 wrong keys for one team code in 15 minutes lock it for a while. */
+function teamKeyAttemptAllowed(code) {
+  return Number(CacheService.getScriptCache().get('tk:' + code) || 0) < 10;
+}
+function teamKeyFailed(code) {
+  var cache = CacheService.getScriptCache();
+  cache.put('tk:' + code, String(Number(cache.get('tk:' + code) || 0) + 1), 900);
+}
+
+/** Validates code + key of a team link. Returns null when valid, or the error payload. */
+function checkTeamAccess(code, key) {
+  if (!code) return { ok: false, motivo: 'CLAVE', error: 'Falta el código del proyecto. Pide el enlace completo a quien inscribió el proyecto.' };
+  if (!teamKeyAttemptAllowed(code)) {
+    return { ok: false, motivo: 'BLOQUEO', error: 'Demasiados intentos con una clave incorrecta. Espera 15 minutos o pide el enlace completo.' };
+  }
+  if (!groupKeyMatches(code, key)) {
+    teamKeyFailed(code);
+    registrar('anonimo', '', 'EQUIPO_CLAVE_INVALIDA', code, '');
+    return { ok: false, motivo: 'CLAVE', error: 'El código o la clave del proyecto no coinciden. Pide el enlace completo a quien inscribió el proyecto.' };
+  }
+  if (!teamLinksOpen()) {
+    return { ok: false, motivo: 'VENCIDO', cerrado: true, error: 'Este enlace de equipo y firmas ya venció.' };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -3333,10 +4186,10 @@ function membersLink(groupCode) {
 // ---------------------------------------------------------------------------
 
 /**
- * Validates server-side, stores ALWAYS (never silently rejects) and returns a
- * verdict the participant can understand. Codes are NOT issued here: they are
- * issued in an operator-run batch after review, so a wave of submissions can
- * not burn the 100 seats on rows that later turn out to be duplicates.
+ * Validates server-side, stores ALWAYS (never silently rejects) and answers with the receipt.
+ * A complete submission is RECIBIDO: the automatic verdict is kept in eligibility_auto and
+ * becomes the official aptitude only when staff apply it (RECIBIDO is never presented as APTO).
+ * Codes are NOT issued here: they are issued in an operator-run batch after review.
  */
 function accionInscribir(datos) {
   datos = datos || {};
@@ -3352,18 +4205,32 @@ function accionInscribir(datos) {
   var videoUrl = normalizarTexto(datos.video_url);
   var video = videoUrl ? cachedVideoCheck(videoUrl) : videoStatusWithoutProbe('');
 
-  var result = exactlyOnce(key, function () { return registerProject(datos, video); });
-  if (result && result.ok !== false && !result.repetido) notifyReception(result.submission_id);
+  // Slow work outside the lock: the receipt id is random, so it can be chosen before the lock.
+  var submissionId = nuevoId('S');
+  var signature = null;
+  if (normalizarTexto(datos.signature_png)) {
+    signature = storeSignature(submissionId, 'INSCRITO', datos.signature_png);
+    if (!signature.ok) return { ok: false, error: signature.error };
+  }
+
+  var result = exactlyOnce(key, function () { return registerProject(datos, video, submissionId, signature); });
+  if (result && result.ok !== false && !result.repetido) sendNow('RECEPCION:' + result.submission_id);
   return result;
 }
 
-function registerProject(datos, video) {
+function registerProject(datos, video, submissionId, signature) {
   var options = opcionesValidacion();
   var verdict = validarInscripcion(datos, options);
+  if (cfgBool('firma_inscripcion', true) && !signature) {
+    verdict.errores.push({ campo: 'signature_png', codigo: 'FALTANTE', mensaje: 'Falta tu firma al final del formulario.' });
+    if (verdict.eligibility_status === ESTADO_ELEGIBILIDAD.APTO || verdict.eligibility_status === ESTADO_ELEGIBILIDAD.EN_REVISION) {
+      verdict.eligibility_status = ESTADO_ELEGIBILIDAD.INCOMPLETO;
+    }
+  }
   var mode = normalizeParticipationMode(datos.participation_mode);
   var group = isGroupMode(mode);
   var existing = leerHoja(HOJA.REGISTRO);
-  var submissionId = nuevoId('S');
+  submissionId = submissionId || nuevoId('S');
 
   var candidate = {
     submission_id: submissionId,
@@ -3371,19 +4238,27 @@ function registerProject(datos, video) {
     normalized_email: normalizarEmail(datos.email),
     normalized_phone: normalizarTelefono(datos.whatsapp)
   };
-  var dup = detectarDuplicado(candidate, existing);
+  // An INCOMPLETO registration is corrected by sending again: it never makes the new one a duplicate.
+  var comparable = existing.filter(function (r) {
+    return normalizeEligibility(r.eligibility_status) !== ESTADO_ELEGIBILIDAD.INCOMPLETO;
+  });
+  var dup = detectarDuplicado(candidate, comparable);
 
   var displayName = normalizarTexto(datos.artistic_name);
   var matchKey = group ? groupMatchKey(displayName) : '';
   var groupMatch = matchKey
-    ? detectGroupMatch({ submission_id: submissionId, group_match_key: matchKey }, existing)
+    ? detectGroupMatch({ submission_id: submissionId, group_match_key: matchKey }, comparable)
     : { match: false, ref: '' };
 
-  var status = verdict.eligibility_status;
-  if (dup.duplicate_flag) status = ESTADO_ELEGIBILIDAD.DUPLICADO;
-  else if ((dup.alerta || groupMatch.match) && status === ESTADO_ELEGIBILIDAD.APTO) status = ESTADO_ELEGIBILIDAD.REVISION;
+  var auto = verdict.eligibility_status;
+  if (auto !== ESTADO_ELEGIBILIDAD.INCOMPLETO) {
+    if (dup.duplicate_flag) auto = ESTADO_ELEGIBILIDAD.DUPLICADO;
+    else if ((dup.alerta || groupMatch.match) && auto === ESTADO_ELEGIBILIDAD.APTO) auto = ESTADO_ELEGIBILIDAD.EN_REVISION;
+  }
+  var status = auto === ESTADO_ELEGIBILIDAD.INCOMPLETO ? ESTADO_ELEGIBILIDAD.INCOMPLETO : ESTADO_ELEGIBILIDAD.RECIBIDO;
 
   var groupCode = group ? formatGroupCode(nextGroupNumber(existing)) : '';
+  var teamCode = group ? groupCode : formatTeamCode(nextTeamNumber(existing));
   var notes = []
     .concat(verdict.errores.map(function (x) { return x.campo + ':' + x.codigo; }))
     .concat(verdict.avisos.map(function (x) { return x.campo + ':' + x.codigo; }));
@@ -3392,13 +4267,15 @@ function registerProject(datos, video) {
 
   var now = ahoraISO();
   var termsVersion = cfg('terms_version', '');
-  var policyVersion = cfg('policy_version', 'v2');
+  var policyVersion = cfg('policy_version', '');
   var controller = dataControllerStamp();
   var usesTrack = esVerdadero(datos.track_uses);
   var genre = normalizarTexto(datos.genre_primary);
   var source = normalizarTexto(datos.source) || 'web';
+  var docType = normalizeDocumentType(datos.document_type);
+  var personId = personIdFor(candidate.normalized_id_number);
 
-  agregarFila(HOJA.REGISTRO, {
+  var row = {
     submission_id: submissionId,
     code: '',
     created_at: now,
@@ -3422,6 +4299,7 @@ function registerProject(datos, video) {
     normalized_email: candidate.normalized_email,
     normalized_phone: candidate.normalized_phone,
     eligibility_status: status,
+    eligibility_auto: auto,
     duplicate_flag: dup.duplicate_flag,
     duplicate_reason: dup.duplicate_reason,
     registro_principal: dup.registro_principal,
@@ -3464,158 +4342,149 @@ function registerProject(datos, video) {
     terms_version: termsVersion,
     policy_version: policyVersion,
     data_controller: controller,
-    capture_source: 'web:formulario-1:' + cfg('consent_version', 'v2')
+    capture_source: 'web:formulario-1:' + cfg('consent_version', 'v2'),
+    team_code: teamCode,
+    document_type: docType,
+    person_id: personId,
+    signature_file_id: signature ? signature.file_id : '',
+    signature_sha256: signature ? signature.sha256 : '',
+    signature_at: signature ? now : '',
+    participation_status: PARTICIPATION.SIN_TURNO
+  };
+  agregarFila(HOJA.REGISTRO, row);
+
+  // The registrant is a person of the project too: their own authorization and signature.
+  var registrantStatus = MEMBER_STATUS.AUTORIZADO;
+  if (verdict.errores.some(function (e) { return e.codigo === 'EDAD' && verdict.edad !== null && verdict.edad < 18; })) {
+    registrantStatus = MEMBER_STATUS.NO_CUMPLE;
+  } else if (!esVerdadero(datos.accept_terms) || !esVerdadero(datos.accept_data_processing) ||
+             !esVerdadero(datos.adult_confirmation) || (cfgBool('firma_inscripcion', true) && !signature)) {
+    registrantStatus = MEMBER_STATUS.INCOMPLETO;
+  }
+  agregarFila(HOJA.INTEGRANTES, {
+    member_id: nuevoId('M'), group_code: teamCode, project_submission_id: submissionId,
+    created_at: now, updated_at: now, source: source, is_leader: true,
+    full_name: row.full_name, id_number: row.id_number, normalized_id_number: candidate.normalized_id_number,
+    birth_date: row.birth_date, age: row.age, adult_confirmation: row.adult_confirmation,
+    artistic_role: normalizarTexto(datos.leader_role) || (group ? 'Líder / vocero' : 'Solista'),
+    consent_terms: row.consent_terms, consent_data: row.consent_data, consent_image: row.consent_image, consent_at: now,
+    terms_version: termsVersion, policy_version: policyVersion, data_controller: controller,
+    capture_source: 'web:formulario-1', member_status: registrantStatus, member_alert: '',
+    signature_file_id: row.signature_file_id, signature_sha256: row.signature_sha256, signature_at: row.signature_at,
+    person_role: PERSON_ROLE.INTERPRETE, crew_role: '', on_stage: true, document_type: docType, person_id: personId,
+    notes: 'Aceptación y firma en el Formulario 1'
   });
 
-  if (group) {
-    var leaderStatus = MEMBER_STATUS.AUTORIZADO;
-    if (verdict.errores.some(function (e) { return e.codigo === 'EDAD'; })) leaderStatus = MEMBER_STATUS.NO_CUMPLE;
-    else if (!esVerdadero(datos.accept_terms) || !esVerdadero(datos.accept_data_processing) ||
-             !esVerdadero(datos.adult_confirmation)) leaderStatus = MEMBER_STATUS.INCOMPLETO;
-    agregarFila(HOJA.INTEGRANTES, {
-      member_id: nuevoId('M'), group_code: groupCode, project_submission_id: submissionId,
-      created_at: now, updated_at: now, source: source, is_leader: true,
-      full_name: normalizarTexto(datos.full_name), id_number: normalizarTexto(datos.id_number),
-      normalized_id_number: candidate.normalized_id_number, birth_date: normalizarTexto(datos.birth_date),
-      age: verdict.edad === null ? '' : verdict.edad, adult_confirmation: esVerdadero(datos.adult_confirmation),
-      artistic_role: normalizarTexto(datos.leader_role) || 'Líder / vocero',
-      consent_terms: esVerdadero(datos.accept_terms), consent_data: esVerdadero(datos.accept_data_processing),
-      consent_image: esVerdadero(datos.accept_image_voice), consent_at: now,
-      terms_version: termsVersion, policy_version: policyVersion, data_controller: controller,
-      capture_source: 'web:formulario-1', member_status: leaderStatus, member_alert: '',
-      notes: 'Aceptacion digital en el Formulario 1'
-    });
+  registrar('participante', '', 'INSCRIPCION', submissionId, 'estado=' + status + ' auto=' + auto + ' equipo=' + teamCode);
+  if (status === ESTADO_ELEGIBILIDAD.RECIBIDO) {
+    enqueueEmail('RECEPCION', row, 'inscripcion', {}, 'RECEPCION:' + submissionId);
   }
 
-  registrar('participante', '', 'INSCRIPCION', submissionId, 'estado=' + status + (groupCode ? ' grupo=' + groupCode : ''));
-
+  var complete = status === ESTADO_ELEGIBILIDAD.RECIBIDO;
   return {
     submission_id: submissionId,
     eligibility_status: status,
+    estado_texto: ELIGIBILITY_LABELS[status],
     edad: verdict.edad,
-    errores: verdict.errores,
-    avisos: verdict.avisos,
-    duplicado: dup.duplicate_flag,
+    errores: complete ? [] : verdict.errores,
+    avisos: [],
     participation_mode: mode,
     group_code: groupCode,
-    group_key: group ? groupAccessKey(groupCode) : '',
-    members_link: group ? membersLink(groupCode) : '',
-    group_repeated: !!groupMatch.match,
+    team_code: teamCode,
+    team_key: groupAccessKey(teamCode),
+    members_link: membersLink(teamCode),
     whatsapp_oficial: cfg('whatsapp_oficial', ''),
     whatsapp_nombre: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución'),
     mi_inscripcion_link: webAppUrl() + '?p=mi-inscripcion',
-    mensaje: mensajeVeredicto(status, verdict, dup, groupMatch)
+    evento: { fecha_texto: humanDate(cfgFecha('evento_fecha', '2026-10-23')), sede: cfg('evento_sede', ''),
+              horario: humanTime(cfgHora('evento_hora_inicio', '15:00')) + ' – ' + humanTime(cfgHora('evento_hora_fin', '21:00')) },
+    mensaje: receptionMessage(status)
   };
 }
 
-function mensajeVeredicto(estado, veredicto, dup, groupMatch) {
-  var numero = phoneText(cfg('whatsapp_oficial', ''));
-  if (estado === ESTADO_ELEGIBILIDAD.APTO) {
-    return 'Recibimos tu inscripción. La organización revisa cada inscripción y asigna los ' +
-      cfgNumero('cupo_total', 100) + ' cupos en orden de inscripción entre quienes cumplen los requisitos. ' +
-      'Si quedas dentro, recibirás tu código y tu horario por WhatsApp' + (numero ? ' desde el ' + numero : '') + '.';
+/** What the person reads right after sending. RECIBIDO is never presented as APTO. */
+function receptionMessage(status) {
+  if (status === ESTADO_ELEGIBILIDAD.INCOMPLETO) {
+    return 'Faltan datos obligatorios. Corrige lo marcado y envía de nuevo: la nueva inscripción no quedará como duplicada.';
   }
-  if (estado === ESTADO_ELEGIBILIDAD.DUPLICADO) {
-    return 'Ya tenemos una inscripción registrada con este documento. Conservamos la primera; no necesitas volver a inscribirte.';
-  }
-  if (estado === ESTADO_ELEGIBILIDAD.NO_CUMPLE) {
-    var reglas = veredicto.errores.filter(function (e) { return e.codigo === 'EDAD' || e.codigo === 'RESIDENCIA'; });
-    return reglas.length ? reglas[0].mensaje : 'Tu inscripción no cumple los requisitos de la convocatoria.';
-  }
-  if (estado === ESTADO_ELEGIBILIDAD.INCOMPLETO) {
-    return 'Faltan datos obligatorios. Revisa los campos marcados y vuelve a enviar.';
-  }
-  if (groupMatch && groupMatch.match) {
-    return 'Recibimos tu inscripción. Ya existe una agrupación con un nombre muy parecido: la organización ' +
-      'verificará si es el mismo proyecto y te contactará.';
-  }
-  return 'Recibimos tu inscripción y quedó en revisión. Te contactaremos si necesitamos verificar algo.';
-}
-
-/**
- * Reception e-mail, sent after the lock is released and never allowed to fail
- * the registration. Test addresses are never mailed, and a small part of the
- * daily Gmail quota is kept for the operators.
- */
-function notifyReception(submissionId) {
-  try {
-    if (!cfgBool('correo_confirmacion_automatico', true)) return;
-    var row = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === submissionId; })[0];
-    if (!row) return;
-    var status = normalizarComparable(row.eligibility_status);
-    if (status !== 'APTO' && status !== 'REVISION') return;
-    if (!esEmailValido(row.email) || /\.test$/i.test(normalizarEmail(row.email))) return;
-    if (MailApp.getRemainingDailyQuota() <= 10) {
-      registrar('sistema', '', 'CORREO_OMITIDO_CUOTA', submissionId, '');
-      return;
-    }
-    var extras = messageExtras(row, webAppUrl(), leerHoja(HOJA.INTEGRANTES));
-    var msg = renderizarPlantilla(plantillas().RECEPCION, row, extras);
-    MailApp.sendEmail({ to: row.email, subject: msg.asunto, body: msg.cuerpo, name: cfg('evento_nombre', 'EL BUNKER') });
-    registrar('sistema', '', 'CORREO_RECEPCION', submissionId, '');
-  } catch (e) {
-    registrar('sistema', '', 'CORREO_RECEPCION_FALLO', submissionId, e.message);
-  }
+  return 'Recibimos tu inscripción. Recibirla no significa que ya seas apto: la organización revisa cada inscripción y te ' +
+    'enviará el resultado por correo. Si resultas apto, los ' + cfgNumero('cupo_total', 100) + ' turnos se asignan en orden ' +
+    'de inscripción; después de ellos queda una bolsa de suplentes.';
 }
 
 // ---------------------------------------------------------------------------
-// Group members
+// Team and signatures (every project: performers + crew)
 // ---------------------------------------------------------------------------
 
-function findGroupProject(groupCode, rows) {
-  var code = normalizarComparable(groupCode);
+/** The project a team code belongs to (team_code, or group_code for rows created before iteration 3). */
+function findGroupProject(teamCode, rows) {
+  var code = normalizarComparable(teamCode);
   return (rows || leerHoja(HOJA.REGISTRO)).filter(function (r) {
-    return normalizarComparable(r.group_code) === code;
+    return normalizarComparable(r.team_code) === code || (!normalizarTexto(r.team_code) && normalizarComparable(r.group_code) === code);
   })[0] || null;
 }
 
-/** Declared / registered / authorized counts. No personal data. */
-function groupSummary(groupCode, members) {
-  var code = normalizarComparable(groupCode);
+function isCrew(m) {
+  return normalizePersonRole(m.person_role) === PERSON_ROLE.EQUIPO_TRABAJO;
+}
+
+/** Performer and crew counts of a team. Crew never counts toward the declared members. No personal data. */
+function groupSummary(teamCode, members) {
+  var code = normalizarComparable(teamCode);
   var list = (members || leerHoja(HOJA.INTEGRANTES)).filter(function (m) {
     return normalizarComparable(m.group_code) === code;
   });
+  var performers = list.filter(function (m) { return !isCrew(m); });
+  var crew = list.filter(isCrew);
+  var authorized = function (xs) { return xs.filter(function (m) { return normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length; };
   return {
-    registered: list.length,
-    authorized: list.filter(function (m) { return normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length,
+    registered: performers.length,
+    authorized: authorized(performers),
+    crew_registered: crew.length,
+    crew_authorized: authorized(crew),
     list: list
   };
 }
 
-/** Public lookup behind the members form: confirms the group without revealing anyone's data. */
+/** Public lookup behind the team form: confirms the project without revealing anyone's data. */
 function accionConsultarAgrupacion(datos) {
   var code = normalizarComparable(datos.group_code);
-  if (!code || !groupKeyMatches(code, datos.group_key)) {
-    return { ok: false, motivo: 'CLAVE', error: 'El código o la clave de la agrupación no coinciden. Pídele el enlace completo a tu líder.' };
-  }
+  var denied = checkTeamAccess(code, datos.group_key);
+  if (denied) return denied;
   var project = findGroupProject(code);
-  if (!project) return { ok: false, error: 'No encontramos esa agrupación.' };
+  if (!project) return { ok: false, error: 'No encontramos ese proyecto.' };
   var summary = groupSummary(code);
   return {
     group_code: code,
-    group_display_name: project.group_display_name || project.artistic_name,
-    members_declared: Number(project.members_declared) || '',
+    group_display_name: project.group_display_name || project.artistic_name || '',
+    participation_mode: project.participation_mode || 'SOLISTA',
+    project_code: project.code || '',
+    members_declared: Number(project.members_declared) || 1,
     members_registered: summary.registered,
     members_authorized: summary.authorized,
+    crew_registered: summary.crew_registered,
+    crew_authorized: summary.crew_authorized,
+    crew_roles: CREW_ROLES.map(function (r) { return { id: r, etiqueta: CREW_ROLE_LABELS[r] }; }),
+    document_types: DOCUMENT_TYPES.map(function (d) { return { id: d, etiqueta: DOCUMENT_TYPE_LABELS[d] }; }),
     abierto: cfgBool('integrantes_abierto', true),
     firma_obligatoria: cfgBool('firma_integrantes', true)
   };
 }
 
 /**
- * One member's own authorization. The same person sending again (same ID
- * number in the same group) updates their row instead of adding a new one.
+ * One person's own authorization for a project: a performer (on stage, part of the project) or a
+ * crew member (manager, producer, technician... never takes a seat, never ranked). The same person
+ * sending again with the same role updates their row; the same person in a second role gets a
+ * second relation with the same person_id.
  */
 function accionRegistrarIntegrante(datos) {
   datos = datos || {};
   if (!cfgBool('integrantes_abierto', true)) {
-    return { ok: false, cerrado: true, error: 'El registro de integrantes está cerrado.' };
+    return { ok: false, cerrado: true, error: 'El registro de equipo y firmas está cerrado.' };
   }
   var code = normalizarComparable(datos.group_code);
-  if (!code || !groupKeyMatches(code, datos.group_key)) {
-    registrar('anonimo', '', 'INTEGRANTE_CLAVE_INVALIDA', code, '');
-    return { ok: false, motivo: 'CLAVE', error: 'El código o la clave de la agrupación no coinciden. Pídele el enlace completo a tu líder.' };
-  }
+  var denied = checkTeamAccess(code, datos.group_key);
+  if (denied) return denied;
   var key = 'integrante:' + (datos.client_submission_id || Utilities.getUuid());
   var replay = replayIfRepeated(key);
   if (replay) return replay;
@@ -3627,9 +4496,11 @@ function accionRegistrarIntegrante(datos) {
     fecha_evento: cfgFecha('evento_fecha', '2026-10-23'),
     firma_obligatoria: cfgBool('firma_integrantes', true)
   });
-
+  var role = validation.person_role;
+  var crew = role === PERSON_ROLE.EQUIPO_TRABAJO;
   var norm = normalizarCedula(datos.id_number);
-  var before = groupSummary(code).list.filter(function (m) { return normalizarCedula(m.normalized_id_number) === norm; })[0];
+  var sameRelation = function (m) { return normalizarCedula(m.normalized_id_number) === norm && normalizePersonRole(m.person_role) === role; };
+  var before = groupSummary(code).list.filter(sameRelation)[0];
   var memberId = before ? before.member_id : nuevoId('M');
 
   var signature = null;
@@ -3641,10 +4512,10 @@ function accionRegistrarIntegrante(datos) {
   return exactlyOnce(key, function () {
     var projects = leerHoja(HOJA.REGISTRO);
     var project = findGroupProject(code, projects);
-    if (!project) return { ok: false, error: 'No encontramos esa agrupación.' };
+    if (!project) return { ok: false, error: 'No encontramos ese proyecto.' };
     var allMembers = leerHoja(HOJA.INTEGRANTES);
     var summary = groupSummary(code, allMembers);
-    var existing = summary.list.filter(function (m) { return normalizarCedula(m.normalized_id_number) === norm; })[0];
+    var existing = summary.list.filter(sameRelation)[0];
 
     var alerts = [];
     allMembers.forEach(function (m) {
@@ -3657,9 +4528,11 @@ function accionRegistrarIntegrante(datos) {
         alerts.push('TAMBIEN_INSCRITO_' + (r.code || r.submission_id));
       }
     });
-    var registeredAfter = summary.registered + (existing ? 0 : 1);
-    var declared = Number(project.members_declared) || 0;
-    if (declared && registeredAfter > declared) alerts.push('SUPERA_INTEGRANTES_DECLARADOS');
+    var declared = Number(project.members_declared) || 1;
+    if (!crew) {
+      var registeredAfter = summary.registered + (existing ? 0 : 1);
+      if (registeredAfter > declared) alerts.push('SUPERA_INTEGRANTES_DECLARADOS');
+    }
 
     var now = ahoraISO();
     var row = {
@@ -3668,11 +4541,17 @@ function accionRegistrarIntegrante(datos) {
       full_name: normalizarTexto(datos.full_name), id_number: normalizarTexto(datos.id_number),
       normalized_id_number: norm, birth_date: normalizarTexto(datos.birth_date),
       age: validation.age === null ? '' : validation.age,
-      adult_confirmation: esVerdadero(datos.adult_confirmation), artistic_role: normalizarTexto(datos.artistic_role),
+      adult_confirmation: esVerdadero(datos.adult_confirmation),
+      artistic_role: crew ? '' : normalizarTexto(datos.artistic_role),
+      person_role: role,
+      crew_role: crew ? normalizarComparable(datos.crew_role).replace(/[^A-Z]/g, '') : '',
+      on_stage: crew ? esVerdadero(datos.on_stage) : true,
+      document_type: normalizeDocumentType(datos.document_type),
+      person_id: personIdFor(norm),
       consent_terms: esVerdadero(datos.accept_terms), consent_data: esVerdadero(datos.accept_data_processing),
       consent_image: esVerdadero(datos.accept_image_voice), consent_at: now,
-      terms_version: cfg('terms_version', ''), policy_version: cfg('policy_version', 'v2'),
-      data_controller: dataControllerStamp(), capture_source: 'web:formulario-integrantes',
+      terms_version: cfg('terms_version', ''), policy_version: cfg('policy_version', ''),
+      data_controller: dataControllerStamp(), capture_source: 'web:formulario-equipo',
       member_status: validation.status, member_alert: alerts.join(' | ')
     };
     if (signature) {
@@ -3683,18 +4562,22 @@ function accionRegistrarIntegrante(datos) {
 
     if (existing) {
       actualizarFila(HOJA.INTEGRANTES, existing._fila, row);
-      registrar('integrante', '', 'INTEGRANTE_ACTUALIZADO', code, existing.member_id + ' estado=' + validation.status);
+      registrar('integrante', '', 'INTEGRANTE_ACTUALIZADO', code, existing.member_id + ' rol=' + role + ' estado=' + validation.status);
     } else {
       row.member_id = memberId;
       row.created_at = now;
       agregarFila(HOJA.INTEGRANTES, row);
-      registrar('integrante', '', 'INTEGRANTE', code, memberId + ' estado=' + validation.status);
+      registrar('integrante', '', 'INTEGRANTE', code, memberId + ' rol=' + role + ' estado=' + validation.status);
     }
 
     var after = groupSummary(code);
+    var okText = crew
+      ? 'Quedaste registrado(a) como equipo de trabajo del proyecto. No ocupas cupo ni participas en la calificación.'
+      : 'Tu autorización quedó registrada. Ya van ' + after.authorized + ' de ' + declared + ' intérpretes autorizados.';
     return {
       member_id: existing ? existing.member_id : memberId,
       member_status: validation.status,
+      person_role: role,
       actualizado: !!existing,
       errores: validation.errors,
       group: {
@@ -3702,12 +4585,13 @@ function accionRegistrarIntegrante(datos) {
         name: project.group_display_name || project.artistic_name,
         declared: declared,
         registered: after.registered,
-        authorized: after.authorized
+        authorized: after.authorized,
+        crew_registered: after.crew_registered
       },
       mensaje: validation.status === MEMBER_STATUS.AUTORIZADO
-        ? 'Tu autorización quedó registrada. Ya van ' + after.authorized + ' de ' + (declared || after.registered) + ' integrantes autorizados.'
+        ? okText
         : (validation.status === MEMBER_STATUS.NO_CUMPLE
-            ? 'Cada integrante debe ser mayor de edad el día del evento. Tu registro quedó guardado y la organización lo revisará.'
+            ? 'Cada persona del proyecto debe ser mayor de edad el día del evento. Tu registro quedó guardado y la organización lo revisará.'
             : 'Faltan datos o autorizaciones. Corrige lo marcado y envía de nuevo.')
     };
   });
@@ -3717,7 +4601,10 @@ function accionRegistrarIntegrante(datos) {
 // "Mi inscripción": status, group link recovery and backing-track upload
 // ---------------------------------------------------------------------------
 
-/** Finds a project by code or receipt and proves identity with the ID number. */
+/**
+ * Finds a project by code (also a code it held before withdrawing) or receipt, and proves
+ * identity with the ID number.
+ */
 function findOwnProject(datos) {
   var doc = normalizarCedula(datos.id_number);
   if (!doc) return null;
@@ -3726,22 +4613,34 @@ function findOwnProject(datos) {
   var rows = leerHoja(HOJA.REGISTRO);
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
-    var byCode = code && normalizarComparable(r.code) === code;
+    var previous = String(r.previous_code || '').toUpperCase().split(/[,\s]+/);
+    var byCode = code && (normalizarComparable(r.code) === code || previous.indexOf(code) !== -1);
     var byReceipt = receipt && normalizarComparable(r.submission_id) === receipt;
     if ((byCode || byReceipt) && normalizarCedula(r.normalized_id_number || r.id_number) === doc) return r;
   }
   return null;
 }
 
-function friendlyStatus(r) {
-  var e = normalizarComparable(r.eligibility_status);
-  if (normalizarTexto(r.code)) return 'Tienes cupo. Este es tu código y tu horario.';
-  if (e === 'APTO') return 'Tu inscripción cumple los requisitos y está en espera de la asignación de cupos.';
-  if (e === 'REVISION') return 'Tu inscripción está en revisión por la organización.';
-  if (e === 'INCOMPLETO') return 'A tu inscripción le faltan datos obligatorios: inscríbete de nuevo con los datos completos.';
-  if (e === 'NO_CUMPLE') return 'Tu inscripción no cumple los requisitos de la convocatoria.';
+/** One sentence for the person, from the official states (never from the automatic verdict). */
+function friendlyStatus(r, offer) {
+  var e = normalizeEligibility(r.eligibility_status);
+  var w = normalizarComparable(r.withdrawal_status);
+  if (w) return 'Liberaste tu cupo' + (r.previous_code ? ' (' + r.previous_code + ')' : '') + '. Gracias por avisar.';
+  if (offer) return 'Se liberó un cupo para ti: responde la oferta antes de que venza.';
+  if (normalizarTexto(r.code)) return 'Tienes turno. Este es tu código y tu horario.';
+  if (e === 'RECIBIDO') return 'Recibimos tu inscripción. La organización la está revisando: te escribiremos con el resultado.';
+  if (e === 'EN_REVISION') return 'Tu inscripción está en revisión por la organización.';
+  if (e === 'APTO') {
+    var pool = normalizarComparable(r.pool_status);
+    if (pool === 'SUPLENTE') return 'Eres apto y estás en la bolsa de suplentes: si se libera un cupo para ti, te avisaremos.';
+    if (pool === 'FUERA_DE_BOLSA') return 'Eres apto. Los turnos y la bolsa de suplentes están completos.';
+    if (pool === 'DECLINO') return 'Eres apto. No aceptaste el cupo ofrecido, así que ya no recibirás nuevas ofertas.';
+    return 'Eres apto y estás en espera de la asignación de turnos (en orden de inscripción).';
+  }
+  if (e === 'INCOMPLETO') return 'A tu inscripción le faltan datos obligatorios: envía el formulario de nuevo con los datos completos.';
+  if (e === 'NO_APTO') return 'Tu inscripción no cumple los requisitos de la convocatoria.';
   if (e === 'DUPLICADO') return 'Esta inscripción está duplicada: vale la primera que enviaste.';
-  return 'Inscripcion recibida.';
+  return 'Inscripción recibida.';
 }
 
 function accionMiInscripcion(datos) {
@@ -3750,39 +4649,72 @@ function accionMiInscripcion(datos) {
   var r = findOwnProject(datos);
   if (!r) return { ok: false, error: 'No encontramos una inscripción con esos datos. Revisa tu documento y tu código o comprobante.' };
 
-  var group = null;
-  if (r.group_code) {
-    var summary = groupSummary(r.group_code);
-    group = {
-      code: r.group_code,
-      key: groupAccessKey(r.group_code),
-      link: membersLink(r.group_code),
-      declared: Number(r.members_declared) || '',
+  var team = null;
+  var teamCode = teamCodeOf(r);
+  if (teamCode) {
+    var summary = groupSummary(teamCode);
+    team = {
+      code: teamCode,
+      key: groupAccessKey(teamCode),
+      link: membersLink(teamCode),
+      open: teamLinksOpen() && cfgBool('integrantes_abierto', true),
+      declared: Number(r.members_declared) || 1,
       registered: summary.registered,
       authorized: summary.authorized,
+      crew_registered: summary.crew_registered,
       members: summary.list.map(function (m) {
         var parts = normalizarTexto(m.full_name).split(' ');
         return {
           name: parts[0] + (parts.length > 1 ? ' ' + parts[parts.length - 1].charAt(0) + '.' : ''),
-          role: m.artistic_role, status: m.member_status, leader: esVerdadero(m.is_leader)
+          role: isCrew(m) ? (CREW_ROLE_LABELS[m.crew_role] || 'Equipo') : m.artistic_role,
+          crew: isCrew(m), status: m.member_status, leader: esVerdadero(m.is_leader),
+          signed: !!normalizarTexto(m.signature_file_id)
         };
       })
     };
   }
 
+  var offer = leerHoja(HOJA.OFERTAS).filter(function (o) {
+    return o.submission_id === r.submission_id && normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE && !offerExpired(o);
+  })[0];
+  var w = currentWindows();
+  var hasSlot = !!normalizarTexto(r.code);
+  var eligibility = normalizeEligibility(r.eligibility_status);
+
   return {
     submission_id: r.submission_id,
-    eligibility_status: r.eligibility_status,
-    estado_texto: friendlyStatus(r),
+    eligibility_status: eligibility,
+    estado_label: ELIGIBILITY_LABELS[eligibility] || eligibility,
+    estado_texto: friendlyStatus(r, offer),
+    participation_status: r.participation_status || participationStatus(r, !!offer),
+    pool_status: normalizarComparable(r.pool_status),
     artistic_name: r.artistic_name,
     participation_mode: r.participation_mode || 'SOLISTA',
     code: r.code || '',
-    bloque: r.final_block || r.original_block || '',
-    hora_llegada: r.arrival_time ? humanTime(r.arrival_time) : '',
-    hora_audicion: (r.final_time || r.original_time) ? humanTime(r.final_time || r.original_time) : '',
+    previous_code: r.previous_code || '',
+    withdrawal_status: r.withdrawal_status || '',
+    bloque: hasSlot ? (r.final_block || r.original_block || '') : '',
+    hora_llegada: hasSlot && r.arrival_time ? humanTime(r.arrival_time) : '',
+    hora_audicion: hasSlot && (r.final_time || r.original_time) ? humanTime(r.final_time || r.original_time) : '',
     fecha_texto: humanDate(cfgFecha('evento_fecha', '2026-10-23')),
     lugar: cfg('evento_sede', ''),
     change_status: r.change_status || ESTADO_CAMBIO.SIN_SOLICITUD,
+    final_confirmation: normalizarComparable(r.final_confirmation),
+    acciones: {
+      retiro: hasSlot && w.retiro_abierto,
+      confirmacion_final: hasSlot && w.confirmacion_abierta,
+      lista_bloqueada: w.lista_bloqueada,
+      retiro_desde_texto: deadlineText(cfg('reemplazos_desde', '')),
+      confirmacion_desde_texto: deadlineText(cfg('confirmacion_final_desde', '')),
+      confirmacion_hasta_texto: deadlineText(cfg('confirmacion_final_hasta', '')),
+      palabra_confirmacion: WITHDRAW_CONFIRMATION
+    },
+    oferta: offer ? {
+      oferta_id: offer.oferta_id, slot_code: offer.slot_code,
+      hora_llegada: humanTime(clockText(offer.slot_arrival) || offer.slot_arrival),
+      hora_audicion: humanTime(clockText(offer.slot_time) || offer.slot_time),
+      vence_texto: humanDateTime(offer.expires_at)
+    } : null,
     song_name: r.song_name || '',
     track: {
       uses: esVerdadero(r.track_uses),
@@ -3790,12 +4722,12 @@ function accionMiInscripcion(datos) {
       status: r.track_status || (esVerdadero(r.track_uses) ? TRACK_STATUS.PENDIENTE : TRACK_STATUS.NO_APLICA),
       file_name: r.track_file_name || '',
       updated_at: r.track_updated_at || '',
-      can_upload: !!normalizarTexto(r.code) && cfgBool('pistas_abiertas', true),
+      can_upload: hasSlot && cfgBool('pistas_abiertas', true),
       max_mb: cfgNumero('pista_max_mb', 15),
       formats: cfg('pista_formatos', 'mp3,wav,m4a,aac,ogg,flac')
     },
     video: { status: r.video_check_status || '', detail: r.video_check_detail || '' },
-    group: group,
+    group: team,
     whatsapp_oficial: cfg('whatsapp_oficial', ''),
     whatsapp_nombre: cfg('whatsapp_oficial_nombre', '')
   };
@@ -3868,7 +4800,7 @@ function accionVerificarVideo(datos) {
 
 /** Records the request only; the new slot is decided by production, never chosen by the participant. */
 function accionSolicitarCambio(datos) {
-  if (!cfgBool('cambios_abiertos', true)) {
+  if (!cfgBool('cambios_abiertos', true) || cfgBool('lista_oficial_bloqueada', false)) {
     return { ok: false, error: 'El plazo para solicitar cambios de horario ya cerró.', cerrado: true };
   }
   var key = 'cambio:' + normalizarComparable(datos.participant_code) + ':' + (datos.client_submission_id || '');
@@ -3899,10 +4831,14 @@ function accionSolicitarCambio(datos) {
       original_time: clockText(registro.original_time) || (horario ? horario.audition_time : ''),
       can_attend_original: 'FALSE', reason_short: String(datos.reason_short || '').slice(0, 400),
       contact: normalizarTexto(datos.contact), acceptance: esVerdadero(datos.acceptance) ? 'TRUE' : 'FALSE',
-      estado: ESTADO_CAMBIO.PENDIENTE, nuevo_bloque: '', nueva_hora: '', resuelto_at: '', resuelto_by: '', observacion: ''
+      estado: ESTADO_CAMBIO.PENDIENTE, nuevo_bloque: '', nueva_hora: '', resuelto_at: '', resuelto_by: '', observacion: '',
+      notificacion_estado: 'CORREO EN COLA'
     });
-    actualizarFila(HOJA.REGISTRO, registro._fila, { change_requested: 'TRUE', change_status: ESTADO_CAMBIO.PENDIENTE });
+    actualizarFila(HOJA.REGISTRO, registro._fila, { change_requested: 'TRUE', change_status: ESTADO_CAMBIO.PENDIENTE,
+                                                    participation_status: PARTICIPATION.CAMBIO_PENDIENTE });
     registrar('participante', '', 'SOLICITUD_CAMBIO', registro.code, solicitudId);
+    enqueueEmail('CAMBIO_SOLICITADO', Object.assign({}, registro, { change_status: ESTADO_CAMBIO.PENDIENTE }), 'cambio',
+                 { solicitud_id: solicitudId }, 'CAMBIO_SOLICITADO:' + solicitudId);
     return {
       solicitud_id: solicitudId, estado: ESTADO_CAMBIO.PENDIENTE,
       mensaje: 'Registramos tu solicitud. Producción te confirmará por WhatsApp o correo si es APROBADA o NO APROBADA. ' +
@@ -3956,7 +4892,10 @@ function accionConfigPublica() {
       edad_maxima: cfgNumero('edad_maxima', 30),
       duracion_audicion: cfgNumero('duracion_audicion_min', 3),
       cupo: cfgNumero('cupo_total', 100),
-      top: cfgNumero('top_seleccionados', 7),
+      top: cfgNumero('top_seleccionados', 10),
+      bolsa: cfgNumero('bolsa_aptos', 200),
+      reemplazos_desde_texto: deadlineText(cfg('reemplazos_desde', '')),
+      confirmacion_final_texto: deadlineText(cfg('confirmacion_final_desde', '')),
       jurados: cfgNumero('jurados', 3),
       integrantes_max: cfgNumero('integrantes_max', 15)
     },
@@ -3982,6 +4921,8 @@ function accionConfigPublica() {
       pista_formatos: cfg('pista_formatos', 'mp3,wav,m4a,aac,ogg,flac'),
       verificar_videos: cfgBool('verificar_videos', true),
       firma_integrantes: cfgBool('firma_integrantes', true),
+      firma_inscripcion: cfgBool('firma_inscripcion', true),
+      document_types: DOCUMENT_TYPES.map(function (d) { return { id: d, etiqueta: DOCUMENT_TYPE_LABELS[d] }; }),
       exigir_video: cfgBool('exigir_video', false)
     },
     entorno: entorno(),
@@ -4013,8 +4954,12 @@ function registryRowView(r) {
     genre_primary: projectGenre(r), members_declared: r.members_declared,
     group_code: r.group_code, group_match_status: r.group_match_status, group_match_ref: r.group_match_ref,
     video_url: r.video_url, video_check_status: r.video_check_status, video_check_detail: r.video_check_detail,
-    track_status: r.track_status, eligibility_status: r.eligibility_status,
-    eligibility_override: r.eligibility_override,
+    track_status: r.track_status, eligibility_status: normalizeEligibility(r.eligibility_status),
+    eligibility_auto: normalizeEligibility(r.eligibility_auto), eligibility_override: r.eligibility_override,
+    team_code: teamCodeOf(r), document_type: r.document_type, priority_rank: r.priority_rank,
+    pool_status: r.pool_status, participation_status: r.participation_status, withdrawal_status: r.withdrawal_status,
+    previous_code: r.previous_code, final_confirmation: r.final_confirmation, evaluation_status: r.evaluation_status,
+    ranking_status: r.ranking_status, dq_status: r.dq_status,
     duplicate_flag: r.duplicate_flag, duplicate_reason: r.duplicate_reason,
     validation_notes: r.validation_notes,
     original_block: r.original_block, original_time: clockText(r.original_time),
@@ -4035,9 +4980,13 @@ function filterRegistry(filas, datos) {
   var busqueda = normalizarComparable(datos.q || '');
   return filas.filter(function (r) {
     if (filtro && filtro !== 'TODOS') {
+      var elig = normalizeEligibility(r.eligibility_status);
       if (filtro === 'AGRUPACIONES') { if (!r.group_code) return false; }
       else if (filtro === 'CON_CODIGO') { if (!normalizarTexto(r.code)) return false; }
-      else if (normalizarComparable(r.eligibility_status) !== filtro) return false;
+      else if (filtro === 'POR_REVISAR') { if (elig !== 'RECIBIDO' && elig !== 'EN_REVISION') return false; }
+      else if (filtro === 'SUPLENTES') { if (normalizarComparable(r.pool_status) !== POOL_STATUS.SUPLENTE) return false; }
+      else if (filtro === 'RETIRADOS') { if (!isWithdrawn(r)) return false; }
+      else if (elig !== normalizeEligibility(filtro)) return false;
     }
     if (!busqueda) return true;
     return normalizarComparable(r.full_name).indexOf(busqueda) !== -1 ||
@@ -4080,24 +5029,31 @@ function accionListarRegistroEnmascarado(datos) {
 }
 
 function resumenElegibilidad(filas) {
-  var r = { total: filas.length, apto: 0, incompleto: 0, no_cumple: 0, revision: 0,
-            duplicado: 0, con_codigo: 0, unicos: 0, agrupaciones: 0, duos: 0, solistas: 0 };
+  var r = { total: filas.length, recibido: 0, en_revision: 0, apto: 0, no_apto: 0, incompleto: 0, duplicado: 0,
+            con_codigo: 0, suplentes: 0, retirados: 0, unicos: 0, agrupaciones: 0, duos: 0, solistas: 0 };
   var cedulas = {};
   filas.forEach(function (f) {
-    var e = normalizarComparable(f.eligibility_status);
-    if (e === 'APTO') r.apto++;
+    var e = normalizeEligibility(f.eligibility_status);
+    if (e === 'RECIBIDO') r.recibido++;
+    else if (e === 'EN_REVISION') r.en_revision++;
+    else if (e === 'APTO') r.apto++;
+    else if (e === 'NO_APTO') r.no_apto++;
     else if (e === 'INCOMPLETO') r.incompleto++;
-    else if (e === 'NO_CUMPLE') r.no_cumple++;
-    else if (e === 'REVISION') r.revision++;
     else if (e === 'DUPLICADO') r.duplicado++;
     if (normalizarTexto(f.code)) r.con_codigo++;
+    if (normalizarComparable(f.pool_status) === POOL_STATUS.SUPLENTE) r.suplentes++;
+    if (isWithdrawn(f)) r.retirados++;
     var mode = normalizeParticipationMode(f.participation_mode) || 'SOLISTA';
     if (mode === 'AGRUPACION') r.agrupaciones++; else if (mode === 'DUO') r.duos++; else r.solistas++;
     var c = normalizarCedula(f.id_number);
     if (c) cedulas[c] = true;
   });
   r.unicos = Object.keys(cedulas).length;
-  r.validos = r.apto + r.revision;
+  r.por_revisar = r.recibido + r.en_revision;
+  r.validos = r.apto + r.en_revision + r.recibido;
+  // Aliases read by older screens.
+  r.revision = r.en_revision;
+  r.no_cumple = r.no_apto;
   return r;
 }
 
@@ -4134,6 +5090,11 @@ function accionRevalidarTodo(datos, sesion) {
 
     filas.forEach(function (r) {
       var verdict = validarInscripcion(rowAsSubmission(r), opciones);
+      if (normalizarTexto(r.signature_file_id) === '' && cfgBool('firma_inscripcion', true) && normalizarTexto(r.team_code) &&
+          verdict.eligibility_status !== ESTADO_ELEGIBILIDAD.NO_APTO) {
+        verdict.eligibility_status = ESTADO_ELEGIBILIDAD.INCOMPLETO;
+        verdict.errores.push({ campo: 'signature_png', codigo: 'FALTANTE' });
+      }
       var candidate = {
         submission_id: r.submission_id,
         normalized_id_number: normalizarCedula(r.id_number),
@@ -4147,32 +5108,44 @@ function accionRevalidarTodo(datos, sesion) {
       var matchStatus = normalizarComparable(r.group_match_status);
       var gm = (candidate.group_match_key && matchStatus !== 'CONFIRMADA_DISTINTA')
         ? detectGroupMatch(candidate, seen) : { match: false };
-      seen.push(candidate);
+      // An incomplete registration never makes a later, complete one a duplicate.
+      if (verdict.eligibility_status !== ESTADO_ELEGIBILIDAD.INCOMPLETO) seen.push(candidate);
 
-      var status = verdict.eligibility_status;
-      if (matchStatus === 'CONFIRMADA_MISMA' || dup.duplicate_flag) status = ESTADO_ELEGIBILIDAD.DUPLICADO;
-      else if ((dup.alerta || gm.match) && status === ESTADO_ELEGIBILIDAD.APTO) status = ESTADO_ELEGIBILIDAD.REVISION;
+      var auto = verdict.eligibility_status;
+      if (auto !== ESTADO_ELEGIBILIDAD.INCOMPLETO) {
+        if (matchStatus === 'CONFIRMADA_MISMA' || dup.duplicate_flag) auto = ESTADO_ELEGIBILIDAD.DUPLICADO;
+        else if ((dup.alerta || gm.match) && auto === ESTADO_ELEGIBILIDAD.APTO) auto = ESTADO_ELEGIBILIDAD.EN_REVISION;
+      }
 
+      var current = normalizeEligibility(r.eligibility_status);
+      var status = current;
       var notes = verdict.errores.map(function (x) { return x.campo + ':' + x.codigo; });
-      var override = normalizarComparable(r.eligibility_override);
+      var override = normalizeEligibility(r.eligibility_override);
       if (override && ESTADO_ELEGIBILIDAD[override]) {
-        if (override !== status) notes.push('DECISION_MANUAL(' + override + ') sobre regla(' + status + ')');
+        if (override !== auto) notes.push('DECISION_MANUAL(' + override + ') sobre regla(' + auto + ')');
         status = override;
+      } else if (current !== ESTADO_ELEGIBILIDAD.RECIBIDO) {
+        // Decided rows follow the rule; RECIBIDO waits for staff to apply the verification.
+        status = auto;
       }
       // A row that already holds a code keeps its seat: re-validation informs, it does not strip.
-      if (normalizarTexto(r.code) && status === ESTADO_ELEGIBILIDAD.DUPLICADO) status = ESTADO_ELEGIBILIDAD.REVISION;
+      if (normalizarTexto(r.code) && (status === ESTADO_ELEGIBILIDAD.DUPLICADO || status === ESTADO_ELEGIBILIDAD.NO_APTO)) {
+        status = ESTADO_ELEGIBILIDAD.EN_REVISION;
+      }
 
       updates.push({
         fila: r._fila,
         cambios: {
           age: verdict.edad === null ? '' : verdict.edad,
           eligibility_status: status,
+          eligibility_auto: auto,
           duplicate_flag: dup.duplicate_flag || matchStatus === 'CONFIRMADA_MISMA',
           duplicate_reason: matchStatus === 'CONFIRMADA_MISMA' ? 'GRUPO_REPETIDO' : dup.duplicate_reason,
           registro_principal: matchStatus === 'CONFIRMADA_MISMA' ? r.group_match_ref : dup.registro_principal,
           normalized_id_number: candidate.normalized_id_number,
           normalized_email: candidate.normalized_email,
           normalized_phone: candidate.normalized_phone,
+          person_id: r.person_id || personIdFor(candidate.normalized_id_number),
           group_match_key: candidate.group_match_key,
           group_match_status: matchStatus || (gm.match ? 'POSIBLE_REPETIDA' : ''),
           group_match_ref: r.group_match_ref || (gm.match ? gm.ref : ''),
@@ -4182,34 +5155,109 @@ function accionRevalidarTodo(datos, sesion) {
     });
 
     actualizarFilasEnLote(HOJA.REGISTRO, updates);
+    refreshPoolLocked();
     registrar(sesion.alias, sesion.rol, 'REVALIDAR_TODO', '', filas.length + ' filas');
     return { revalidados: filas.length, resumen: resumenElegibilidad(leerHoja(HOJA.REGISTRO)) };
   });
 }
 
-/** Manual decision by logistics, always logged with who and why, and kept by later re-validations. */
+/** Final aptitude states: the ones that are communicated to the person. */
+var FINAL_ELIGIBILITY = ['APTO', 'NO_APTO', 'DUPLICADO', 'INCOMPLETO'];
+
+/** Queues the aptitude result e-mail once per (registration, state). Caller holds the lock. */
+function queueAptitudeEmailLocked(row, status) {
+  if (FINAL_ELIGIBILITY.indexOf(status) === -1) return false;
+  var r = enqueueEmail('APTITUD', Object.assign({}, row, { eligibility_status: status }), 'aptitud', {},
+                       'APTITUD:' + row.submission_id + ':' + status);
+  if (r.encolado) actualizarFila(HOJA.REGISTRO, row._fila, { aptitude_notified_at: isoWithOffset() });
+  return r.encolado;
+}
+
+/**
+ * "Aplicar verificación": every RECIBIDO registration takes its automatic verdict as the official
+ * aptitude, except the ones the rules flagged for a person (EN_REVISION), which wait for a manual
+ * decision. Everyone decided gets the aptitude e-mail. Nothing is ever deleted.
+ */
+function accionAplicarVerificacion(datos, sesion) {
+  var result = conBloqueo(function () {
+    var rows = leerHoja(HOJA.REGISTRO).filter(function (r) { return normalizeEligibility(r.eligibility_status) === ESTADO_ELEGIBILIDAD.RECIBIDO; });
+    var now = isoWithOffset();
+    var counts = {};
+    var updates = rows.map(function (r) {
+      var auto = normalizeEligibility(r.eligibility_auto) || ESTADO_ELEGIBILIDAD.EN_REVISION;
+      counts[auto] = (counts[auto] || 0) + 1;
+      return { fila: r._fila, row: r, status: auto,
+               cambios: { eligibility_status: auto, eligibility_decided_at: now, eligibility_decided_by: sesion.alias } };
+    });
+    actualizarFilasEnLote(HOJA.REGISTRO, updates);
+    var queued = 0;
+    updates.forEach(function (u) { if (queueAptitudeEmailLocked(u.row, u.status)) queued++; });
+    var pool = refreshPoolLocked();
+    registrar(sesion.alias, sesion.rol, 'APLICAR_VERIFICACION', '', JSON.stringify(counts));
+    return { aplicadas: updates.length, por_estado: counts, correos_en_cola: queued, bolsa: pool,
+             en_revision_manual: counts.EN_REVISION || 0 };
+  });
+  result.envio = processEmailQueue({ limit: 15 });
+  return result;
+}
+
+/** Queues the aptitude e-mail for every decided registration that has not been told its current state. */
+function accionNotificarAptitud(datos, sesion) {
+  var result = conBloqueo(function () {
+    var queued = 0;
+    leerHoja(HOJA.REGISTRO).forEach(function (r) {
+      if (queueAptitudeEmailLocked(r, normalizeEligibility(r.eligibility_status))) queued++;
+    });
+    registrar(sesion.alias, sesion.rol, 'NOTIFICAR_APTITUD', '', queued + ' correos');
+    return { correos_en_cola: queued };
+  });
+  result.envio = processEmailQueue({ limit: 15 });
+  return result;
+}
+
+/**
+ * Manual decision by logistics, always logged with who and why, and kept by later re-validations.
+ * A slot holder can only be made NO_APTO / DUPLICADO by releasing the slot (liberar_cupo), so the
+ * seat goes to the next substitute instead of silently disappearing.
+ */
 function accionMarcarElegibilidad(datos, sesion) {
   return conBloqueo(function () {
     var registro = datos.submission_id
       ? leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === datos.submission_id; })[0]
       : buscarPorCodigo(datos.code);
     if (!registro) return { ok: false, error: 'Registro no encontrado.' };
-    if (!normalizarTexto(datos.motivo)) return { ok: false, error: 'Escribe el motivo: queda en la bitacora.' };
+    if (!normalizarTexto(datos.motivo)) return { ok: false, error: 'Escribe el motivo: queda en la bitácora.' };
 
-    var nuevo = normalizarComparable(datos.eligibility_status);
-    if (!ESTADO_ELEGIBILIDAD[nuevo]) return { ok: false, error: 'Estado de elegibilidad invalido: ' + datos.eligibility_status };
-
+    var nuevo = normalizeEligibility(datos.eligibility_status);
+    if (!ESTADO_ELEGIBILIDAD[nuevo]) return { ok: false, error: 'Estado de elegibilidad inválido: ' + datos.eligibility_status };
+    var holder = !!normalizarTexto(registro.code);
+    if (holder && (nuevo === 'NO_APTO' || nuevo === 'DUPLICADO' || nuevo === 'INCOMPLETO')) {
+      if (!esVerdadero(datos.liberar_cupo)) {
+        return { ok: false, requiere_liberar: true,
+                 error: 'Este proyecto tiene el cupo ' + registro.code + '. Para marcarlo ' + nuevo + ' hay que liberar el cupo (pasa al siguiente suplente).' };
+      }
+    }
+    var now = isoWithOffset();
     actualizarFila(HOJA.REGISTRO, registro._fila, {
       eligibility_status: nuevo,
       eligibility_override: nuevo,
       override_by: sesion.alias,
-      override_at: ahoraISO(),
-      notes: [registro.notes, '[' + ahoraISO() + ' ' + sesion.alias + '] ' + nuevo + ': ' + datos.motivo]
-        .filter(Boolean).join(' || ')
+      override_at: now,
+      eligibility_decided_at: now,
+      eligibility_decided_by: sesion.alias,
+      notes: [registro.notes, '[' + now + ' ' + sesion.alias + '] ' + nuevo + ': ' + datos.motivo].filter(Boolean).join(' || ')
     });
     registrar(sesion.alias, sesion.rol, 'MARCAR_ELEGIBILIDAD', registro.submission_id,
               registro.eligibility_status + '->' + nuevo + ' motivo=' + datos.motivo);
-    return { submission_id: registro.submission_id, eligibility_status: nuevo };
+    var released = null;
+    var fresh = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === registro.submission_id; })[0];
+    if (holder && esVerdadero(datos.liberar_cupo) && nuevo !== 'APTO' && nuevo !== 'EN_REVISION' && nuevo !== 'RECIBIDO') {
+      released = releaseSlotLocked(fresh, { actor: sesion.alias, rol: sesion.rol, reason: 'Aptitud ' + nuevo + ': ' + datos.motivo });
+      fresh = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === registro.submission_id; })[0];
+    }
+    queueAptitudeEmailLocked(fresh, nuevo);
+    refreshPoolLocked();
+    return { submission_id: registro.submission_id, eligibility_status: nuevo, cupo_liberado: released };
   });
 }
 
@@ -4219,7 +5267,8 @@ function accionMarcarElegibilidad(datos, sesion) {
  * takes exactly one code however many members it has.
  */
 function accionAsignarCodigos(datos, sesion) {
-  return conBloqueo(function () {
+  if (cfgBool('lista_oficial_bloqueada', false)) return { ok: false, error: 'La lista oficial ya está consolidada.' };
+  var out = conBloqueo(function () {
     var cfgAgenda = agendaConfigurada();
     var filas = leerHoja(HOJA.REGISTRO);
     var resultado = asignarCodigos(filas, {
@@ -4251,6 +5300,21 @@ function accionAsignarCodigos(datos, sesion) {
     });
 
     actualizarFilasEnLote(HOJA.REGISTRO, actualizaciones);
+    var pool = refreshPoolLocked();
+
+    // Each newly assigned project gets its code and schedule; each eligible project without a
+    // slot is told whether it is a substitute or outside the pool. Idempotent per state.
+    var queued = { asignacion: 0, sin_cupo: 0 };
+    leerHoja(HOJA.REGISTRO).forEach(function (r) {
+      if (normalizarTexto(r.code)) {
+        if (enqueueEmail('ASIGNACION', r, 'asignacion', {}, 'ASIGNACION:' + r.submission_id + ':' + normalizarComparable(r.code)).encolado) queued.asignacion++;
+        return;
+      }
+      var p = normalizarComparable(r.pool_status);
+      if (normalizeEligibility(r.eligibility_status) === 'APTO' && (p === POOL_STATUS.SUPLENTE || p === POOL_STATUS.FUERA_DE_BOLSA)) {
+        if (enqueueEmail('SIN_CUPO', r, 'asignacion', {}, 'SIN_CUPO:' + r.submission_id + ':' + p).encolado) queued.sin_cupo++;
+      }
+    });
     refrescarVistas();
 
     registrar(sesion.alias, sesion.rol, 'ASIGNAR_CODIGOS', '',
@@ -4261,10 +5325,15 @@ function accionAsignarCodigos(datos, sesion) {
       ya_tenian: resultado.ya_tenian,
       total_con_codigo: resultado.total_con_codigo,
       sin_cupo: resultado.sin_cupo.length,
+      suplentes: pool.suplentes,
+      fuera_de_bolsa: pool.fuera_de_bolsa,
       cupo: resultado.cupo,
+      correos_en_cola: queued,
       detalle: resultado.asignados.slice(0, 200)
     };
   });
+  out.envio = processEmailQueue({ limit: 15 });
+  return out;
 }
 
 function accionListarCambios(datos) {
@@ -4291,6 +5360,9 @@ function accionBloquesDisponibles() {
 
 /** Production approves (with a destination block) or rejects. */
 function accionResolverCambio(datos, sesion) {
+  if (cfgBool('lista_oficial_bloqueada', false)) {
+    return { ok: false, error: 'La lista oficial ya está consolidada: no hay cambios ordinarios. Si es una emergencia, admin debe desbloquearla.' };
+  }
   return conBloqueo(function () {
     var solicitudes = leerHoja(HOJA.CAMBIOS);
     var solicitud = solicitudes.filter(function (c) { return c.solicitud_id === datos.solicitud_id; })[0];
@@ -4314,6 +5386,10 @@ function accionResolverCambio(datos, sesion) {
         changed_at: ahoraISO(), changed_by: sesion.alias
       });
       registrar(sesion.alias, sesion.rol, 'CAMBIO_RECHAZADO', solicitud.code, datos.observacion || '');
+      actualizarFila(HOJA.CAMBIOS, solicitud._fila, { notificacion_estado: 'CORREO EN COLA' });
+      enqueueEmail('CAMBIO_RECHAZADO', buscarPorCodigo(solicitud.code), 'cambio', { solicitud_id: solicitud.solicitud_id },
+                   'CAMBIO_RESUELTO:' + solicitud.solicitud_id);
+      refreshPoolLocked();
       refrescarVistas();
       return { estado: ESTADO_CAMBIO.RECHAZADO, code: solicitud.code,
                mensaje: 'Solicitud rechazada. El participante mantiene su horario original.' };
@@ -4341,6 +5417,10 @@ function accionResolverCambio(datos, sesion) {
     });
     registrar(sesion.alias, sesion.rol, 'CAMBIO_APROBADO', solicitud.code,
               'bloque=' + aplicado.horario.block_id);
+    actualizarFila(HOJA.CAMBIOS, solicitud._fila, { notificacion_estado: 'CORREO EN COLA' });
+    enqueueEmail('CAMBIO_APROBADO', buscarPorCodigo(solicitud.code), 'cambio', { solicitud_id: solicitud.solicitud_id },
+                 'CAMBIO_RESUELTO:' + solicitud.solicitud_id);
+    refreshPoolLocked();
     refrescarVistas();
 
     return {
@@ -4376,24 +5456,31 @@ function accionRefrescarVistas(datos, sesion) {
 
 /** Every group project with its members (logistics sees full data: it operates with it). */
 function accionListarAgrupaciones(datos) {
-  var projects = leerHoja(HOJA.REGISTRO).filter(function (r) { return normalizarTexto(r.group_code); });
   var members = leerHoja(HOJA.INTEGRANTES);
+  var withCrew = {};
+  members.forEach(function (m) { if (isCrew(m)) withCrew[normalizarComparable(m.group_code)] = true; });
+  var projects = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    return normalizarTexto(r.group_code) || withCrew[normalizarComparable(teamCodeOf(r))];
+  });
   return {
     total: projects.length,
     agrupaciones: projects.map(function (p) {
-      var summary = groupSummary(p.group_code, members);
+      var team = teamCodeOf(p);
+      var summary = groupSummary(team, members);
       return {
-        submission_id: p.submission_id, code: p.code, group_code: p.group_code,
+        submission_id: p.submission_id, code: p.code, group_code: team,
         group_display_name: p.group_display_name || p.artistic_name,
         group_match_status: p.group_match_status, group_match_ref: p.group_match_ref,
         participation_mode: p.participation_mode, eligibility_status: p.eligibility_status,
         leader_name: p.full_name, leader_whatsapp: p.whatsapp,
         members_declared: Number(p.members_declared) || '', members_registered: summary.registered,
-        members_authorized: summary.authorized,
-        members_link: membersLink(p.group_code),
+        members_authorized: summary.authorized, crew_registered: summary.crew_registered,
+        members_link: membersLink(team),
         members: summary.list.map(function (m) {
           return {
             member_id: m.member_id, full_name: m.full_name, id_number: m.id_number, age: m.age,
+            document_type: m.document_type || 'CC', person_role: normalizePersonRole(m.person_role),
+            crew_role: m.crew_role ? (CREW_ROLE_LABELS[m.crew_role] || m.crew_role) : '', on_stage: esVerdadero(m.on_stage),
             artistic_role: m.artistic_role, is_leader: esVerdadero(m.is_leader),
             consent_terms: esVerdadero(m.consent_terms), consent_data: esVerdadero(m.consent_data),
             consent_image: esVerdadero(m.consent_image), signature: !!normalizarTexto(m.signature_file_id),
@@ -4586,27 +5673,80 @@ function accionExportarContactos(datos, sesion) {
 // ---------------------------------------------------------------------------
 
 /**
- * Minutes of the committee for a tie at the cut that the ladder could not
- * break. The new decision replaces any previous one; RESULTADOS applies it
- * only if it still matches the current tie.
+ * Minutes of a tie at cut 10 or 20 that the automatic criterion (presence + arena) could not break:
+ * method (repeat a short song / the music juror's casting vote), participants, result and the order
+ * decided. One decision in force per cut; RESULTADOS applies it only while it matches the current tie.
  */
 function accionRegistrarDeliberacion(datos, sesion) {
-  var codes = String(datos.codes_in_order || '').split(/[\s,;]+/).map(function (c) { return normalizarComparable(c); }).filter(Boolean);
-  if (codes.length < 2) return { ok: false, error: 'Indica el orden decidido con al menos dos codigos.' };
-  if (!normalizarTexto(datos.acta)) return { ok: false, error: 'Escribe el acta: quienes deliberaron y por que.' };
+  var codes = (Array.isArray(datos.codes_in_order) ? datos.codes_in_order : String(datos.codes_in_order || '').split(/[\s,;]+/))
+    .map(function (c) { return normalizarComparable(c); }).filter(Boolean);
+  var cut = parseInt(datos.cut_position, 10) || cfgNumero('top_seleccionados', 10);
+  var method = normalizarComparable(datos.method);
+  if (codes.length < 2) return { ok: false, error: 'Indica el orden decidido con al menos dos códigos.' };
+  if (cut !== cfgNumero('top_seleccionados', 10) && cut !== cfgNumero('top_privado', 20)) {
+    return { ok: false, error: 'El corte debe ser ' + cfgNumero('top_seleccionados', 10) + ' o ' + cfgNumero('top_privado', 20) + '.' };
+  }
+  if (!TIE_METHODS.some(function (m) { return m.id === method; })) return { ok: false, error: 'Elige el método de desempate.' };
+  if (normalizarTexto(datos.participants).length < 3) return { ok: false, error: 'Escribe quiénes participaron en la decisión.' };
+  if (normalizarTexto(datos.result).length < 3) return { ok: false, error: 'Escribe el resultado (qué pasó y por qué).' };
+  if (cfgBool('resultados_cerrados', false)) return { ok: false, error: 'Los resultados están cerrados.' };
   return conBloqueo(function () {
+    var tie = tiedCuts().filter(function (t) { return t.cut === cut; })[0];
+    if (!tie) return { ok: false, error: 'No hay un empate sin resolver en el corte ' + cut + '.' };
+    var tiedCodes = tie.empatados.map(function (a) { return normalizarComparable(a.code); });
+    var sameSet = codes.length === tiedCodes.length && tiedCodes.every(function (c) { return codes.indexOf(c) !== -1; });
+    if (!sameSet) return { ok: false, error: 'El acta debe ordenar exactamente a los empatados: ' + tiedCodes.join(', ') + '.' };
     leerHoja(HOJA.DELIBERACIONES).forEach(function (d) {
-      if (normalizarComparable(d.status) === 'VIGENTE') actualizarFila(HOJA.DELIBERACIONES, d._fila, { status: 'REEMPLAZADA' });
+      if (normalizarComparable(d.status) === 'VIGENTE' && Number(d.cut_position) === cut) {
+        actualizarFila(HOJA.DELIBERACIONES, d._fila, { status: 'REEMPLAZADA' });
+      }
     });
     var id = nuevoId('ACTA');
     agregarFila(HOJA.DELIBERACIONES, {
-      deliberation_id: id, at: ahoraISO(), by: sesion.alias, codes_in_order: codes.join(','),
-      cut_position: cfgNumero('top_seleccionados', 7), minutes: String(datos.acta).slice(0, 2000), status: 'VIGENTE'
+      deliberation_id: id, at: isoWithOffset(), by: sesion.alias, codes_in_order: codes.join(','), cut_position: cut,
+      minutes: String(datos.acta || datos.result || '').slice(0, 2000), status: 'VIGENTE', method: method,
+      participants: String(datos.participants).slice(0, 500), result: String(datos.result).slice(0, 1000)
     });
-    registrar(sesion.alias, sesion.rol, 'DELIBERACION', id, codes.join(','));
+    registrar(sesion.alias, sesion.rol, 'DELIBERACION', id, 'corte=' + cut + ' metodo=' + method + ' orden=' + codes.join(','));
     reconstruirResultados(leerHoja(HOJA.REGISTRO));
-    return { deliberation_id: id, codes_in_order: codes };
+    return { deliberation_id: id, cut_position: cut, codes_in_order: codes };
   });
+}
+
+/**
+ * Closes the results: needs every audited project fully evaluated (3 submitted cards), no pending
+ * disqualification and no unresolved tie at 10 or 20. Locks evaluations; the Top 10 is final.
+ */
+function accionCerrarResultados(datos, sesion) {
+  if (normalizarComparable(datos.confirmacion) !== 'CERRAR') return { ok: false, error: 'Para cerrar escribe CERRAR.' };
+  return conBloqueo(function () {
+    if (cfgBool('resultados_cerrados', false)) return { ok: false, error: 'Los resultados ya están cerrados.' };
+    var rows = leerHoja(HOJA.REGISTRO);
+    var sel = computeResults(rows);
+    var problems = [];
+    if (sel.cortes.length) problems.push('Empates sin acta en el corte ' + sel.cortes.map(function (c) { return c.cut; }).join(' y ') + '.');
+    if (sel.dq_pendientes.length) problems.push('Descalificaciones sin validar: ' + sel.dq_pendientes.join(', ') + '.');
+    var missing = sel.excluidos.filter(function (e) { return e.motivo === 'JURADOS_INSUFICIENTES'; });
+    if (missing.length && !esVerdadero(datos.forzar_incompletos)) {
+      problems.push('Proyectos audicionados sin las 3 evaluaciones enviadas: ' + missing.map(function (e) { return e.code; }).join(', ') + '.');
+    }
+    if (problems.length) return { ok: false, error: problems.join(' '), pendientes: problems };
+    setConfigValue('resultados_cerrados', 'SI');
+    reconstruirResultados(leerHoja(HOJA.REGISTRO));
+    registrar(sesion.alias, sesion.rol, 'CERRAR_RESULTADOS', '', 'top=' + sel.top10.map(function (a) { return a.code; }).join(','));
+    return { cerrado: true, top10: sel.top10.map(function (a) { return { code: a.code, artistic_name: a.artistic_name }; }),
+             mensaje: 'Resultados cerrados. Ya puedes enviar el correo RESULTADO_FINAL desde Comunicación.' };
+  });
+}
+
+/** Admin only: reopens the results (e.g. a validated correction). Logged with the reason. */
+function accionReabrirResultados(datos, sesion) {
+  var reason = normalizarTexto(datos.motivo);
+  if (reason.length < 10) return { ok: false, error: 'Escribe el motivo (queda en la bitácora).' };
+  setConfigValue('resultados_cerrados', 'NO');
+  registrar(sesion.alias, sesion.rol, 'REABRIR_RESULTADOS', '', reason);
+  refrescarVistas();
+  return { mensaje: 'Resultados reabiertos.' };
 }
 
 /** Counts rows that carry test-data markers. In production this must always be zero. */
@@ -4650,13 +5790,14 @@ function constanciaData(groupCode) {
     generated_at: Utilities.formatDate(new Date(), zonaHoraria(), 'yyyy-MM-dd HH:mm'),
     members: summary.list.map(function (m) {
       return {
-        full_name: m.full_name, id_number: m.id_number, artistic_role: m.artistic_role,
+        full_name: m.full_name, id_number: m.id_number,
+        artistic_role: isCrew(m) ? 'Equipo de trabajo: ' + (CREW_ROLE_LABELS[m.crew_role] || m.crew_role || '') : m.artistic_role,
         is_leader: esVerdadero(m.is_leader), status: m.member_status, consent_at: m.consent_at,
         consent_image: esVerdadero(m.consent_image), signature: signatureDataUrl(m.signature_file_id),
         signature_sha256: m.signature_sha256
       };
     }),
-    blank_lines: Math.max(0, declared - summary.list.length)
+    blank_lines: Math.max(0, declared - summary.registered)
   };
 }
 
@@ -4683,7 +5824,8 @@ function membersByGroup() {
     byGroup[code].push({
       full_name: m.full_name,
       id_number: String(m.id_number || ''),
-      artistic_role: m.artistic_role,
+      artistic_role: isCrew(m) ? 'Equipo: ' + (CREW_ROLE_LABELS[m.crew_role] || m.crew_role || '') : m.artistic_role,
+      crew: isCrew(m),
       is_leader: esVerdadero(m.is_leader),
       member_status: m.member_status,
       signature: !!normalizarTexto(m.signature_file_id),
@@ -4695,7 +5837,8 @@ function membersByGroup() {
 
 /** One participant as the desk sees it. */
 function deskView(r, members) {
-  var list = r.group_code ? (members[normalizarComparable(r.group_code)] || []) : [];
+  var team = teamCodeOf(r);
+  var list = team ? (members[normalizarComparable(team)] || []) : [];
   return {
     code: r.code,
     full_name: r.full_name,
@@ -4706,7 +5849,7 @@ function deskView(r, members) {
     group_code: r.group_code || '',
     members_declared: Number(r.members_declared) || (r.group_code ? '' : 1),
     members: list,
-    members_authorized: list.filter(function (m) { return normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length,
+    members_authorized: list.filter(function (m) { return !m.crew && normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length,
     final_block: r.final_block || r.original_block,
     block_label: blockLabel(r.final_block || r.original_block, agendaConfigurada()),
     arrival_time: clockText(r.arrival_time),
@@ -4935,12 +6078,80 @@ function accionPistasEvento(datos) {
 // ========================================================================
 
 /**
- * EL BUNKER - Jury actions.
+ * EL BUNKER - Jury actions and the official rubric as a parameter.
  *
- * A juror sees only what they need to score: code, artistic name and discipline.
- * No document number, no contact details, no other juror's marks - the spec is
- * explicit that jurors score independently before deliberating.
+ * A juror sees only what they need to score: code, artistic name, format and song.
+ * No document number, no contact details, no other juror's marks and no ranking - jurors
+ * score independently. A card is a draft (BORRADOR) until the juror submits it
+ * ("ENVIAR Y BLOQUEAR EVALUACIÓN"); after that only direction/admin can reopen it, with a
+ * reason that goes to the log.
  */
+
+var JURY_SHEETS = ['JURADO_1', 'JURADO_2', 'JURADO_3'];
+
+// ---------------------------------------------------------------------------
+// The rubric in the PARAMETROS_RUBRICA sheet
+// ---------------------------------------------------------------------------
+
+var _rubricCache = null;
+
+/**
+ * The rubric in force: the PARAMETROS_RUBRICA sheet when it has rows, the official default
+ * otherwise. Returns the validation result too; callers that score refuse an invalid rubric.
+ */
+function activeRubric() {
+  if (_rubricCache) return _rubricCache;
+  var rows = [];
+  try {
+    if (libro().getSheetByName(HOJA.PARAMETROS_RUBRICA)) rows = leerHoja(HOJA.PARAMETROS_RUBRICA);
+  } catch (e) { rows = []; }
+  var built = rows.length ? rubricFromRows(rows) : { version: RUBRIC_VERSION_DEFAULT, categorias: RUBRIC_DEFAULT };
+  var check = validateRubric(built.categorias);
+  _rubricCache = {
+    version: built.version || RUBRIC_VERSION_DEFAULT,
+    categorias: built.categorias,
+    fingerprint: rubricFingerprint(built.categorias),
+    origen: rows.length ? 'PARAMETROS_RUBRICA' : 'DEFECTO',
+    valida: check.ok,
+    errores: check.errores
+  };
+  return _rubricCache;
+}
+
+function invalidateRubricCache() { _rubricCache = null; }
+
+/** Categories used to lay out the jury sheets; an invalid sheet never reshapes them. */
+function activeRubricCategories() {
+  var r = activeRubric();
+  return r.valida ? r.categorias : RUBRIC_DEFAULT;
+}
+
+/** Everything the private "Cómo calificar" panel shows. */
+function rubricGuide(rubric) {
+  var r = rubric || activeRubric();
+  var cats = r.categorias;
+  return {
+    version: r.version,
+    escala: RUBRIC_SCALE,
+    minimo: rubricMinTotal(cats),
+    maximo: rubricMaxTotal(cats),
+    categorias: cats.map(function (c) {
+      return {
+        id: c.id, orden: c.orden, categoria: c.categoria, corta: c.corta, categoria_no_vocal: c.categoria_no_vocal,
+        descripcion: c.descripcion, factor: c.factor, puntos_max: c.factor * RATING_MAX,
+        niveles: c.niveles.map(function (texto, i) { return { nota: i + 1, etiqueta: RUBRIC_SCALE[i].etiqueta, texto: texto }; }),
+        desempate: c.desempate
+      };
+    }),
+    desempate: cats.filter(function (c) { return c.desempate; }).map(function (c) { return c.corta; }),
+    metodos_desempate: TIE_METHODS,
+    causales_dq: DQ_CAUSES
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Jury sheets
+// ---------------------------------------------------------------------------
 
 function hojaDeJurado(alias) {
   var usuarios = leerHoja(HOJA.USUARIOS);
@@ -4955,23 +6166,69 @@ function hojaDeJurado(alias) {
   throw new Error('No se pudo determinar la hoja de este jurado. En _USUARIOS, la nota debe decir "jurado 1", "jurado 2" o "jurado 3".');
 }
 
-function accionListaEvaluacion(datos, sesion) {
-  var miHoja = hojaDeJurado(sesion.alias);
-  var yaEvaluados = {};
-  leerHoja(miHoja).forEach(function (f) {
-    if (f.code) yaEvaluados[normalizarComparable(f.code)] = f;
+function ratingsOf(row, rubric) {
+  var out = {};
+  (rubric || activeRubricCategories()).forEach(function (c) {
+    var v = row[c.id];
+    out[c.id] = esPuntajeValido(v) ? Number(v) : null;
   });
+  return out;
+}
 
-  var filas = leerHoja(HOJA.REGISTRO).filter(function (r) {
-    return normalizarTexto(r.code) && normalizarEstado(r.attendance_status) !== ESTADO.CONFIRMADO;
+/**
+ * Every juror card by project code: { 'B-001': [{ jurado: 1, estado, puntajes, total, row }] }.
+ * Used by results, dashboard and exports; the ranking counts only ENVIADA cards.
+ */
+function evaluationCards() {
+  var rubric = activeRubricCategories();
+  var byCode = {};
+  JURY_SHEETS.forEach(function (sheetName, i) {
+    leerHoja(sheetName).forEach(function (row) {
+      var code = normalizarComparable(row.code);
+      if (!code) return;
+      (byCode[code] = byCode[code] || []).push({
+        jurado: i + 1,
+        estado: normalizarComparable(row.estado) || EVALUATION_STATE.BORRADOR,
+        puntajes: ratingsOf(row, rubric),
+        total: row.total,
+        observaciones: row.observaciones || '',
+        dq_flag: esVerdadero(row.dq_flag),
+        row: row
+      });
+    });
+  });
+  return byCode;
+}
+
+function sentCards(cards) {
+  return (cards || []).filter(function (c) { return c.estado === EVALUATION_STATE.ENVIADA; });
+}
+
+// ---------------------------------------------------------------------------
+// Juror screen
+// ---------------------------------------------------------------------------
+
+function accionListaEvaluacion(datos, sesion) {
+  var rubric = activeRubric();
+  var mySheet = hojaDeJurado(sesion.alias);
+  var mine = {};
+  leerHoja(mySheet).forEach(function (f) { if (f.code) mine[normalizarComparable(f.code)] = f; });
+
+  // Everyone who reached the venue is listed so the juror can follow the day; only REALIZADA can be scored.
+  var rows = leerHoja(HOJA.REGISTRO).filter(function (r) {
+    return normalizarTexto(r.code) && normalizarTexto(r.attendance_status) &&
+           normalizarEstado(r.attendance_status) !== ESTADO.CONFIRMADO;
   });
 
   return {
-    hoja: miHoja,
-    rubrica: RUBRICA,
-    escala: ESCALA,
-    participantes: filas.map(function (r) {
-      var previo = yaEvaluados[normalizarComparable(r.code)];
+    hoja: mySheet,
+    rubrica: rubricGuide(rubric),
+    rubrica_valida: rubric.valida,
+    rubrica_errores: rubric.errores,
+    resultados_cerrados: cfgBool('resultados_cerrados', false),
+    participantes: rows.map(function (r) {
+      var card = mine[normalizarComparable(r.code)];
+      var state = card ? (normalizarComparable(card.estado) || EVALUATION_STATE.BORRADOR) : '';
       return {
         code: r.code,
         artistic_name: r.artistic_name || '(sin nombre artístico)',
@@ -4980,74 +6237,780 @@ function accionListaEvaluacion(datos, sesion) {
         members_declared: Number(r.members_declared) || 1,
         presentation_format: r.presentation_format || '',
         presentation_format_texto: presentationFormatText(r.presentation_format, r.presentation_other),
+        categoria_1: categoryLabelFor(rubric.categorias[0], r.presentation_format),
         song_name: r.song_name || '',
         attendance_status: r.attendance_status,
         audition_status: r.audition_status || '',
-        evaluado: !!previo,
-        total: previo ? previo.total : null,
-        puntajes: previo ? {
-          talento: previo.talento, performance: previo.performance,
-          identidad: previo.identidad, repertorio: previo.repertorio,
-          profesionalismo: previo.profesionalismo, presencia: previo.presencia,
-          digital: previo.digital, proyecto: previo.proyecto
-        } : null,
-        observaciones: previo ? previo.observaciones : ''
+        calificable: normalizarEstado(r.audition_status) === ESTADO.REALIZADA ||
+                     normalizarEstado(r.attendance_status) === ESTADO.REALIZADA,
+        estado_tarjeta: state,
+        bloqueada: state === EVALUATION_STATE.ENVIADA,
+        total: card && normalizarTexto(card.total) ? Number(card.total) : null,
+        puntajes: card ? ratingsOf(card, rubric.categorias) : null,
+        observaciones: card ? card.observaciones : '',
+        dq_flag: card ? esVerdadero(card.dq_flag) : false,
+        dq_causa: card ? card.dq_causa || '' : ''
       };
     })
   };
 }
 
+/**
+ * Saves a draft, or submits and locks the card when `enviar` is true.
+ * A draft may be partial; a submission must be complete (every category 1-5).
+ * Observations never change the score. A disqualification report is recorded apart and
+ * waits for validation by an authorized role.
+ */
 function accionGuardarEvaluacion(datos, sesion) {
+  var rubric = activeRubric();
+  if (!rubric.valida) {
+    return { ok: false, error: 'La rúbrica configurada no es válida (' + rubric.errores.join(' ') + '). Avisa a dirección.' };
+  }
+  if (cfgBool('resultados_cerrados', false)) {
+    return { ok: false, error: 'Los resultados ya están cerrados: no se reciben más evaluaciones.' };
+  }
   return conBloqueo(function () {
-    var miHoja = hojaDeJurado(sesion.alias);
+    var mySheet = hojaDeJurado(sesion.alias);
     var registro = buscarPorCodigo(datos.code);
-    if (!registro) return { ok: false, error: 'Codigo no encontrado.' };
+    if (!registro) return { ok: false, error: 'Código no encontrado.' };
 
-    // Only a performed audition can be scored.
+    var forced = esVerdadero(datos.forzar) && sesion.rol === ROL.ADMIN;
     if (normalizarEstado(registro.audition_status) !== ESTADO.REALIZADA &&
-        normalizarEstado(registro.attendance_status) !== ESTADO.REALIZADA &&
-        !esVerdadero(datos.forzar)) {
+        normalizarEstado(registro.attendance_status) !== ESTADO.REALIZADA && !forced) {
       return { ok: false, error: 'Este participante aún no tiene la audición marcada como REALIZADA.' };
     }
 
-    var puntajes = {};
-    RUBRICA.forEach(function (f) { puntajes[f.id] = datos[f.id]; });
-
-    var calculo = calcularPuntajeJurado(puntajes);
-    if (!calculo.valido) {
-      return { ok: false, error: 'Faltan o son invalidos: ' + calculo.faltantes.join(', ') + '. Cada factor va de 1 a 10.',
-               faltantes: calculo.faltantes };
+    var existing = leerHoja(mySheet).filter(function (f) {
+      return normalizarComparable(f.code) === normalizarComparable(registro.code);
+    })[0];
+    if (existing && normalizarComparable(existing.estado) === EVALUATION_STATE.ENVIADA) {
+      return { ok: false, error: 'Esta evaluación ya fue enviada y está bloqueada. Solo dirección puede reabrirla.', bloqueada: true };
     }
 
-    var existentes = leerHoja(miHoja);
-    var previo = existentes.filter(function (f) {
-      return normalizarComparable(f.code) === normalizarComparable(datos.code);
-    })[0];
+    var ratings = {};
+    var badValues = [];
+    rubric.categorias.forEach(function (c) {
+      var v = datos[c.id];
+      if (v === undefined || v === null || v === '') { ratings[c.id] = ''; return; }
+      if (!esPuntajeValido(v)) { badValues.push(c.corta); ratings[c.id] = ''; return; }
+      ratings[c.id] = Number(v);
+    });
+    if (badValues.length) {
+      return { ok: false, error: 'Cada categoría se califica de ' + RATING_MIN + ' a ' + RATING_MAX + ' (revisa: ' + badValues.join(', ') + ').' };
+    }
 
-    var fila = {
+    var calc = calcularPuntajeJurado(ratings, rubric.categorias);
+    var submit = esVerdadero(datos.enviar);
+    if (submit && !calc.valido) {
+      var names = rubric.categorias.filter(function (c) { return calc.faltantes.indexOf(c.id) !== -1; }).map(function (c) { return c.corta; });
+      return { ok: false, error: 'Para enviar faltan: ' + names.join(', ') + '.', faltantes: calc.faltantes };
+    }
+
+    var dqCause = normalizarComparable(datos.dq_causa);
+    var dqFlag = esVerdadero(datos.dq_flag) && DQ_CAUSES.some(function (c) { return c.id === dqCause; });
+    if (esVerdadero(datos.dq_flag) && !dqFlag) return { ok: false, error: 'Elige la causal de descalificación.' };
+
+    var now = ahoraISO();
+    var row = {
       code: registro.code,
       artistic_name: registro.artistic_name,
       discipline: projectGenre(registro),
-      total: calculo.total,
-      valido: 'TRUE',
+      presentation_format: registro.presentation_format || '',
+      rubric_version: rubric.version,
+      rubric_fingerprint: rubric.fingerprint,
+      total: calc.valido ? calc.total : '',
+      desempate: calc.valido ? calc.desempate : '',
+      estado: submit ? EVALUATION_STATE.ENVIADA : EVALUATION_STATE.BORRADOR,
       observaciones: String(datos.observaciones || '').slice(0, 900),
-      evaluado_at: ahoraISO(),
+      dq_flag: dqFlag ? 'TRUE' : 'FALSE',
+      dq_causa: dqFlag ? dqCause : '',
+      dq_nota: dqFlag ? String(datos.dq_nota || '').slice(0, 500) : '',
+      evaluado_at: now,
+      enviado_at: submit ? now : '',
       evaluado_by: sesion.alias
     };
-    RUBRICA.forEach(function (f) { fila[f.id] = Number(puntajes[f.id]); });
+    rubric.categorias.forEach(function (c) { row[c.id] = ratings[c.id]; });
 
-    if (previo) {
-      actualizarFila(miHoja, previo._fila, fila);
-      // A correction must leave a trace: the spec demands it explicitly.
-      registrar(sesion.alias, sesion.rol, 'EVALUACION_CORREGIDA', registro.code,
-                'antes=' + previo.total + ' despues=' + calculo.total);
-    } else {
-      agregarFila(miHoja, fila);
-      registrar(sesion.alias, sesion.rol, 'EVALUACION', registro.code, 'total=' + calculo.total);
+    if (existing) actualizarFila(mySheet, existing._fila, row);
+    else agregarFila(mySheet, row);
+
+    registrar(sesion.alias, sesion.rol, submit ? 'EVALUACION_ENVIADA' : 'EVALUACION_BORRADOR', registro.code,
+              calc.valido ? 'total=' + calc.total : 'parcial');
+
+    if (dqFlag) reportDisqualification(registro, dqCause, row.dq_nota, sesion);
+
+    return {
+      code: registro.code, hoja: mySheet, estado: row.estado, total: calc.valido ? calc.total : null,
+      detalle: calc.detalle, bloqueada: submit,
+      mensaje: submit ? 'Evaluación enviada y bloqueada: ' + calc.total + ' / ' + rubricMaxTotal(rubric.categorias) + ' puntos.'
+                      : 'Borrador guardado.'
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Corrections and disqualifications (authorized roles only)
+// ---------------------------------------------------------------------------
+
+/** Reopens a submitted card so its juror can correct it. Direction/admin, with a reason. */
+function accionReabrirEvaluacion(datos, sesion) {
+  var reason = normalizarTexto(datos.motivo);
+  if (reason.length < 5) return { ok: false, error: 'Escribe el motivo de la corrección.' };
+  if (cfgBool('resultados_cerrados', false)) return { ok: false, error: 'Los resultados están cerrados. Primero hay que reabrirlos.' };
+  var juror = parseInt(datos.jurado, 10);
+  if (!(juror >= 1 && juror <= 3)) return { ok: false, error: 'Jurado inválido.' };
+  return conBloqueo(function () {
+    var sheetName = 'JURADO_' + juror;
+    var card = leerHoja(sheetName).filter(function (f) { return normalizarComparable(f.code) === normalizarComparable(datos.code); })[0];
+    if (!card) return { ok: false, error: 'Ese jurado no tiene evaluación para ' + datos.code + '.' };
+    if (normalizarComparable(card.estado) !== EVALUATION_STATE.ENVIADA) return { ok: false, error: 'La evaluación no está enviada: el jurado ya puede editarla.' };
+    actualizarFila(sheetName, card._fila, {
+      estado: EVALUATION_STATE.BORRADOR, reabierta_at: ahoraISO(), reabierta_by: sesion.alias, reabierta_motivo: reason.slice(0, 400)
+    });
+    registrar(sesion.alias, sesion.rol, 'EVALUACION_REABIERTA', card.code, 'jurado=' + juror + ' total_previo=' + card.total + ' motivo=' + reason);
+    return { ok: true, code: card.code, jurado: juror, mensaje: 'Evaluación reabierta. El jurado ' + juror + ' puede corregirla y volver a enviarla.' };
+  });
+}
+
+/** A juror's report opens a PENDING disqualification; one open report per project and juror. */
+function reportDisqualification(registro, cause, note, sesion) {
+  var open = leerHoja(HOJA.DESCALIFICACIONES).filter(function (d) {
+    return normalizarComparable(d.code) === normalizarComparable(registro.code) &&
+           normalizarComparable(d.reportado_por) === normalizarComparable(sesion.alias) &&
+           normalizarComparable(d.estado) === DQ_STATUS.PENDIENTE;
+  })[0];
+  if (open) return open.dq_id;
+  var id = nuevoId('DQ');
+  agregarFila(HOJA.DESCALIFICACIONES, {
+    dq_id: id, code: registro.code, submission_id: registro.submission_id, causa: cause, nota: note || '',
+    reportado_por: sesion.alias, reportado_at: ahoraISO(), estado: DQ_STATUS.PENDIENTE,
+    resuelto_por: '', resuelto_at: '', motivo: ''
+  });
+  if (normalizarComparable(registro.dq_status) !== DQ_STATUS.VALIDADA) {
+    actualizarFila(HOJA.REGISTRO, registro._fila, { dq_status: DQ_STATUS.PENDIENTE });
+  }
+  registrar(sesion.alias, sesion.rol, 'DQ_REPORTADA', registro.code, cause);
+  return id;
+}
+
+function accionListarDescalificaciones() {
+  var causes = {};
+  DQ_CAUSES.forEach(function (c) { causes[c.id] = c.etiqueta; });
+  return {
+    causales: DQ_CAUSES,
+    reportes: leerHoja(HOJA.DESCALIFICACIONES).map(function (d) {
+      return {
+        dq_id: d.dq_id, code: d.code, causa: d.causa, causa_texto: causes[normalizarComparable(d.causa)] || d.causa,
+        nota: d.nota, reportado_por: d.reportado_por, reportado_at: humanDateTime(d.reportado_at),
+        estado: d.estado, resuelto_por: d.resuelto_por, motivo: d.motivo
+      };
+    })
+  };
+}
+
+/** Direction/admin validates (the project leaves the ranking) or dismisses a report. */
+function accionResolverDescalificacion(datos, sesion) {
+  var decision = normalizarComparable(datos.decision);
+  if (decision !== DQ_STATUS.VALIDADA && decision !== DQ_STATUS.DESCARTADA) return { ok: false, error: 'Decisión inválida.' };
+  var reason = normalizarTexto(datos.motivo);
+  if (reason.length < 5) return { ok: false, error: 'Documenta el motivo de la decisión.' };
+  return conBloqueo(function () {
+    var report = leerHoja(HOJA.DESCALIFICACIONES).filter(function (d) { return d.dq_id === datos.dq_id; })[0];
+    if (!report) return { ok: false, error: 'Reporte no encontrado.' };
+    if (normalizarComparable(report.estado) !== DQ_STATUS.PENDIENTE) return { ok: false, error: 'Ese reporte ya fue resuelto.' };
+    actualizarFila(HOJA.DESCALIFICACIONES, report._fila, {
+      estado: decision, resuelto_por: sesion.alias, resuelto_at: ahoraISO(), motivo: reason.slice(0, 500)
+    });
+    var registro = buscarPorCodigo(report.code);
+    if (registro) {
+      var stillOpen = leerHoja(HOJA.DESCALIFICACIONES).some(function (d) {
+        return d.dq_id !== report.dq_id && normalizarComparable(d.code) === normalizarComparable(report.code) &&
+               normalizarComparable(d.estado) === DQ_STATUS.PENDIENTE;
+      });
+      var status = decision === DQ_STATUS.VALIDADA ? DQ_STATUS.VALIDADA
+        : (normalizarComparable(registro.dq_status) === DQ_STATUS.VALIDADA ? DQ_STATUS.VALIDADA : (stillOpen ? DQ_STATUS.PENDIENTE : ''));
+      actualizarFila(HOJA.REGISTRO, registro._fila, { dq_status: status });
+    }
+    registrar(sesion.alias, sesion.rol, decision === DQ_STATUS.VALIDADA ? 'DQ_VALIDADA' : 'DQ_DESCARTADA', report.code, reason);
+    return { ok: true, dq_id: report.dq_id, estado: decision };
+  });
+}
+
+/** "2026-10-23 20:41" from an ISO stamp, for staff screens. */
+function humanDateTime(value) {
+  if (!value) return '';
+  var d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return Utilities.formatDate(d, zonaHoraria(), 'yyyy-MM-dd HH:mm');
+}
+
+// ========================================================================
+// 25_api_bolsa.gs
+// ========================================================================
+
+/**
+ * EL BUNKER - Pool of eligible projects, withdrawals, substitute offers, final confirmation
+ * and the official list of the event.
+ *
+ * Rules (release QA, section 9):
+ *  - 100 operative slots (B-001..B-100); eligible projects beyond them wait as substitutes
+ *    (positions 101-200 of the pool), ordered only by submission time.
+ *  - A withdrawal frees exactly that slot. It is offered to ONE substitute at a time; if they
+ *    turn it down or do not answer in time, it goes to the next one. Nobody else moves.
+ *  - The substitute inherits the slot (code + current schedule), never the previous holder's data.
+ *    The previous holder keeps the number in `previous_code`; submission_id never changes.
+ *  - Once the official list is consolidated, ordinary changes stop.
+ *
+ * Functions whose name ends in `Locked` expect the caller to hold the script lock.
+ */
+
+// ---------------------------------------------------------------------------
+// Ledger helpers
+// ---------------------------------------------------------------------------
+
+function slotHistoryLocked(slotCode, event, submissionId, actor, detail) {
+  agregarFila(HOJA.SLOTS_HISTORIAL, {
+    at: isoWithOffset(), slot_code: slotCode, evento: event, submission_id: submissionId || '',
+    actor: actor || 'sistema', detalle: String(detail || '').slice(0, 500)
+  });
+}
+
+function pendingOffersBySubmission(offers) {
+  var out = {};
+  (offers || []).forEach(function (o) {
+    if (normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE) out[o.submission_id] = o;
+  });
+  return out;
+}
+
+function offerExpired(offer, nowMs) {
+  var t = new Date(offer.expires_at).getTime();
+  return !isNaN(t) && t <= (nowMs || Date.now());
+}
+
+function currentWindows() {
+  return operationWindows(new Date().toISOString(), operationCalendar());
+}
+
+/**
+ * Writes priority_rank, pool_status and the derived participation_status of every project.
+ * One batched write; only rows whose values changed are touched.
+ */
+function refreshPoolLocked(rows, offers) {
+  rows = rows || leerHoja(HOJA.REGISTRO);
+  offers = offers || leerHoja(HOJA.OFERTAS);
+  var pool = computePool(rows, poolOptions());
+  var bySubmission = {};
+  pool.filas.forEach(function (p) { bySubmission[p.submission_id] = p; });
+  var pending = pendingOffersBySubmission(offers);
+  var updates = [];
+  rows.forEach(function (r) {
+    var p = bySubmission[r.submission_id];
+    var rank = p ? p.priority_rank : '';
+    var status = p ? p.pool_status : '';
+    var participation = participationStatus(r, !!pending[r.submission_id]);
+    if (String(r.priority_rank) !== String(rank) || normalizarComparable(r.pool_status) !== status ||
+        normalizarComparable(r.participation_status) !== participation) {
+      updates.push({ fila: r._fila, cambios: { priority_rank: rank, pool_status: status, participation_status: participation } });
+    }
+  });
+  actualizarFilasEnLote(HOJA.REGISTRO, updates);
+  return { principales: pool.principales, suplentes: pool.suplentes, fuera_de_bolsa: pool.fuera, actualizadas: updates.length };
+}
+
+// ---------------------------------------------------------------------------
+// Releasing a slot and offering it
+// ---------------------------------------------------------------------------
+
+/**
+ * Frees the slot held by `row`. `final` marks a withdrawal given at the final confirmation
+ * (RETIRO_FINAL). Returns what happened to the slot: offered to a substitute or left vacant.
+ */
+function releaseSlotLocked(row, opts) {
+  opts = opts || {};
+  var code = normalizarComparable(row.code);
+  if (!code) return { ok: false, error: 'Este proyecto no tiene un cupo asignado.' };
+  if (isWithdrawn(row)) return { ok: false, error: 'Este proyecto ya se retiró.' };
+  var now = isoWithOffset();
+  var slot = {
+    code: code,
+    block: row.final_block || row.original_block || '',
+    arrival: clockText(row.arrival_time) || '',
+    time: clockText(row.final_time || row.original_time) || ''
+  };
+  actualizarFila(HOJA.REGISTRO, row._fila, {
+    code: '',
+    previous_code: [normalizarTexto(row.previous_code), code].filter(Boolean).join(','),
+    withdrawal_status: opts.final ? WITHDRAWAL.RETIRO_FINAL : WITHDRAWAL.RETIRADO,
+    withdrawn_at: now,
+    withdrawn_by: opts.actor || 'participante',
+    withdrawal_reason: String(opts.reason || '').slice(0, 400),
+    final_confirmation: opts.final ? 'NO' : row.final_confirmation,
+    final_confirmation_at: opts.final ? now : row.final_confirmation_at,
+    pool_status: POOL_STATUS.RETIRADO,
+    participation_status: opts.final ? PARTICIPATION.RETIRO_FINAL : PARTICIPATION.RETIRADO
+  });
+  slotHistoryLocked(code, opts.final ? 'RETIRO_FINAL' : 'LIBERADO', row.submission_id, opts.actor, opts.reason);
+  registrar(opts.actor || 'participante', opts.rol || '', opts.final ? 'RETIRO_FINAL' : 'RETIRO', code, row.submission_id);
+  enqueueEmail('RETIRO_CONFIRMADO', Object.assign({}, row, { code: '', previous_code: code }), 'retiro',
+               { slot_code: code }, 'RETIRO_CONFIRMADO:' + row.submission_id + ':' + code);
+
+  var outcome = currentWindows().reemplazo_viable
+    ? offerSlotLocked(slot, opts.actor || 'sistema')
+    : closeSlotVacantLocked(slot, opts.actor || 'sistema', 'Liberado después del límite para reemplazos.');
+  return { ok: true, slot_code: code, reemplazo: outcome };
+}
+
+/** Offers a free slot to the next substitute in priority order, or leaves it vacant if none is left. */
+function offerSlotLocked(slot, actor) {
+  var rows = leerHoja(HOJA.REGISTRO);
+  var offers = leerHoja(HOJA.OFERTAS);
+  var state = slotStatuses(rows, offers, poolOptions()).filter(function (s) { return s.slot_code === slot.code; })[0];
+  if (state && (state.status === SLOT_STATUS.ASIGNADO || state.status === SLOT_STATUS.OFRECIDO)) {
+    return { estado: state.status, mensaje: 'El cupo ' + slot.code + ' ya está ' + state.status.toLowerCase() + '.' };
+  }
+  var nowIso = isoWithOffset();
+  var expires = offerExpiry(new Date().toISOString(), cfgNumero('suplente_horas_respuesta', 24), cfg('reemplazo_limite', ''));
+  if (new Date(expires).getTime() - Date.now() < 3600000) {
+    return closeSlotVacantLocked(slot, actor, 'No queda tiempo suficiente para que un suplente responda.');
+  }
+  var next = nextSubstitute(rows, offers, poolOptions());
+  if (!next) return closeSlotVacantLocked(slot, actor, 'No hay suplentes disponibles en la bolsa.');
+
+  var id = nuevoId('OF');
+  var expiresLocal = isoWithOffset(new Date(expires));
+  agregarFila(HOJA.OFERTAS, {
+    oferta_id: id, slot_code: slot.code, slot_block: slot.block, slot_arrival: slot.arrival, slot_time: slot.time,
+    submission_id: next.submission_id, priority_rank: next.priority_rank, estado: OFFER_STATUS.PENDIENTE,
+    created_at: nowIso, expires_at: expiresLocal, responded_at: '', actor: '', released_by: actor || 'sistema', notas: ''
+  });
+  slotHistoryLocked(slot.code, 'OFRECIDO', next.submission_id, actor, 'oferta ' + id + ' vence ' + expiresLocal);
+  enqueueEmail('OFERTA_SUPLENTE', next, 'oferta',
+               { slot_code: slot.code, slot_block: slot.block, slot_arrival: slot.arrival, slot_time: slot.time,
+                 vence_texto: humanDateTime(expiresLocal) },
+               'OFERTA_SUPLENTE:' + id);
+  refreshPoolLocked();
+  return { estado: SLOT_STATUS.OFRECIDO, oferta_id: id, submission_id: next.submission_id,
+           priority_rank: next.priority_rank, vence: expiresLocal };
+}
+
+function closeSlotVacantLocked(slot, actor, reason) {
+  agregarFila(HOJA.OFERTAS, {
+    oferta_id: nuevoId('OF'), slot_code: slot.code, slot_block: slot.block, slot_arrival: slot.arrival, slot_time: slot.time,
+    submission_id: '', priority_rank: '', estado: OFFER_STATUS.VACANTE, created_at: isoWithOffset(), expires_at: '',
+    responded_at: '', actor: actor || 'sistema', released_by: actor || 'sistema', notas: String(reason || '').slice(0, 400)
+  });
+  slotHistoryLocked(slot.code, 'VACANTE_SIN_REEMPLAZO', '', actor, reason);
+  refreshPoolLocked();
+  return { estado: SLOT_STATUS.VACANTE_SIN_REEMPLAZO, mensaje: reason };
+}
+
+/** Marks a pending offer as turned down / expired, and passes the slot to the next substitute. */
+function closeOfferLocked(offer, status, actor) {
+  actualizarFila(HOJA.OFERTAS, offer._fila, { estado: status, responded_at: isoWithOffset(), actor: actor || 'sistema' });
+  var holder = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === offer.submission_id; })[0];
+  if (holder && !normalizarTexto(holder.code)) {
+    actualizarFila(HOJA.REGISTRO, holder._fila, { pool_status: POOL_STATUS.DECLINO });
+  }
+  slotHistoryLocked(offer.slot_code, status === OFFER_STATUS.VENCIDA ? 'OFERTA_VENCIDA' : 'OFERTA_RECHAZADA',
+                    offer.submission_id, actor, offer.oferta_id);
+  var slot = { code: offer.slot_code, block: offer.slot_block, arrival: clockText(offer.slot_arrival) || offer.slot_arrival,
+               time: clockText(offer.slot_time) || offer.slot_time };
+  return currentWindows().reemplazo_viable
+    ? offerSlotLocked(slot, 'sistema')
+    : closeSlotVacantLocked(slot, 'sistema', 'Oferta cerrada después del límite para reemplazos.');
+}
+
+/** Expires every pending offer whose time ran out. Safe to call anywhere; used by the trigger. */
+function expireOffersLocked() {
+  var now = Date.now();
+  var expired = leerHoja(HOJA.OFERTAS).filter(function (o) {
+    return normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE && offerExpired(o, now);
+  });
+  var results = expired.map(function (o) {
+    return { oferta_id: o.oferta_id, slot_code: o.slot_code, siguiente: closeOfferLocked(o, OFFER_STATUS.VENCIDA, 'sistema') };
+  });
+  return { vencidas: results.length, detalle: results };
+}
+
+/** Hourly trigger. */
+function vencerOfertas() {
+  try {
+    var r = conBloqueo(function () { return expireOffersLocked(); });
+    if (r.vencidas) registrar('sistema', '', 'OFERTAS_VENCIDAS', '', JSON.stringify(r.detalle).slice(0, 900));
+    return r;
+  } catch (e) {
+    registrar('sistema', '', 'OFERTAS_VENCIDAS_FALLO', '', e.message);
+    return { error: e.message };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Participant side (identity: ID number + code or receipt, like "Mi inscripción")
+// ---------------------------------------------------------------------------
+
+var WITHDRAW_CONFIRMATION = 'LIBERAR MI CUPO';
+
+/** "NO PUEDO ASISTIR — SOLICITAR REEMPLAZO". Needs the second confirmation typed by the person. */
+function accionRetirarme(datos) {
+  datos = datos || {};
+  var blocked = guardSubmission(datos, 'cambio');
+  if (blocked) return blocked;
+  var row = findOwnProject(datos);
+  if (!row) return { ok: false, error: 'No encontramos una inscripción con esos datos.' };
+  var w = currentWindows();
+  if (w.lista_bloqueada) return { ok: false, error: 'La lista oficial del evento ya está cerrada. Escríbenos por WhatsApp.' };
+  if (!w.retiro_abierto) return { ok: false, error: 'Esta opción se habilita el ' + deadlineText(cfg('reemplazos_desde', '')) + '.' };
+  if (!normalizarTexto(row.code)) return { ok: false, error: 'Tu inscripción no tiene un cupo asignado que liberar.' };
+  if (normalizarComparable(datos.confirmacion) !== WITHDRAW_CONFIRMATION) {
+    return { ok: false, motivo: 'CONFIRMACION', error: 'Para liberar tu cupo confirma escribiendo: ' + WITHDRAW_CONFIRMATION };
+  }
+  var final = w.confirmacion_abierta;
+  var key = 'retiro:' + row.submission_id;
+  return exactlyOnce(key, function () {
+    var fresh = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === row.submission_id; })[0];
+    var released = releaseSlotLocked(fresh, { actor: 'participante', reason: datos.motivo || 'No puede asistir', final: final });
+    if (!released.ok) return released;
+    return {
+      retirado: true, slot_code: released.slot_code,
+      mensaje: 'Liberaste el cupo ' + released.slot_code + '. Gracias por avisar: lo recibirá la siguiente persona de la lista de suplentes. ' +
+               'Esta decisión no se puede deshacer.'
+    };
+  });
+}
+
+/** CONFIRMACIÓN FINAL DE ASISTENCIA: SI keeps everything as is; NO frees the slot (RETIRO_FINAL). */
+function accionConfirmacionFinal(datos) {
+  datos = datos || {};
+  var blocked = guardSubmission(datos, 'cambio');
+  if (blocked) return blocked;
+  var row = findOwnProject(datos);
+  if (!row) return { ok: false, error: 'No encontramos una inscripción con esos datos.' };
+  var w = currentWindows();
+  if (w.lista_bloqueada) return { ok: false, error: 'La lista oficial del evento ya está cerrada.' };
+  if (!w.confirmacion_abierta) {
+    return { ok: false, error: 'La confirmación final está abierta del ' + deadlineText(cfg('confirmacion_final_desde', '')) +
+                               ' al ' + deadlineText(cfg('confirmacion_final_hasta', '')) + '.' };
+  }
+  if (!normalizarTexto(row.code)) return { ok: false, error: 'Tu inscripción no tiene un cupo asignado.' };
+  var answer = normalizarComparable(datos.respuesta);
+  if (answer !== 'SI' && answer !== 'NO') return { ok: false, error: 'Respuesta inválida.' };
+  if (answer === 'NO' && normalizarComparable(datos.confirmacion) !== WITHDRAW_CONFIRMATION) {
+    return { ok: false, motivo: 'CONFIRMACION', error: 'Para liberar tu cupo confirma escribiendo: ' + WITHDRAW_CONFIRMATION };
+  }
+  return exactlyOnce('confirmacion-final:' + row.submission_id + ':' + answer, function () {
+    var fresh = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === row.submission_id; })[0];
+    if (!normalizarTexto(fresh.code)) return { ok: false, error: 'Tu inscripción ya no tiene un cupo asignado.' };
+    if (answer === 'SI') {
+      actualizarFila(HOJA.REGISTRO, fresh._fila, { final_confirmation: 'SI', final_confirmation_at: isoWithOffset() });
+      registrar('participante', '', 'CONFIRMACION_FINAL_SI', fresh.code, '');
+      refreshPoolLocked();
+      return { confirmado: true, mensaje: '¡Confirmado! Te esperamos. Tu código y tu horario no cambian.' };
+    }
+    var released = releaseSlotLocked(fresh, { actor: 'participante', reason: 'Confirmación final: no podrá asistir', final: true });
+    if (!released.ok) return released;
+    return { confirmado: false, slot_code: released.slot_code,
+             mensaje: 'Registramos que no podrás asistir y liberamos el cupo ' + released.slot_code + '. Gracias por avisar.' };
+  });
+}
+
+/** A substitute accepts or turns down the slot offered to them. */
+function accionResponderOferta(datos) {
+  datos = datos || {};
+  var blocked = guardSubmission(datos, 'cambio');
+  if (blocked) return blocked;
+  var row = findOwnProject(datos);
+  if (!row) return { ok: false, error: 'No encontramos una inscripción con esos datos.' };
+  var answer = normalizarComparable(datos.respuesta);
+  if (answer !== 'ACEPTAR' && answer !== 'RECHAZAR') return { ok: false, error: 'Respuesta inválida.' };
+  return exactlyOnce('oferta:' + datos.oferta_id + ':' + answer, function () {
+    var offer = leerHoja(HOJA.OFERTAS).filter(function (o) { return o.oferta_id === datos.oferta_id; })[0];
+    if (!offer || offer.submission_id !== row.submission_id) return { ok: false, error: 'No encontramos esa oferta para tu inscripción.' };
+    if (normalizarComparable(offer.estado) !== OFFER_STATUS.PENDIENTE) return { ok: false, error: 'Esta oferta ya no está vigente (' + offer.estado + ').' };
+    if (offerExpired(offer)) {
+      closeOfferLocked(offer, OFFER_STATUS.VENCIDA, 'sistema');
+      return { ok: false, error: 'El plazo para responder esta oferta ya venció.' };
+    }
+    if (answer === 'RECHAZAR') {
+      closeOfferLocked(offer, OFFER_STATUS.RECHAZADA, 'participante');
+      registrar('participante', '', 'OFERTA_RECHAZADA', offer.slot_code, row.submission_id);
+      return { aceptada: false, mensaje: 'Registramos tu respuesta. El cupo pasa a la siguiente persona de la lista.' };
+    }
+    return acceptOfferLocked(offer, row.submission_id, 'participante');
+  });
+}
+
+function acceptOfferLocked(offer, submissionId, actor) {
+  if (currentWindows().lista_bloqueada) return { ok: false, error: 'La lista oficial del evento ya está cerrada.' };
+  var rows = leerHoja(HOJA.REGISTRO);
+  var holder = rows.filter(function (r) { return normalizarComparable(r.code) === normalizarComparable(offer.slot_code); })[0];
+  if (holder) return { ok: false, error: 'Ese cupo ya tiene titular.' };
+  var fresh = rows.filter(function (r) { return r.submission_id === submissionId; })[0];
+  if (!fresh || normalizarTexto(fresh.code) || isWithdrawn(fresh)) return { ok: false, error: 'Tu inscripción no puede recibir este cupo.' };
+  var now = isoWithOffset();
+  var time = clockText(offer.slot_time) || offer.slot_time;
+  actualizarFila(HOJA.REGISTRO, fresh._fila, {
+    code: offer.slot_code, issued_at: now, issued_by: 'reemplazo:' + offer.oferta_id,
+    original_block: offer.slot_block, original_time: time, final_block: offer.slot_block, final_time: time,
+    arrival_time: clockText(offer.slot_arrival) || offer.slot_arrival,
+    attendance_status: ESTADO.CONFIRMADO, change_status: ESTADO_CAMBIO.SIN_SOLICITUD, change_requested: '',
+    final_confirmation: '', final_confirmation_at: '', pool_status: POOL_STATUS.PRINCIPAL
+  });
+  actualizarFila(HOJA.OFERTAS, offer._fila, { estado: OFFER_STATUS.ACEPTADA, responded_at: now, actor: actor });
+  slotHistoryLocked(offer.slot_code, 'ASIGNADO', submissionId, actor, 'oferta ' + offer.oferta_id + ' aceptada');
+  registrar(actor, '', 'OFERTA_ACEPTADA', offer.slot_code, submissionId);
+  refreshPoolLocked();
+  var updated = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === submissionId; })[0];
+  enqueueEmail('ASIGNACION', updated, 'reemplazo', {}, 'ASIGNACION:' + submissionId + ':' + offer.slot_code);
+  return { aceptada: true, code: offer.slot_code,
+           mensaje: '¡Listo! El cupo ' + offer.slot_code + ' es tuyo. Te enviamos tu código y horario por correo.' };
+}
+
+// ---------------------------------------------------------------------------
+// Staff side
+// ---------------------------------------------------------------------------
+
+/** Pool, slots and offers in one view for the logistics panel. */
+function accionBolsa(datos) {
+  var rows = leerHoja(HOJA.REGISTRO);
+  var offers = leerHoja(HOJA.OFERTAS);
+  var options = poolOptions();
+  var pool = computePool(rows, options);
+  var bySubmission = {};
+  rows.forEach(function (r) { bySubmission[r.submission_id] = r; });
+  var pending = pendingOffersBySubmission(offers);
+  var list = pool.filas.filter(function (p) { return p.pool_status !== POOL_STATUS.RETIRADO; })
+    .sort(function (a, b) { return (Number(a.priority_rank) || 9999) - (Number(b.priority_rank) || 9999); })
+    .map(function (p) {
+      var r = bySubmission[p.submission_id] || {};
+      return {
+        priority_rank: p.priority_rank, pool_status: p.pool_status, submission_id: p.submission_id, code: r.code || '',
+        artistic_name: r.artistic_name || '', participation_mode: r.participation_mode || 'SOLISTA',
+        created_at: String(r.created_at || '').replace('T', ' ').slice(0, 16),
+        oferta: pending[p.submission_id] ? pending[p.submission_id].slot_code : ''
+      };
+    });
+  var slots = slotStatuses(rows, offers, options).map(function (s) {
+    var r = s.holder_submission_id ? bySubmission[s.holder_submission_id] : null;
+    var o = s.offered_to ? bySubmission[s.offered_to] : null;
+    return Object.assign({}, s, { holder: r ? r.artistic_name : '', offered_name: o ? o.artistic_name : '' });
+  });
+  var counts = {};
+  slots.forEach(function (s) { counts[s.status] = (counts[s.status] || 0) + 1; });
+  return {
+    ventanas: currentWindows(),
+    resumen: { principales: pool.principales, suplentes: pool.suplentes, fuera_de_bolsa: pool.fuera, cupos: counts },
+    bolsa: list,
+    cupos: slots,
+    ofertas: offers.slice(-300).reverse().map(function (o) {
+      var r = bySubmission[o.submission_id] || {};
+      return Object.assign({}, o, { artistic_name: r.artistic_name || '', vence: humanDateTime(o.expires_at),
+                                    creada: humanDateTime(o.created_at) });
+    }),
+    lista_oficial: { bloqueada: cfgBool('lista_oficial_bloqueada', false), version: cfg('lista_oficial_version', ''),
+                     at: cfg('lista_oficial_at', ''), by: cfg('lista_oficial_by', '') }
+  };
+}
+
+/** Logistics withdraws a project (e.g. the person called or wrote). Frees exactly that slot. */
+function accionRetirarParticipante(datos, sesion) {
+  var reason = normalizarTexto(datos.motivo);
+  if (reason.length < 5) return { ok: false, error: 'Escribe el motivo del retiro: queda en la bitácora.' };
+  if (currentWindows().lista_bloqueada) return { ok: false, error: 'La lista oficial ya está consolidada.' };
+  return conBloqueo(function () {
+    var row = buscarPorCodigo(datos.code);
+    if (!row) return { ok: false, error: 'Código no encontrado.' };
+    var released = releaseSlotLocked(row, { actor: sesion.alias, rol: sesion.rol, reason: reason, final: esVerdadero(datos.final) });
+    if (!released.ok) return released;
+    return { slot_code: released.slot_code, reemplazo: released.reemplazo,
+             mensaje: 'Cupo ' + released.slot_code + ' liberado. ' + (released.reemplazo.estado === SLOT_STATUS.OFRECIDO
+               ? 'Se ofreció al suplente con prioridad ' + released.reemplazo.priority_rank + '.'
+               : 'Quedó como vacante: ' + (released.reemplazo.mensaje || '')) };
+  });
+}
+
+/** Offers a freed (LIBERADO or VACANTE) slot again, e.g. when new substitutes became eligible. */
+function accionOfrecerCupo(datos, sesion) {
+  if (currentWindows().lista_bloqueada) return { ok: false, error: 'La lista oficial ya está consolidada.' };
+  return conBloqueo(function () {
+    expireOffersLocked();
+    var code = normalizarComparable(datos.slot_code);
+    var rows = leerHoja(HOJA.REGISTRO);
+    var offers = leerHoja(HOJA.OFERTAS);
+    var state = slotStatuses(rows, offers, poolOptions()).filter(function (s) { return s.slot_code === code; })[0];
+    if (!state) return { ok: false, error: 'Cupo inválido.' };
+    if (state.status !== SLOT_STATUS.LIBERADO && state.status !== SLOT_STATUS.VACANTE_SIN_REEMPLAZO) {
+      return { ok: false, error: 'Solo se ofrece un cupo liberado o vacante (este está ' + state.status + ').' };
+    }
+    var last = offers.filter(function (o) { return normalizarComparable(o.slot_code) === code; }).pop();
+    var prev = rows.filter(function (r) { return String(r.previous_code || '').split(',').indexOf(code) !== -1; })[0];
+    var slot = last
+      ? { code: code, block: last.slot_block, arrival: clockText(last.slot_arrival) || last.slot_arrival, time: clockText(last.slot_time) || last.slot_time }
+      : { code: code, block: prev ? (prev.final_block || prev.original_block) : '', arrival: prev ? clockText(prev.arrival_time) : '',
+          time: prev ? clockText(prev.final_time || prev.original_time) : '' };
+    registrar(sesion.alias, sesion.rol, 'OFRECER_CUPO', code, '');
+    return { resultado: offerSlotLocked(slot, sesion.alias) };
+  });
+}
+
+/** Closes a slot without replacement (cancels its pending offer, if any). */
+function accionCerrarVacante(datos, sesion) {
+  var reason = normalizarTexto(datos.motivo);
+  if (reason.length < 5) return { ok: false, error: 'Escribe el motivo.' };
+  return conBloqueo(function () {
+    var code = normalizarComparable(datos.slot_code);
+    var offers = leerHoja(HOJA.OFERTAS);
+    if (buscarPorCodigo(code)) return { ok: false, error: 'Ese cupo tiene titular: primero hay que retirarlo.' };
+    var pending = offers.filter(function (o) {
+      return normalizarComparable(o.slot_code) === code && normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE;
+    })[0];
+    if (pending) actualizarFila(HOJA.OFERTAS, pending._fila, { estado: OFFER_STATUS.CANCELADA, responded_at: isoWithOffset(), actor: sesion.alias });
+    var last = offers.filter(function (o) { return normalizarComparable(o.slot_code) === code; }).pop() || {};
+    registrar(sesion.alias, sesion.rol, 'CERRAR_VACANTE', code, reason);
+    return closeSlotVacantLocked({ code: code, block: last.slot_block || '', arrival: last.slot_arrival || '', time: last.slot_time || '' },
+                                 sesion.alias, reason);
+  });
+}
+
+/** Recomputes the pool order (after eligibility decisions) and expires overdue offers. */
+function accionRefrescarBolsa(datos, sesion) {
+  return conBloqueo(function () {
+    var expired = expireOffersLocked();
+    var pool = refreshPoolLocked();
+    registrar(sesion.alias, sesion.rol, 'REFRESCAR_BOLSA', '', JSON.stringify(pool));
+    return { bolsa: pool, ofertas_vencidas: expired.vencidas };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// CONSOLIDAR LISTA OFICIAL DEL EVENTO
+// ---------------------------------------------------------------------------
+
+var ROSTER_COLUMNS = ['slot_code', 'estado_cupo', 'final_block', 'arrival_time', 'final_time', 'submission_id', 'artistic_name',
+                      'full_name', 'participation_mode', 'members_declared', 'final_confirmation', 'participation_status',
+                      'reemplazo', 'track_status', 'observacion'];
+
+/** Reconciliation of everything the official list depends on. Pure over the given rows. */
+function rosterReconciliation(rows, offers, changes, cupo) {
+  var slots = slotStatuses(rows, offers, { cupo: cupo });
+  var bySubmission = {};
+  rows.forEach(function (r) { bySubmission[r.submission_id] = r; });
+  var holdersByCode = {};
+  var duplicateCodes = [];
+  rows.forEach(function (r) {
+    var c = normalizarComparable(r.code);
+    if (!c) return;
+    if (holdersByCode[c]) duplicateCodes.push(c);
+    holdersByCode[c] = true;
+  });
+  var roster = slots.map(function (s) {
+    var r = s.holder_submission_id ? bySubmission[s.holder_submission_id] : null;
+    var status = r ? participationStatus(r, false) : '';
+    return {
+      slot_code: s.slot_code, estado_cupo: s.status,
+      final_block: r ? (r.final_block || r.original_block) : '', arrival_time: r ? clockText(r.arrival_time) : '',
+      final_time: r ? clockText(r.final_time || r.original_time) : '', submission_id: r ? r.submission_id : '',
+      artistic_name: r ? r.artistic_name : '', full_name: r ? r.full_name : '',
+      participation_mode: r ? (r.participation_mode || 'SOLISTA') : '', members_declared: r ? r.members_declared : '',
+      final_confirmation: r ? (normalizarComparable(r.final_confirmation) || 'SIN RESPUESTA') : '',
+      participation_status: status,
+      reemplazo: r && /^reemplazo:/.test(String(r.issued_by || '')) ? 'SI' : '',
+      track_status: r ? r.track_status : '', observacion: ''
+    };
+  });
+  var count = function (pred) { return roster.filter(pred).length; };
+  return {
+    roster: roster,
+    conteos: {
+      cupos: cupo,
+      con_titular: count(function (x) { return x.estado_cupo === SLOT_STATUS.ASIGNADO; }),
+      confirmados: count(function (x) { return x.final_confirmation === 'SI'; }),
+      sin_respuesta: count(function (x) { return x.estado_cupo === SLOT_STATUS.ASIGNADO && x.final_confirmation === 'SIN RESPUESTA'; }),
+      reemplazos: count(function (x) { return x.reemplazo === 'SI'; }),
+      vacantes: count(function (x) { return x.estado_cupo === SLOT_STATUS.VACANTE_SIN_REEMPLAZO; }),
+      liberados_sin_cerrar: count(function (x) { return x.estado_cupo === SLOT_STATUS.LIBERADO; }),
+      ofertas_pendientes: count(function (x) { return x.estado_cupo === SLOT_STATUS.OFRECIDO; }),
+      sin_emitir: count(function (x) { return x.estado_cupo === SLOT_STATUS.SIN_EMITIR; }),
+      retirados: rows.filter(isWithdrawn).length,
+      suplentes: rows.filter(function (r) { return normalizarComparable(r.pool_status) === POOL_STATUS.SUPLENTE; }).length,
+      cambios_pendientes: (changes || []).filter(function (c) { return normalizarComparable(c.estado) === 'PENDIENTE'; }).length
+    },
+    codigos_duplicados: duplicateCodes
+  };
+}
+
+/** Preview: what the official list would look like now. */
+function accionVistaPreviaLista() {
+  var r = rosterReconciliation(leerHoja(HOJA.REGISTRO), leerHoja(HOJA.OFERTAS), leerHoja(HOJA.CAMBIOS), cfgNumero('cupo_total', 100));
+  return { conteos: r.conteos, codigos_duplicados: r.codigos_duplicados, bloqueada: cfgBool('lista_oficial_bloqueada', false),
+           roster: r.roster.filter(function (x) { return x.estado_cupo !== SLOT_STATUS.SIN_EMITIR; }) };
+}
+
+/**
+ * Consolidates the official list: reconciles, cancels open offers (their slots become vacant),
+ * writes the ROSTER_FINAL snapshot sheet + a JSON copy, and locks ordinary changes.
+ * Never deletes or resets anything.
+ */
+function accionConsolidarLista(datos, sesion) {
+  if (normalizarComparable(datos.confirmacion) !== 'CONSOLIDAR') {
+    return { ok: false, error: 'Para consolidar escribe CONSOLIDAR. Después no habrá cambios ordinarios.' };
+  }
+  return conBloqueo(function () {
+    if (cfgBool('lista_oficial_bloqueada', false)) {
+      return { ok: false, error: 'La lista ya está consolidada (' + cfg('lista_oficial_version', '') + ').' };
+    }
+    expireOffersLocked();
+    leerHoja(HOJA.OFERTAS).filter(function (o) { return normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE; })
+      .forEach(function (o) {
+        actualizarFila(HOJA.OFERTAS, o._fila, { estado: OFFER_STATUS.CANCELADA, responded_at: isoWithOffset(), actor: sesion.alias });
+        closeSlotVacantLocked({ code: o.slot_code, block: o.slot_block, arrival: o.slot_arrival, time: o.slot_time },
+                              sesion.alias, 'Oferta abierta al consolidar la lista oficial.');
+      });
+
+    var rows = leerHoja(HOJA.REGISTRO);
+    var rec = rosterReconciliation(rows, leerHoja(HOJA.OFERTAS), leerHoja(HOJA.CAMBIOS), cfgNumero('cupo_total', 100));
+    if (rec.codigos_duplicados.length) {
+      return { ok: false, error: 'Hay códigos con dos titulares: ' + rec.codigos_duplicados.join(', ') + '. Corrige antes de consolidar.' };
     }
 
-    return { code: registro.code, total: calculo.total, hoja: miHoja, corregida: !!previo };
+    var book = libro();
+    var base = cfg('lista_oficial_nombre', 'ROSTER_FINAL_2026-10-22');
+    var name = base;
+    for (var v = 2; book.getSheetByName(name); v++) name = base + ' v' + v;
+    var sheet = book.insertSheet(name);
+    var matrix = [ROSTER_COLUMNS].concat(rec.roster.map(function (x) {
+      return ROSTER_COLUMNS.map(function (c) { return cellValue(x[c]); });
+    }));
+    sheet.getRange(1, 1, matrix.length, ROSTER_COLUMNS.length).setNumberFormat('@').setValues(matrix);
+    sheet.getRange(1, 1, 1, ROSTER_COLUMNS.length).setFontWeight('bold').setBackground('#1D1D1B').setFontColor('#FFFFFF');
+    sheet.setFrozenRows(1);
+    sheet.protect().setDescription('Foto de la lista oficial consolidada. No se edita.').setWarningOnly(true);
+
+    var at = isoWithOffset();
+    var json = carpetaBackups().createFile(Utilities.newBlob(JSON.stringify({
+      lista: name, consolidada_at: at, por: sesion.alias, version_sistema: VERSION_SISTEMA, entorno: environmentName(),
+      conteos: rec.conteos, roster: rec.roster
+    }, null, 1), 'application/json', name + '.json'));
+
+    setConfigValue('lista_oficial_bloqueada', 'SI');
+    setConfigValue('lista_oficial_version', name);
+    setConfigValue('lista_oficial_at', at);
+    setConfigValue('lista_oficial_by', sesion.alias);
+    refreshPoolLocked();
+    registrar(sesion.alias, sesion.rol, 'CONSOLIDAR_LISTA', name, JSON.stringify(rec.conteos));
+    return { lista: name, conteos: rec.conteos, respaldo_json: json.getName(),
+             mensaje: 'Lista oficial consolidada como ' + name + '. Desde ahora no hay cambios ordinarios.' };
   });
+}
+
+/** Admin only, for a real emergency: reopens ordinary changes. A later consolidation creates a new version. */
+function accionDesbloquearLista(datos, sesion) {
+  var reason = normalizarTexto(datos.motivo);
+  if (reason.length < 10) return { ok: false, error: 'Escribe el motivo (queda en la bitácora).' };
+  if (!cfgBool('lista_oficial_bloqueada', false)) return { ok: false, error: 'La lista no está bloqueada.' };
+  setConfigValue('lista_oficial_bloqueada', 'NO');
+  registrar(sesion.alias, sesion.rol, 'DESBLOQUEAR_LISTA', cfg('lista_oficial_version', ''), reason);
+  return { mensaje: 'Lista desbloqueada. Al terminar la corrección, vuelve a consolidar (se creará una nueva versión).' };
 }
 
 // ========================================================================
@@ -5065,14 +7028,17 @@ function accionGuardarEvaluacion(datos, sesion) {
 
 function refrescarVistas() {
   var filas = leerHoja(HOJA.REGISTRO);
-  return {
+  var out = {
     agenda: reconstruirAgenda(filas),
     check_in: reconstruirCheckIn(filas),
     agrupaciones: reconstruirAgrupaciones(filas),
     pistas: reconstruirPistas(filas),
     resultados: reconstruirResultados(filas),
-    dashboard: reconstruirDashboard(filas)
+    bolsa: reconstruirBolsa(filas),
+    seguro: reconstruirSeguro(filas)
   };
+  out.dashboard = reconstruirDashboard(leerHoja(HOJA.REGISTRO));
+  return out;
 }
 
 function limpiarDatos(nombreHoja) {
@@ -5170,10 +7136,11 @@ function reconstruirAgrupaciones(filas) {
         row_type: 'INTEGRANTE', group_code: g.group_code, project_code: g.code || '',
         submission_id: g.submission_id, group_display_name: g.group_display_name || g.artistic_name,
         member_id: m.member_id, member_name: m.full_name, member_id_number: m.id_number, member_age: m.age,
-        member_role: m.artistic_role + (esVerdadero(m.is_leader) ? ' (lider)' : ''),
+        member_role: (isCrew(m) ? 'EQUIPO DE TRABAJO: ' + (CREW_ROLE_LABELS[m.crew_role] || m.crew_role) : m.artistic_role) +
+                     (esVerdadero(m.is_leader) ? ' (lider)' : ''),
         member_consents: ['T:' + (esVerdadero(m.consent_terms) ? 'SI' : 'NO'), 'D:' + (esVerdadero(m.consent_data) ? 'SI' : 'NO'),
                           'I:' + (esVerdadero(m.consent_image) ? 'SI' : 'NO')].join(' '),
-        member_signature: normalizarTexto(m.signature_file_id) ? 'SI' : (esVerdadero(m.is_leader) ? 'FORMULARIO 1' : 'NO'),
+        member_signature: normalizarTexto(m.signature_file_id) ? 'SI' : 'NO',
         member_status: m.member_status, member_alert: m.member_alert
       });
     });
@@ -5211,80 +7178,145 @@ function reconstruirPistas(filas) {
   return datos.length;
 }
 
-/** The committee decision currently in force, if any. */
-function currentDeliberation() {
-  var d = leerHoja(HOJA.DELIBERACIONES).filter(function (x) { return normalizarComparable(x.status) === 'VIGENTE'; });
-  if (!d.length) return null;
-  var last = d[d.length - 1];
-  return { deliberation_id: last.deliberation_id, codes_in_order: String(last.codes_in_order || '').split(',') };
+/** Committee decisions in force: at most one per cut (10 and 20). */
+function currentDeliberations() {
+  var byCut = {};
+  leerHoja(HOJA.DELIBERACIONES).forEach(function (x) {
+    if (normalizarComparable(x.status) !== 'VIGENTE') return;
+    byCut[String(x.cut_position)] = {
+      deliberation_id: x.deliberation_id, cut_position: Number(x.cut_position),
+      codes_in_order: String(x.codes_in_order || '').split(',').filter(Boolean),
+      method: x.method || '', participants: x.participants || '', result: x.result || '', at: x.at, by: x.by
+    };
+  });
+  return Object.keys(byCut).map(function (k) { return byCut[k]; });
 }
 
-/** Joins the three jury sheets onto REGISTRO and writes the ranking. */
+/** Legacy single-decision accessor (last one in force), kept for older callers. */
+function currentDeliberation() {
+  var all = currentDeliberations();
+  return all.length ? all[all.length - 1] : null;
+}
+
+/** The whole ranking computation from the source sheets: one function, used by views, panel and exports. */
+function computeResults(filas) {
+  var rubric = activeRubricCategories();
+  var cards = evaluationCards();
+  var artists = filas.filter(function (r) { return normalizarTexto(r.code); }).map(function (r) {
+    return {
+      code: r.code, artistic_name: r.artistic_name, full_name: r.full_name, discipline: projectGenre(r),
+      audition_status: r.audition_status || r.attendance_status,
+      dq_status: normalizarComparable(r.dq_status),
+      tarjetas: sentCards(cards[normalizarComparable(r.code)])
+    };
+  });
+  return seleccionarTop(artists, {
+    top_publico: cfgNumero('top_seleccionados', 10),
+    top_privado: cfgNumero('top_privado', 20),
+    minimo_jurados: cfgNumero('minimo_jurados', 3),
+    rubrica: rubric,
+    deliberaciones: currentDeliberations(),
+    resultados_cerrados: cfgBool('resultados_cerrados', false)
+  });
+}
+
+/**
+ * Writes RESULTADOS (private: Top 20, Top 10, ties, disqualifications) and persists
+ * evaluation_status / ranking_status into REGISTRO so every screen and export reads the same.
+ */
 function reconstruirResultados(filas) {
   limpiarDatos(HOJA.RESULTADOS);
+  var sel = computeResults(filas);
+  var cards = evaluationCards();
+  var applied = {};
+  sel.deliberaciones_aplicadas.forEach(function (d) { applied[d.cut] = d.deliberation_id; });
 
-  var tarjetasPorCodigo = {};
-  [HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3].forEach(function (nombre, idx) {
-    leerHoja(nombre).forEach(function (f) {
-      var code = normalizarComparable(f.code);
-      if (!code) return;
-      if (!tarjetasPorCodigo[code]) tarjetasPorCodigo[code] = [];
-      var puntajes = {};
-      RUBRICA.forEach(function (factor) { puntajes[factor.id] = f[factor.id]; });
-      tarjetasPorCodigo[code].push({ jurado: idx + 1, puntajes: puntajes });
-    });
-  });
-
-  var artistas = filas.filter(function (r) { return normalizarTexto(r.code); }).map(function (r) {
+  var datos = sel.ranking.map(function (a) {
+    var byJuror = { 1: '', 2: '', 3: '' };
+    a.totales_jurado.forEach(function (t) { byJuror[t.jurado] = t.total; });
+    var notes = [];
+    if (a.ranking_status === RANKING_STATUS.TIE_REVIEW_REQUIRED) notes.push('Empate en el corte: requiere revisión humana (acta).');
+    Object.keys(applied).forEach(function (cut) { if (a.posicion <= Number(cut) + 5) notes.push('Acta ' + applied[cut] + ' (corte ' + cut + ')'); });
+    if (a.dq_pendiente) notes.push('Reporte de descalificación PENDIENTE de validar.');
     return {
-      code: r.code, artistic_name: r.artistic_name, full_name: r.full_name,
-      discipline: projectGenre(r),
-      audition_status: r.audition_status || r.attendance_status,
-      tarjetas: tarjetasPorCodigo[normalizarComparable(r.code)] || []
+      posicion: a.posicion, code: a.code, artistic_name: a.artistic_name, full_name: a.full_name, discipline: a.discipline,
+      jurado_1: byJuror[1], jurado_2: byJuror[2], jurado_3: byJuror[3], jurados_validos: a.jurados_validos,
+      artist_final: a.artist_final, tie_break: a.tie_break, ranking_status: a.ranking_status,
+      seleccionado: a.ranking_status === RANKING_STATUS.TOP10_SELECCIONADO ? 'SI' : 'NO',
+      requiere_comite: a.ranking_status === RANKING_STATUS.TIE_REVIEW_REQUIRED ? 'SI' : '',
+      dq: a.dq_pendiente ? DQ_STATUS.PENDIENTE : '', observacion: notes.join(' ')
     };
   });
-
-  var seleccion = seleccionarTop(artistas, {
-    top: cfgNumero('top_seleccionados', 7),
-    minimo_jurados: cfgNumero('minimo_jurados', 2),
-    deliberacion: currentDeliberation()
-  });
-
-  var enTop = {};
-  seleccion.top.forEach(function (a) { enTop[a.code] = true; });
-  var enEmpate = {};
-  seleccion.empates_sin_resolver.forEach(function (a) { enEmpate[a.code] = true; });
-
-  var datos = seleccion.ranking.map(function (a) {
-    var porJurado = { 1: '', 2: '', 3: '' };
-    a.totales_jurado.forEach(function (t) { porJurado[t.jurado] = t.total; });
-    return {
-      posicion: a.posicion, code: a.code, artistic_name: a.artistic_name,
-      full_name: a.full_name, discipline: a.discipline,
-      jurado_1: porJurado[1], jurado_2: porJurado[2], jurado_3: porJurado[3],
-      jurados_validos: a.jurados_validos, artist_final: a.artist_final,
-      seleccionado: enTop[a.code] ? 'SI' : 'NO',
-      requiere_comite: enEmpate[a.code] ? 'SI' : '',
-      observacion: seleccion.deliberacion_aplicada ? 'Desempate por ' + seleccion.deliberacion_aplicada : ''
-    };
-  });
-
-  seleccion.excluidos.forEach(function (e) {
+  sel.excluidos.forEach(function (e) {
     datos.push({
-      posicion: '', code: e.code, artistic_name: '', full_name: '', discipline: '',
-      jurado_1: '', jurado_2: '', jurado_3: '', jurados_validos: e.jurados_validos || 0,
-      artist_final: '', seleccionado: 'NO', requiere_comite: '', observacion: e.motivo
+      posicion: '', code: e.code, artistic_name: e.artistic_name || '', full_name: '', discipline: '',
+      jurado_1: '', jurado_2: '', jurado_3: '', jurados_validos: e.jurados_validos || 0, artist_final: '', tie_break: '',
+      ranking_status: RANKING_STATUS.SIN_RANKING, seleccionado: 'NO', requiere_comite: '',
+      dq: e.motivo === 'DESCALIFICADO' ? DQ_STATUS.VALIDADA : '', observacion: e.motivo
     });
   });
-  if (seleccion.deliberacion_descartada) {
-    registrar('sistema', '', 'DELIBERACION_NO_APLICA', '', seleccion.deliberacion_descartada);
-  }
-
+  sel.deliberaciones_descartadas.forEach(function (d) {
+    registrar('sistema', '', 'DELIBERACION_NO_APLICA', d.deliberation_id, 'corte ' + d.cut + ': ' + d.motivo);
+  });
   agregarFilas(HOJA.RESULTADOS, datos);
+
+  // Persist the per-project statuses (only rows that changed).
+  var ranking = {};
+  sel.ranking.forEach(function (a) { ranking[normalizarComparable(a.code)] = a.ranking_status; });
+  var jurors = cfgNumero('jurados', 3);
+  var closed = cfgBool('resultados_cerrados', false);
+  var updates = [];
+  filas.forEach(function (r) {
+    var code = normalizarComparable(r.code);
+    var evaluation = code ? evaluationStatusOf(cards[code] || [], { jurados: jurors, dq_status: normalizarComparable(r.dq_status),
+                                                                     resultados_cerrados: closed }) : '';
+    var rank = code ? (ranking[code] || RANKING_STATUS.SIN_RANKING) : '';
+    if (normalizarComparable(r.evaluation_status) !== evaluation || normalizarComparable(r.ranking_status) !== rank) {
+      updates.push({ fila: r._fila, cambios: { evaluation_status: evaluation, ranking_status: rank } });
+    }
+  });
+  actualizarFilasEnLote(HOJA.REGISTRO, updates);
   return datos.length;
 }
 
-/** Every indicator the brief asks for, written as label/value rows plus charts data. */
+/** BOLSA: every eligible project in priority order, plus the open offer of each substitute. */
+function reconstruirBolsa(filas) {
+  limpiarDatos(HOJA.BOLSA);
+  var offers = leerHoja(HOJA.OFERTAS);
+  var pool = computePool(filas, poolOptions());
+  var bySubmission = {};
+  filas.forEach(function (r) { bySubmission[r.submission_id] = r; });
+  var pending = {};
+  offers.forEach(function (o) { if (normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE) pending[o.submission_id] = o; });
+  var datos = pool.filas.slice().sort(function (a, b) {
+    return (Number(a.priority_rank) || 99999) - (Number(b.priority_rank) || 99999);
+  }).map(function (p) {
+    var r = bySubmission[p.submission_id] || {};
+    var o = pending[p.submission_id];
+    return {
+      priority_rank: p.priority_rank, pool_status: p.pool_status, code: r.code || '', submission_id: p.submission_id,
+      artistic_name: r.artistic_name || '', participation_mode: r.participation_mode || 'SOLISTA',
+      created_at: String(r.created_at || '').replace('T', ' ').slice(0, 19),
+      eligibility_status: normalizeEligibility(r.eligibility_status),
+      participation_status: participationStatus(r, !!o),
+      oferta: o ? o.slot_code + ' (vence ' + humanDateTime(o.expires_at) + ')' : '',
+      observacion: r.previous_code ? 'Tuvo el cupo ' + r.previous_code : ''
+    };
+  });
+  agregarFilas(HOJA.BOLSA, datos);
+  return datos.length;
+}
+
+/** SEGURO_MAYORCA: people of every project holding a slot, for the venue policy (private). */
+function reconstruirSeguro(filas) {
+  limpiarDatos(HOJA.SEGURO);
+  if (typeof insuranceRows !== 'function') return 0;
+  var datos = insuranceRows(filas, leerHoja(HOJA.INTEGRANTES));
+  agregarFilas(HOJA.SEGURO, datos);
+  return datos.length;
+}
+
+/** Every indicator the brief asks for, written as label/value rows. The dashboard is private. */
 function reconstruirDashboard(filas) {
   var m = calcularMetricas(filas);
   var h = limpiarDatos(HOJA.DASHBOARD);
@@ -5293,39 +7325,39 @@ function reconstruirDashboard(filas) {
   var bloque = [
     ['INDICADOR', 'VALOR'],
     ['Inscripciones recibidas (filas)', m.inscritos],
-    ['Válidas (aptas + en revisión)', m.validos],
-    ['Personas unicas (por documento)', m.unicos],
-    ['Duplicados marcados', m.duplicados],
-    ['Aptos', m.aptos],
-    ['Incompletos', m.incompletos],
-    ['No cumplen requisitos', m.no_cumplen],
-    ['En revisión', m.revision],
-    ['Solistas / duos / agrupaciones', m.solistas + ' / ' + m.duos + ' / ' + m.agrupaciones],
-    ['Con código definitivo', m.con_codigo],
-    ['Con horario asignado', m.horarios],
-    ['Cupos libres', m.cupos_libres],
+    ['Por revisar (RECIBIDO) / en revisión', m.recibidos + ' / ' + m.revision],
+    ['Aptos / no aptos / incompletos / duplicados', m.aptos + ' / ' + m.no_cumplen + ' / ' + m.incompletos + ' / ' + m.duplicados],
+    ['Personas únicas (por documento)', m.unicos],
+    ['Solistas / dúos / agrupaciones', m.solistas + ' / ' + m.duos + ' / ' + m.agrupaciones],
+    ['', ''],
+    ['Bolsa: principales con turno / suplentes / fuera de bolsa', m.bolsa.principales + ' / ' + m.bolsa.suplentes + ' / ' + m.bolsa.fuera],
+    ['Retirados / reemplazos aceptados', m.bolsa.retirados + ' / ' + m.bolsa.reemplazos],
+    ['Cupos: con titular / ofrecidos / liberados / vacantes / sin emitir',
+      m.cupos.ASIGNADO + ' / ' + m.cupos.OFRECIDO + ' / ' + m.cupos.LIBERADO + ' / ' + m.cupos.VACANTE_SIN_REEMPLAZO + ' / ' + m.cupos.SIN_EMITIR],
+    ['Confirmación final: sí / no / sin respuesta', m.confirmacion.si + ' / ' + m.confirmacion.no + ' / ' + m.confirmacion.sin_respuesta],
+    ['Lista oficial', m.lista_oficial],
     ['', ''],
     ['Cambios solicitados / aprobados / rechazados / pendientes',
       m.cambios.solicitados + ' / ' + m.cambios.aprobados + ' / ' + m.cambios.rechazados + ' / ' + m.cambios.pendientes],
-    ['Integrantes autorizados / registrados / declarados (con código)',
+    ['Intérpretes autorizados / registrados / declarados (con código)',
       m.integrantes.autorizados + ' / ' + m.integrantes.registrados + ' / ' + m.integrantes.declarados],
-    ['Agrupaciones con autorizaciones completas', m.integrantes.grupos_completos + ' de ' + m.integrantes.grupos_con_codigo],
+    ['Proyectos con firmas completas', m.integrantes.grupos_completos + ' de ' + m.integrantes.grupos_con_codigo],
+    ['Equipo de trabajo registrado (no ocupa cupo)', m.integrantes.equipo],
     ['Pistas pendientes / recibidas / validadas / con problema',
       (m.pistas['PISTA PENDIENTE'] || 0) + ' / ' + (m.pistas['PISTA RECIBIDA'] || 0) + ' / ' +
       (m.pistas['PISTA VALIDADA'] || 0) + ' / ' + (m.pistas['PISTA CON PROBLEMA'] || 0)],
-    ['Videos accesibles / no accesibles / por revisar',
-      (m.videos['ACCESIBLE'] || 0) + ' / ' + (m.videos['NO ACCESIBLE'] || 0) + ' / ' +
-      ((m.videos['NO VERIFICABLE'] || 0) + (m.videos['PENDIENTE'] || 0))],
+    ['Correos enviados / en cola / con error', m.correos.ENVIADO + ' / ' + m.correos.PENDIENTE + ' / ' + (m.correos.FALLIDO + m.correos.ERROR)],
     ['', ''],
     ['Confirmados (con turno, sin llegar)', m.confirmados],
     ['Check-in / precola / en audición', m.check_ins + ' / ' + m.precola + ' / ' + m.en_audicion],
     ['Audiciones realizadas', m.realizadas],
-    ['No show', m.no_show],
-    ['En contingencia', m.contingencia],
-    ['No audicionados', m.no_audicionados],
+    ['No show / contingencia / no audicionados', m.no_show + ' / ' + m.contingencia + ' / ' + m.no_audicionados],
     ['Avance de audiciones', m.avance_texto],
-    ['Promedio global (audiciones validas)', m.promedio_global === null ? 'sin datos' : m.promedio_global],
-    ['Requiere deliberacion del comite', m.requiere_comite ? 'SI' : 'NO'],
+    ['Evaluaciones completas / parciales / sin calificar', m.evaluaciones.COMPLETA + m.evaluaciones.BLOQUEADA + ' / ' + m.evaluaciones.PARCIAL + ' / ' + m.evaluaciones.SIN_CALIFICAR],
+    ['Descalificaciones pendientes / validadas', m.evaluaciones.DQ_PENDIENTE + ' / ' + m.evaluaciones.DESCALIFICADO],
+    ['Promedio global (proyectos con 3 jurados)', m.promedio_global === null ? 'sin datos' : m.promedio_global],
+    ['Empates que requieren acta', m.requiere_comite ? 'SI' : 'NO'],
+    ['Resultados cerrados', m.resultados_cerrados ? 'SI' : 'NO'],
     ['Actualizado', ahoraISO()]
   ];
   h.getRange(1, 1, bloque.length, 2).setValues(bloque);
@@ -5341,13 +7373,12 @@ function reconstruirDashboard(filas) {
     ['Check-in', m.operativo.check_in], ['Realizadas', m.operativo.realizadas],
     ['No show', m.operativo.no_show], ['Contingencia', m.operativo.contingencia]
   ]);
-  seccion('DISTRIBUCION DE PUNTAJES', [['Rango', 'Artistas']].concat(m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; })));
-  var top = [['Artista', 'Puntaje']].concat(m.top.map(function (t) { return [(t.artistic_name || t.code), t.artist_final]; }));
-  if (top.length === 1) top.push(['(sin resultados aún)', 0]);
-  seccion('TOP ' + cfgNumero('top_seleccionados', 7), top);
-  seccion('ESTADO DE PARTICIPANTES', [['Estado', 'Cantidad'],
-    ['Confirmados', m.confirmados], ['Check-in', m.check_ins], ['Precola', m.precola], ['En audición', m.en_audicion],
-    ['Realizadas', m.realizadas], ['No show', m.no_show], ['Contingencia', m.contingencia], ['No audicionados', m.no_audicionados]]);
+  seccion('DISTRIBUCIÓN DE PUNTAJES (promedio por proyecto)', [['Rango', 'Proyectos']].concat(m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; })));
+  var top = [['Posición', 'Proyecto', 'Puntaje final', 'Estado']].concat(m.top20.map(function (t) {
+    return [t.posicion, (t.artistic_name || t.code) + ' (' + t.code + ')', scoreText(t.artist_final), t.ranking_status];
+  }));
+  if (top.length === 1) top.push(['', '(sin resultados aún)', '', '']);
+  seccion('TOP ' + m.top_privado + ' PRIVADO (los primeros ' + m.top_n + ' son los seleccionados públicos)', top);
   seccion('AVANCE POR BLOQUE', [['Bloque', 'Realizadas', 'Asignados']].concat(m.por_bloque.map(function (b) {
     return ['Bloque ' + b.block_id + ' (' + b.ventana + ')', b.realizadas, b.asignados];
   })));
@@ -5428,9 +7459,10 @@ function calcularMetricas(filas, hora) {
     var ts = r.track_status || (esVerdadero(r.track_uses) ? TRACK_STATUS.PENDIENTE : TRACK_STATUS.NO_APLICA);
     pistas[ts] = (pistas[ts] || 0) + 1;
 
-    if (r.group_code) {
-      var s = groupSummary(r.group_code, members);
-      var declared = Number(r.members_declared) || 0;
+    var teamCode = teamCodeOf(r);
+    if (teamCode) {
+      var s = groupSummary(teamCode, members);
+      var declared = Number(r.members_declared) || 1;
       integrantes.grupos_con_codigo++;
       integrantes.declarados += declared;
       integrantes.registrados += s.registered;
@@ -5461,29 +7493,56 @@ function calcularMetricas(filas, hora) {
   var ranking = resultados
     .filter(function (r) { return r.posicion !== '' && r.posicion !== undefined; })
     .map(function (r) { return { code: r.code, artistic_name: r.artistic_name, artist_final: Number(r.artist_final),
-                                 posicion: Number(r.posicion), seleccionado: r.seleccionado }; })
+                                 posicion: Number(r.posicion), seleccionado: r.seleccionado,
+                                 ranking_status: r.ranking_status }; })
     .sort(function (a, b) { return a.posicion - b.posicion; });
+
+  var offers = leerHoja(HOJA.OFERTAS);
+  var pool = computePool(filas, poolOptions());
+  var slotCounts = { ASIGNADO: 0, OFRECIDO: 0, LIBERADO: 0, VACANTE_SIN_REEMPLAZO: 0, SIN_EMITIR: 0 };
+  slotStatuses(filas, offers, poolOptions()).forEach(function (sl) { slotCounts[sl.status] = (slotCounts[sl.status] || 0) + 1; });
+  var confirmation = { si: 0, no: 0, sin_respuesta: 0 };
+  var evaluations = { SIN_CALIFICAR: 0, PARCIAL: 0, COMPLETA: 0, BLOQUEADA: 0, DQ_PENDIENTE: 0, DESCALIFICADO: 0 };
+  filas.forEach(function (r) {
+    if (normalizarTexto(r.code)) {
+      var fc = normalizarComparable(r.final_confirmation);
+      if (fc === 'SI') confirmation.si++; else confirmation.sin_respuesta++;
+      var ev = normalizarComparable(r.evaluation_status);
+      if (evaluations[ev] !== undefined && normalizarEstado(r.audition_status || r.attendance_status) === ESTADO.REALIZADA) evaluations[ev]++;
+    } else if (normalizarComparable(r.final_confirmation) === 'NO') confirmation.no++;
+  });
+  var mailCounts = { ENVIADO: 0, PENDIENTE: 0, ERROR: 0, FALLIDO: 0, OMITIDO: 0, ENVIANDO: 0 };
+  leerHoja(HOJA.EMAIL_LOG).forEach(function (e) { var st = normalizarComparable(e.status); mailCounts[st] = (mailCounts[st] || 0) + 1; });
+  var crewCount = members.filter(function (mm) { return normalizePersonRole(mm.person_role) === PERSON_ROLE.EQUIPO_TRABAJO; }).length;
 
   var objetivo = resumen.con_codigo || cupo;
 
   return {
     inscritos: resumen.total, validos: resumen.validos, unicos: resumen.unicos, duplicados: resumen.duplicado,
-    aptos: resumen.apto, incompletos: resumen.incompleto, no_cumplen: resumen.no_cumple,
+    aptos: resumen.apto, incompletos: resumen.incompleto, no_cumplen: resumen.no_cumple, recibidos: resumen.recibido,
     revision: resumen.revision, con_codigo: resumen.con_codigo, horarios: conteo.horarios,
+    bolsa: { principales: pool.principales, suplentes: pool.suplentes, fuera: pool.fuera,
+             retirados: filas.filter(isWithdrawn).length,
+             reemplazos: filas.filter(function (r) { return /^reemplazo:/.test(String(r.issued_by || '')); }).length },
+    cupos: slotCounts, confirmacion: confirmation, evaluaciones: evaluations, correos: mailCounts,
+    lista_oficial: cfgBool('lista_oficial_bloqueada', false) ? 'CONSOLIDADA (' + cfg('lista_oficial_version', '') + ')' : 'ABIERTA',
+    resultados_cerrados: cfgBool('resultados_cerrados', false),
+    top20: ranking.filter(function (r) { return r.posicion <= cfgNumero('top_privado', 20); }),
+    top_privado: cfgNumero('top_privado', 20),
     solistas: resumen.solistas, duos: resumen.duos, agrupaciones: resumen.agrupaciones,
     cupos_libres: Math.max(0, cupo - resumen.con_codigo),
     confirmados: conteo.confirmados, check_ins: conteo.check_ins, precola: conteo.precola,
     en_audicion: conteo.en_audicion, realizadas: conteo.realizadas, no_show: conteo.no_show,
     contingencia: conteo.contingencia, no_audicionados: conteo.no_audicionados,
     reasignados: conteo.reasignados, cambios_pendientes: cambiosResumen.pendientes, cambios: cambiosResumen,
-    integrantes: integrantes, pistas: pistas, videos: videos,
+    integrantes: Object.assign(integrantes, { equipo: crewCount }), pistas: pistas, videos: videos,
     avance: objetivo ? redondear((conteo.realizadas / objetivo) * 100, 1) : 0,
     avance_texto: conteo.realizadas + ' de ' + objetivo + ' (' +
                   (objetivo ? redondear((conteo.realizadas / objetivo) * 100, 1) : 0) + '%)',
     promedio_global: promedio,
     distribucion: distribucionPuntajes(ranking),
     top: ranking.filter(function (r) { return normalizarComparable(r.seleccionado) === 'SI'; }),
-    top_n: cfgNumero('top_seleccionados', 7),
+    top_n: cfgNumero('top_seleccionados', 10),
     por_bloque: Object.keys(porBloque).map(function (k) { return porBloque[k]; }),
     operativo: operationalIndicator(filas, hora),
     requiere_comite: leerHoja(HOJA.RESULTADOS).some(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; }),
@@ -5498,15 +7557,36 @@ function accionDashboard(datos) {
 function accionResultados(datos, sesion) {
   refrescarVistas();
   var filas = leerHoja(HOJA.RESULTADOS);
+  var ranked = filas.filter(function (r) { return r.posicion !== '' && r.posicion !== undefined; });
+  var dq = accionListarDescalificaciones();
   return {
-    top: filas.filter(function (r) { return normalizarComparable(r.seleccionado) === 'SI'; }),
-    ranking: filas.filter(function (r) { return r.posicion !== '' && r.posicion !== undefined; }),
+    top_publico: cfgNumero('top_seleccionados', 10),
+    top_privado: cfgNumero('top_privado', 20),
+    top: ranked.filter(function (r) { return normalizarComparable(r.ranking_status) === RANKING_STATUS.TOP10_SELECCIONADO; }),
+    top20: ranked.filter(function (r) { return Number(r.posicion) <= cfgNumero('top_privado', 20); }),
+    ranking: ranked,
     excluidos: filas.filter(function (r) { return r.observacion && !r.posicion; }),
     requiere_comite: filas.some(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; }),
     empatados: filas.filter(function (r) { return normalizarComparable(r.requiere_comite) === 'SI'; })
-      .map(function (r) { return { code: r.code, artistic_name: r.artistic_name, artist_final: r.artist_final }; }),
-    deliberacion: currentDeliberation()
+      .map(function (r) { return { code: r.code, artistic_name: r.artistic_name, artist_final: r.artist_final,
+                                   tie_break: r.tie_break, posicion: r.posicion }; }),
+    cortes: tiedCuts(),
+    deliberaciones: currentDeliberations(),
+    metodos_desempate: TIE_METHODS,
+    descalificaciones: dq.reportes,
+    resultados_cerrados: cfgBool('resultados_cerrados', false),
+    rubrica_version: activeRubric().version
   };
+}
+
+/** The cuts (10 / 20) that currently hold an unresolved tie, with the tied codes of each. */
+function tiedCuts() {
+  var sel = computeResults(leerHoja(HOJA.REGISTRO));
+  return sel.cortes.map(function (c) {
+    return { cut: c.cut, empatados: c.empatados.map(function (a) {
+      return { code: a.code, artistic_name: a.artistic_name, artist_final: a.artist_final, tie_break: a.tie_break };
+    }) };
+  });
 }
 
 // ========================================================================
@@ -5521,13 +7601,21 @@ function accionResultados(datos, sesion) {
  * what makes a restore possible. Both go to the backups folder in Drive.
  */
 
-/** Sheets that hold original data (everything else is rebuilt from these). */
+/**
+ * Sheets that hold original data (everything else is rebuilt from these).
+ * Iteration 3 adds the rubric parameters, the substitute offers, the slot hand-over history,
+ * the disqualification reports and the e-mail log: none of them can be rebuilt from REGISTRO.
+ */
 var SOURCE_SHEETS = ['REGISTRO', '_INTEGRANTES', 'JURADO_1', 'JURADO_2', 'JURADO_3', 'INCIDENTES',
-                     '_CAMBIOS', '_DELIBERACIONES'];
+                     '_CAMBIOS', '_DELIBERACIONES',
+                     'PARAMETROS_RUBRICA', '_OFERTAS', '_SLOTS_HISTORIAL', '_DESCALIFICACIONES', '_EMAIL_LOG'];
 
 /** Every sheet that goes into a JSON backup. */
 var BACKUP_SHEETS = SOURCE_SHEETS.concat(['AGENDA', 'CHECK-IN', 'AGRUPACIONES', 'PISTAS', 'RESULTADOS',
-                                          'CONFIG', '_USUARIOS', '_LOG']);
+                                          'BOLSA', 'SEGURO_MAYORCA', 'CONFIG', '_USUARIOS', '_LOG']);
+
+/** Source sheets a restore never empties: without rows the jury would score with no rubric. */
+var RESTORE_ONLY_WITH_ROWS = ['PARAMETROS_RUBRICA'];
 
 /** Labels offered in the admin panel: the brief asks for one backup per milestone. */
 var BACKUP_LABELS = ['MANUAL', 'DIARIO', 'PRE-EVENTO', 'AGENDA', 'POST-EVENTO', 'RESULTADOS', 'ENSAYO'];
@@ -5549,8 +7637,17 @@ function carpetaBackups() {
 /** Exports the whole spreadsheet as XLSX into the backups folder. */
 function exportarXlsx(nombreArchivo) {
   var id = PropertiesService.getScriptProperties().getProperty(PROP.SPREADSHEET_ID);
-  var url = 'https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx';
+  var nombre = (nombreArchivo || 'EL-BUNKER-' + Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd-HHmm')) + '.xlsx';
+  return exportSpreadsheetAsXlsx(id, nombre);
+}
 
+/**
+ * Downloads any spreadsheet of this account as .xlsx and stores it in the backups folder.
+ * An expired or missing token makes Google answer with its login page as HTTP 200 HTML,
+ * so the content type is checked too: an HTML page must never be saved as a backup.
+ */
+function exportSpreadsheetAsXlsx(spreadsheetId, fileName) {
+  var url = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?format=xlsx';
   var respuesta = UrlFetchApp.fetch(url, {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
     muteHttpExceptions: true
@@ -5558,10 +7655,12 @@ function exportarXlsx(nombreArchivo) {
   if (respuesta.getResponseCode() !== 200) {
     throw new Error('No se pudo exportar el XLSX (HTTP ' + respuesta.getResponseCode() + ').');
   }
-
-  var nombre = (nombreArchivo || 'EL-BUNKER-' + Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd-HHmm')) + '.xlsx';
-  var archivo = carpetaBackups().createFile(respuesta.getBlob().setName(nombre));
-  return { nombre: nombre, id: archivo.getId(), url: archivo.getUrl(), bytes: archivo.getSize() };
+  var blob = respuesta.getBlob();
+  if (/html/i.test(String(blob.getContentType() || ''))) {
+    throw new Error('No se pudo exportar el XLSX: Google devolvió una página web en lugar del archivo (sesión o permiso vencido).');
+  }
+  var archivo = carpetaBackups().createFile(blob.setName(fileName));
+  return { nombre: fileName, id: archivo.getId(), url: archivo.getUrl(), bytes: archivo.getSize() };
 }
 
 function accionExportar(datos, sesion) {
@@ -5660,7 +7759,9 @@ function restaurarDesdeJson(idArchivo, confirmacion) {
   return conBloqueo(function () {
     var restored = {};
     SOURCE_SHEETS.forEach(function (nombre) {
-      if (!respaldo.datos[nombre]) return;
+      if (!respaldo.datos[nombre]) return;                          // older backups do not carry the newer sheets
+      if (!libro().getSheetByName(nombre)) { restored[nombre] = 'OMITIDA: la hoja no existe (corre MIGRAR)'; return; }
+      if (RESTORE_ONLY_WITH_ROWS.indexOf(nombre) !== -1 && !respaldo.datos[nombre].length) return;
       limpiarDatos(nombre);
       var limpias = respaldo.datos[nombre].map(function (f) {
         var copia = {};
@@ -5670,6 +7771,7 @@ function restaurarDesdeJson(idArchivo, confirmacion) {
       agregarFilas(nombre, limpias);
       restored[nombre] = limpias.length;
     });
+    if (typeof invalidateRubricCache === 'function') invalidateRubricCache();
     refrescarVistas();
     registrar('sistema', 'admin', 'RESTAURAR', idArchivo, respaldo.generado_at);
     return { restaurado_de: respaldo.generado_at, etiqueta: respaldo.etiqueta || '', filas: restored };
@@ -5691,24 +7793,988 @@ function RESTAURAR() {
   return r;
 }
 
+// ===========================================================================
+// Iteration 3: corporate Excel (15 sheets) and the venue insurance export
+// ===========================================================================
+//
+// Both workbooks are a PHOTO of the master spreadsheet: every value is read from the
+// master sheets (never recomputed into a second truth), written into a temporary
+// spreadsheet, exported as .xlsx into the backups folder, and the temporary spreadsheet
+// is trashed. Editing the .xlsx never flows back into the system.
+
+/** Sheet names of the corporate workbook, in tab order (release QA, section 5). */
+var CORPORATE_SHEETS = [
+  'README_OPERACION', 'MASTER_PROYECTOS', 'PERSONAS', 'INTERPRETES', 'EQUIPO_TRABAJO', 'AGENDA', 'CAMBIOS_TURNO',
+  'JURADOS', 'CALIFICACIONES', 'RESULTADOS', 'DASHBOARD', 'EMAIL_LOG', 'SEGURO_MAYORCA', 'PARAMETROS_RUBRICA', 'LISTAS'
+];
+
+/** Brand header + accessible state tones (dark text on light fills, text always states the value too). */
+var XLS_COLOR = {
+  HEADER_BG: '#1D1D1B', HEADER_FG: '#FFFFFF',
+  OK: '#D9F2E3', WARN: '#FFF2CC', BAD: '#F8D7DA', BAND: '#F5F5F3'
+};
+
+/** Tone of a state value, whatever column it lives in (normalized: upper case, no accents, "_" for spaces). */
+var XLS_TONE_BY_VALUE = (function () {
+  var map = {};
+  function put(tone, values) { values.forEach(function (v) { map[v] = tone; }); }
+  put('OK', ['APTO', 'ENVIADA', 'ENVIADO', 'SENT', 'TOP10_SELECCIONADO', 'AUTORIZADO', 'CONFIRMADO', 'AUDICIONADO',
+             'REALIZADA', 'ASIGNADO', 'ACEPTADA', 'COMPLETA', 'BLOQUEADA', 'PRINCIPAL', 'APROBADO', 'CAMBIO_APROBADO']);
+  put('WARN', ['RECIBIDO', 'EN_REVISION', 'REVISION', 'PENDIENTE', 'BORRADOR', 'PARCIAL', 'INCOMPLETO', 'INCOMPLETA',
+               'CAMBIO_PENDIENTE', 'INVITADO', 'OFRECIDO', 'LIBERADO', 'SUPLENTE', 'TIE_REVIEW_REQUIRED', 'DQ_PENDIENTE',
+               'CONTINGENCIA', 'REINTENTO', 'RETRY', 'EN_COLA', 'QUEUED']);
+  put('BAD', ['NO_APTO', 'NO_CUMPLE', 'DUPLICADO', 'DUPLICADA', 'DESCALIFICADO', 'RETIRADO', 'RETIRO_FINAL', 'NO_SHOW',
+              'NO_AUDICIONADO', 'NO_CONFIRMADO', 'RECHAZADO', 'RECHAZADA', 'VENCIDA', 'VACANTE_SIN_REEMPLAZO', 'ERROR',
+              'FALLIDO', 'FAILED', 'REBOTADO', 'BOUNCED']);
+  return map;
+})();
+
+/** Columns whose meaning changes the tone of a value (a VALIDADA disqualification is bad news, not good). */
+var XLS_TONE_BY_KEY = {
+  dq_status: { PENDIENTE: 'WARN', VALIDADA: 'BAD' },
+  final_confirmation: { SI: 'OK', NO: 'BAD' },
+  firma: { SI: 'OK', NO: 'WARN' },
+  firma_completa: { SI: 'OK', NO: 'WARN' },
+  seleccionado: { SI: 'OK' },
+  requiere_comite: { SI: 'WARN' },
+  dq: { SI: 'BAD', TRUE: 'BAD' },
+  dq_flag: { SI: 'BAD' },
+  activo: { NO: 'BAD', FALSE: 'BAD' }
+};
+
+/** Status columns coloured with XLS_TONE_BY_VALUE. */
+var XLS_STATE_KEYS = [
+  'eligibility_status', 'eligibility_auto', 'pool_status', 'participation_status', 'evaluation_status', 'ranking_status',
+  'withdrawal_status', 'change_status', 'attendance_status', 'audition_status', 'member_status', 'authorization_status',
+  'estado', 'status', 'slot_status', 'notificacion_estado'
+];
+
+/** Spanish column titles (what staff read). Unknown keys keep their own name. */
+var XLS_LABELS = {
+  submission_id: 'ID PROYECTO', code: 'CÓDIGO', created_at: 'FECHA DE INSCRIPCIÓN', artistic_name: 'NOMBRE ARTÍSTICO',
+  participation_mode: 'MODALIDAD', full_name: 'NOMBRE COMPLETO', document_type: 'TIPO DE DOCUMENTO',
+  id_number: 'NÚMERO DE DOCUMENTO', email: 'CORREO', whatsapp: 'WHATSAPP', members_declared: 'INTEGRANTES DECLARADOS',
+  genre: 'GÉNERO', presentation_format: 'FORMATO', eligibility_status: 'APTITUD', eligibility_auto: 'APTITUD AUTOMÁTICA',
+  priority_rank: 'PRIORIDAD', pool_status: 'BOLSA', participation_status: 'PARTICIPACIÓN', final_block: 'BLOQUE',
+  arrival_time: 'HORA DE LLEGADA', final_time: 'HORA DE AUDICIÓN', final_confirmation: 'CONFIRMACIÓN FINAL',
+  withdrawal_status: 'RETIRO', previous_code: 'CÓDIGO ANTERIOR', evaluation_status: 'EVALUACIÓN', ranking_status: 'RANKING',
+  dq_status: 'DESCALIFICACIÓN', team_code: 'CÓDIGO DE EQUIPO', group_code: 'CÓDIGO DE AGRUPACIÓN',
+  terms_version: 'VERSIÓN DE TÉRMINOS', consent_terms: 'ACEPTA TÉRMINOS', consent_data: 'AUTORIZA DATOS',
+  consent_whatsapp: 'AUTORIZA WHATSAPP', consent_image: 'AUTORIZA IMAGEN Y VOZ', firma: 'FIRMA', signature_at: 'FECHA DE FIRMA',
+  interpretes: 'INTÉRPRETES REGISTRADOS', equipo: 'EQUIPO REGISTRADO', attendance_status: 'ASISTENCIA',
+  check_in_time: 'HORA DE CHECK-IN', person_id: 'ID PERSONA', person_type: 'TIPO DE PERSONA', role_detail: 'ROL',
+  on_stage: 'EN TARIMA', authorization_status: 'AUTORIZACIÓN', member_status: 'AUTORIZACIÓN', alerta: 'ALERTA',
+  is_leader: 'RESPONSABLE DEL PROYECTO', origen: 'ORIGEN DEL DATO', proyectos: 'PROYECTOS', codigos: 'CÓDIGOS',
+  relaciones: 'RELACIONES (PROYECTO · TIPO · ROL)', tipos: 'TIPO DE PERSONA', firma_completa: 'FIRMÓ EN TODOS',
+  slot_code: 'CUPO', slot_status: 'ESTADO DEL CUPO', ventana: 'VENTANA', audition_time: 'HORA DE AUDICIÓN',
+  offered_to: 'OFRECIDO A', solicitud_id: 'ID SOLICITUD', original_block: 'BLOQUE ORIGINAL', original_time: 'HORA ORIGINAL',
+  at: 'FECHA', can_attend_original: 'PUEDE EN SU HORARIO', reason_short: 'MOTIVO', estado: 'ESTADO',
+  nuevo_bloque: 'BLOQUE NUEVO', nueva_hora: 'HORA NUEVA', resuelto_at: 'DECIDIDO EL', resuelto_by: 'DECIDIDO POR',
+  observacion: 'OBSERVACIÓN', notificacion_estado: 'NOTIFICACIÓN', email_o_alias: 'JURADO (ALIAS)', hoja: 'HOJA ASIGNADA',
+  activo: 'ACTIVO', creado_at: 'CREADO EL', nota: 'NOTA', borradores: 'TARJETAS EN BORRADOR', enviadas: 'TARJETAS ENVIADAS',
+  tarjetas: 'TARJETAS TOTALES', jurado: 'JURADO', rubric_version: 'VERSIÓN DE RÚBRICA', total: 'TOTAL (20-100)',
+  desempate: 'DESEMPATE (PRESENCIA + ARENA)', dq_flag: 'DQ REPORTADA', dq_causa: 'CAUSAL DQ', observaciones: 'OBSERVACIONES',
+  evaluado_by: 'EVALUADO POR', enviado_at: 'ENVIADA EL',
+  // copies of master sheets
+  posicion: 'POSICIÓN', discipline: 'GÉNERO', jurado_1: 'JURADO 1', jurado_2: 'JURADO 2', jurado_3: 'JURADO 3',
+  jurados_validos: 'JURADOS VÁLIDOS', artist_final: 'PUNTAJE FINAL', tie_break: 'DESEMPATE', seleccionado: 'SELECCIONADO',
+  requiere_comite: 'REQUIERE COMITÉ', dq: 'DQ', email_id: 'ID CORREO', template_key: 'PLANTILLA',
+  template_version: 'VERSIÓN DE PLANTILLA', trigger: 'DISPARADOR', idempotency_key: 'CLAVE DE IDEMPOTENCIA',
+  recipient: 'DESTINATARIO', status: 'ESTADO', provider_message_id: 'ID DEL PROVEEDOR', retry_count: 'REINTENTOS',
+  last_attempt_at: 'ÚLTIMO INTENTO', error: 'ERROR', subject: 'ASUNTO', version: 'VERSIÓN', orden: 'ORDEN', id: 'ID',
+  categoria: 'CATEGORÍA', categoria_corta: 'CATEGORÍA (CORTA)', categoria_no_vocal: 'CATEGORÍA (FORMATO NO VOCAL)',
+  descripcion: 'DESCRIPCIÓN', factor: 'FACTOR', puntos_max: 'PUNTOS MÁXIMOS', nivel_1: 'NIVEL 1', nivel_2: 'NIVEL 2',
+  nivel_3: 'NIVEL 3', nivel_4: 'NIVEL 4', nivel_5: 'NIVEL 5',
+  seccion: 'SECCIÓN', concepto: 'CONCEPTO', detalle: 'DETALLE', lista: 'LISTA', valor: 'VALOR', etiqueta: 'SIGNIFICADO'
+};
+
+/** One line per sheet for README_OPERACION. */
+var XLS_SHEET_LEGEND = {
+  README_OPERACION: 'Esta hoja: uso, versión, fecha, leyendas y resumen de la póliza.',
+  MASTER_PROYECTOS: '1 fila por proyecto artístico (solista, dúo o agrupación) con todos sus estados.',
+  PERSONAS: '1 fila por persona física. Si está en dos proyectos o con dos roles, es UNA fila con todas sus relaciones.',
+  INTERPRETES: 'Relación proyecto-persona de quienes suben a tarima.',
+  EQUIPO_TRABAJO: 'Relación proyecto-persona del equipo de trabajo (no ocupa cupo ni entra al ranking).',
+  AGENDA: 'Cupos B-001 a B-100: estado del cupo, bloque, horarios, titular, confirmación y check-in.',
+  CAMBIOS_TURNO: 'Solicitudes de cambio de horario: pedido, decisión, quién decidió, cuándo y notificación.',
+  JURADOS: 'Jurados habilitados, hoja asignada y tarjetas en borrador o enviadas. Nunca incluye enlaces de acceso.',
+  CALIFICACIONES: '1 fila por jurado y proyecto: las 7 notas, total, desempate, estado y DQ reportada.',
+  RESULTADOS: 'Copia de RESULTADOS de la base: promedios, ranking, Top 20, Top 10 y desempates.',
+  DASHBOARD: 'Copia del DASHBOARD de la base (métricas operativas y de evaluación).',
+  EMAIL_LOG: 'Registro de correos: plantilla, destinatario, disparador, estado, reintentos y error.',
+  SEGURO_MAYORCA: 'Personas de proyectos con código vigente, para la póliza del C.C. Mayorca. Privado.',
+  PARAMETROS_RUBRICA: 'Rúbrica oficial vigente: categorías, factores, niveles y versión.',
+  LISTAS: 'Catálogos de estados y valores válidos, con su significado.'
+};
+
+/** Meaning of each state, shown in LISTAS. Values come from the constants; this only explains them. */
+var XLS_STATE_MEANING = {
+  RECIBIDO: 'Inscripción recibida, sin revisar', EN_REVISION: 'En revisión por logística', APTO: 'Cumple los requisitos',
+  NO_APTO: 'No cumple los requisitos', INCOMPLETO: 'Faltan datos o autorizaciones', DUPLICADO: 'Inscripción repetida',
+  SIN_TURNO: 'Sin código B-XXX', INVITADO: 'Tiene turno u oferta de cupo; falta confirmar',
+  CONFIRMADO: 'Confirmó asistencia', CAMBIO_PENDIENTE: 'Pidió cambio de horario; aún no se decide',
+  CAMBIO_APROBADO: 'Cambio de horario aprobado', NO_CONFIRMADO: 'Respondió que no podrá asistir',
+  NO_SHOW: 'No se presentó', CONTINGENCIA: 'Pasó a la ventana de contingencia', AUDICIONADO: 'Audición realizada',
+  NO_AUDICIONADO: 'No alcanzó a audicionar', RETIRADO: 'Se retiró; su cupo quedó libre', RETIRO_FINAL: 'Retiro definitivo',
+  SIN_CALIFICAR: 'Ningún jurado ha calificado', PARCIAL: 'Faltan tarjetas por enviar', COMPLETA: 'Los 3 jurados enviaron',
+  BLOQUEADA: 'Completa y con resultados cerrados', DQ_PENDIENTE: 'Descalificación reportada, por validar',
+  DESCALIFICADO: 'Descalificación validada: sale del ranking',
+  SIN_RANKING: 'Fuera del ranking (sin audición, sin los jurados mínimos o descalificado)',
+  RANKED: 'En el ranking, fuera del Top 20', TOP20: 'Puestos 11 a 20 (privado)', TOP10_SELECCIONADO: 'Seleccionado (Top 10 público)',
+  TIE_REVIEW_REQUIRED: 'Empate en el corte: decide el comité con acta', NO_SELECCIONADO: 'No seleccionado (resultados cerrados)',
+  PRINCIPAL: 'Tiene cupo B-001 a B-100', SUPLENTE: 'Apto en la bolsa de suplentes (puestos 101 a 200)',
+  FUERA_DE_BOLSA: 'Apto después del puesto 200', DECLINO: 'Suplente que rechazó o dejó vencer una oferta',
+  PENDIENTE: 'Abierto, esperando respuesta o decisión', ACEPTADA: 'Oferta aceptada', RECHAZADA: 'Oferta rechazada',
+  VENCIDA: 'Oferta vencida sin respuesta', CANCELADA: 'Oferta cancelada',
+  VACANTE_SIN_REEMPLAZO: 'Cupo cerrado sin suplente (después del límite de reemplazos)',
+  ASIGNADO: 'Cupo con titular', OFRECIDO: 'Cupo ofrecido a un suplente', LIBERADO: 'Cupo liberado por un retiro',
+  SIN_EMITIR: 'Código aún no emitido', BORRADOR: 'Tarjeta guardada; el jurado aún puede editarla',
+  ENVIADA: 'Tarjeta enviada y bloqueada', AUTORIZADO: 'Firmó y aceptó sus autorizaciones', 'NO CUMPLE': 'No cumple (edad)',
+  VALIDADA: 'Descalificación confirmada por dirección', DESCARTADA: 'Reporte de descalificación descartado',
+  INTERPRETE: 'Sube a tarima como parte del proyecto',
+  EQUIPO_TRABAJO: 'Manager, productor, técnico, asistente, fotógrafo u otro. No ocupa cupo ni entra al ranking',
+  SOLISTA: 'Una persona', DUO: 'Dos personas', AGRUPACION: 'Tres o más personas'
+};
+
+// ---------------------------------------------------------------------------
+// People per project (pure: arrays in, arrays out)
+// ---------------------------------------------------------------------------
+
+/** Stored person id, or the one derived from the document number (same function the core uses). */
+function xlsPersonId(stored, idNumber) {
+  var s = normalizarTexto(stored);
+  if (s) return s;
+  return personIdFor(normalizarCedula(idNumber)) || '';
+}
+
+function xlsYesNo(value) {
+  return esVerdadero(value) ? 'SI' : 'NO';
+}
+
+/**
+ * Every project-person relation of the registry, one per person per project.
+ *
+ * Members are linked by `_INTEGRANTES.group_code` against the project's team_code
+ * (iteration 3, every project) or group_code (iteration 2, groups); when neither matches,
+ * by `project_submission_id`. The person who registered the project is part of it too:
+ * when no linked row is the leader or carries their document, that person is taken from
+ * the REGISTRO row itself (legacy soloists had no member row).
+ */
+function projectPeople(projects, members) {
+  var byKey = {};
+  var bySubmission = {};
+  (projects || []).forEach(function (p) {
+    [p.team_code, p.group_code].forEach(function (k) {
+      var key = normalizarComparable(k);
+      if (key && !byKey[key]) byKey[key] = p;
+    });
+    if (normalizarTexto(p.submission_id)) bySubmission[normalizarTexto(p.submission_id)] = p;
+  });
+
+  var linked = {};
+  (members || []).forEach(function (m) {
+    var p = byKey[normalizarComparable(m.group_code)] || bySubmission[normalizarTexto(m.project_submission_id)];
+    if (!p) return;
+    (linked[p.submission_id] = linked[p.submission_id] || []).push(m);
+  });
+
+  var out = [];
+  (projects || []).forEach(function (p) {
+    var list = linked[p.submission_id] || [];
+    var responsibleDoc = normalizarCedula(p.normalized_id_number || p.id_number);
+    var hasResponsible = list.some(function (m) {
+      return esVerdadero(m.is_leader) ||
+             (responsibleDoc && normalizarCedula(m.normalized_id_number || m.id_number) === responsibleDoc);
+    });
+    var people = [];
+    if (!hasResponsible) people.push(xlsResponsibleRelation(p));
+    list.forEach(function (m) { people.push(xlsMemberRelation(p, m)); });
+    xlsMergeSamePerson(people).forEach(function (r) { out.push(r); });
+  });
+  return out;
+}
+
+function xlsProjectFields(p) {
+  return {
+    submission_id: normalizarTexto(p.submission_id), code: normalizarTexto(p.code), artistic_name: normalizarTexto(p.artistic_name),
+    participation_mode: normalizarTexto(p.participation_mode) || 'SOLISTA',
+    eligibility_status: normalizarTexto(p.eligibility_status), withdrawn: isWithdrawn(p)
+  };
+}
+
+/** The registrant, read from REGISTRO when the project has no member row for them. */
+function xlsResponsibleRelation(p) {
+  var r = xlsProjectFields(p);
+  var solo = normalizarComparable(r.participation_mode) === 'SOLISTA';
+  r.full_name = normalizarTexto(p.full_name);
+  r.id_number = normalizarTexto(p.id_number);
+  r.document_type = normalizeDocumentType(p.document_type);
+  r.person_id = xlsPersonId(p.person_id, p.normalized_id_number || p.id_number);
+  r.person_type = PERSON_ROLE.INTERPRETE;
+  r.role_detail = solo ? 'Solista' : 'Responsable del proyecto';
+  r.on_stage = 'SI';
+  r.authorization_status = esVerdadero(p.consent_terms) && esVerdadero(p.consent_data)
+    ? MEMBER_STATUS.AUTORIZADO : MEMBER_STATUS.INCOMPLETO;
+  r.signature_at = normalizarTexto(p.signature_at);
+  r.signed = !!(normalizarTexto(p.signature_at) || normalizarTexto(p.signature_file_id));
+  r.consent_terms = xlsYesNo(p.consent_terms);
+  r.consent_data = xlsYesNo(p.consent_data);
+  r.consent_image = xlsYesNo(p.consent_image);
+  r.is_leader = 'SI';
+  r.synthesized = true;
+  r.origen = 'FORMULARIO 1 (sin fila de integrante)';
+  return r;
+}
+
+function xlsMemberRelation(p, m) {
+  var r = xlsProjectFields(p);
+  var leader = esVerdadero(m.is_leader);
+  var role = normalizePersonRole(m.person_role);
+  var crew = role === PERSON_ROLE.EQUIPO_TRABAJO;
+  var crewRole = normalizarComparable(m.crew_role).replace(/[^A-Z]/g, '');
+  var signatureAt = normalizarTexto(m.signature_at) || (leader ? normalizarTexto(p.signature_at) : '');
+  r.full_name = normalizarTexto(m.full_name);
+  r.id_number = normalizarTexto(m.id_number);
+  r.document_type = normalizeDocumentType(m.document_type || (leader ? p.document_type : ''));
+  r.person_id = xlsPersonId(m.person_id, m.normalized_id_number || m.id_number);
+  r.person_type = role;
+  r.role_detail = crew ? (CREW_ROLE_LABELS[crewRole] || normalizarTexto(m.crew_role) || 'Equipo de trabajo')
+                       : (normalizarTexto(m.artistic_role) || 'Intérprete');
+  r.on_stage = normalizarTexto(m.on_stage) ? xlsYesNo(m.on_stage) : (crew ? 'NO' : 'SI');
+  r.authorization_status = normalizarTexto(m.member_status);
+  r.signature_at = signatureAt;
+  r.signed = !!(signatureAt || normalizarTexto(m.signature_file_id) || (leader && normalizarTexto(p.signature_file_id)));
+  r.consent_terms = xlsYesNo(m.consent_terms);
+  r.consent_data = xlsYesNo(m.consent_data);
+  r.consent_image = xlsYesNo(m.consent_image);
+  r.is_leader = leader ? 'SI' : 'NO';
+  r.synthesized = false;
+  r.origen = leader ? 'FORMULARIO 1' : 'ENLACE DE EQUIPO Y FIRMAS';
+  return r;
+}
+
+/** One person listed twice in the same project becomes one relation: on stage wins, roles are joined. */
+function xlsMergeSamePerson(people) {
+  var out = [];
+  var index = {};
+  people.forEach(function (r) {
+    var key = r.person_id;
+    if (!key || index[key] === undefined) {
+      if (key) index[key] = out.length;
+      out.push(r);
+      return;
+    }
+    var kept = out[index[key]];
+    if (kept.role_detail.indexOf(r.role_detail) === -1) kept.role_detail += ' / ' + r.role_detail;
+    if (r.person_type === PERSON_ROLE.INTERPRETE) kept.person_type = PERSON_ROLE.INTERPRETE;
+    if (r.on_stage === 'SI') kept.on_stage = 'SI';
+    if (r.authorization_status === MEMBER_STATUS.AUTORIZADO) kept.authorization_status = MEMBER_STATUS.AUTORIZADO;
+    if (!kept.signature_at && r.signature_at) kept.signature_at = r.signature_at;
+    kept.signed = kept.signed || r.signed;
+    if (r.is_leader === 'SI') kept.is_leader = 'SI';
+  });
+  return out;
+}
+
+/**
+ * Alerts per relation, never a removal: missing signature, and a person who appears in more
+ * than one project of `relations` (the codes, or the project ids when there is no code yet).
+ */
+function xlsRelationAlerts(relations) {
+  var projectsByPerson = {};
+  relations.forEach(function (r) {
+    if (!r.person_id) return;
+    var label = r.code || r.submission_id;
+    var list = projectsByPerson[r.person_id] = projectsByPerson[r.person_id] || [];
+    if (list.indexOf(label) === -1) list.push(label);
+  });
+  relations.forEach(function (r) {
+    var alerts = [];
+    if (!r.signed) alerts.push(r.synthesized ? 'SIN_FIRMA_INDIVIDUAL' : 'SIN_FIRMA');
+    var list = r.person_id ? projectsByPerson[r.person_id] : [];
+    if (list && list.length > 1) alerts.push('PERSONA_EN_VARIOS_PROYECTOS: ' + list.slice().sort().join(','));
+    r.alerta = alerts.join(' | ');
+  });
+  return relations;
+}
+
+function xlsByProjectThenPerson(a, b) {
+  var ka = [a.code || '~' + a.submission_id, a.is_leader === 'SI' ? 0 : 1, a.person_type === PERSON_ROLE.INTERPRETE ? 0 : 1,
+            normalizarComparable(a.full_name)];
+  var kb = [b.code || '~' + b.submission_id, b.is_leader === 'SI' ? 0 : 1, b.person_type === PERSON_ROLE.INTERPRETE ? 0 : 1,
+            normalizarComparable(b.full_name)];
+  for (var i = 0; i < ka.length; i++) {
+    if (ka[i] < kb[i]) return -1;
+    if (ka[i] > kb[i]) return 1;
+  }
+  return 0;
+}
+
+/**
+ * SEGURO_MAYORCA: one row per person linked to a project that holds a code (B-XXX) and has
+ * not withdrawn. Keys are exactly COLUMNAS_SEGURO. A person in two projects stays in both
+ * (they are two relations) and is flagged, never removed.
+ * @param {Array<Object>} projects REGISTRO rows
+ * @param {Array<Object>} members _INTEGRANTES rows
+ */
+function insuranceRows(projects, members) {
+  var relations = projectPeople(projects, members).filter(function (r) { return r.code && !r.withdrawn; });
+  xlsRelationAlerts(relations);
+  relations.sort(xlsByProjectThenPerson);
+  return relations.map(function (r) {
+    var row = {};
+    COLUMNAS_SEGURO.forEach(function (k) { row[k] = r[k] === undefined || r[k] === null ? '' : r[k]; });
+    return row;
+  });
+}
+
+/** Reconciliation counts of insuranceRows(). */
+function insuranceSummary(rows) {
+  var codes = {}, people = {}, repeated = {};
+  var s = { proyectos: 0, personas: 0, interpretes: 0, equipo: 0, sin_firma: 0, repetidas: 0 };
+  (rows || []).forEach(function (r, i) {
+    codes[normalizarComparable(r.code)] = true;
+    var person = r.person_id || 'FILA-' + i;
+    people[person] = true;
+    if (r.person_type === PERSON_ROLE.EQUIPO_TRABAJO) s.equipo++;
+    else s.interpretes++;
+    if (/SIN_FIRMA/.test(String(r.alerta || ''))) s.sin_firma++;
+    if (/PERSONA_EN_VARIOS_PROYECTOS/.test(String(r.alerta || ''))) repeated[person] = true;
+  });
+  s.proyectos = Object.keys(codes).length;
+  s.personas = Object.keys(people).length;
+  s.repetidas = Object.keys(repeated).length;
+  return s;
+}
+
+// ---------------------------------------------------------------------------
+// Workbook writer (Sheets calls live here and only here)
+// ---------------------------------------------------------------------------
+
+function xlsLabel(key) {
+  return XLS_LABELS[key] || String(key);
+}
+
+/** Column spec: { key, label, num }. Non-numeric columns are written as plain text. */
+function xlsCol(key, label, num) {
+  return { key: key, label: label || xlsLabel(key), num: !!num };
+}
+
+/**
+ * Display value of one cell. Dates become text, ISO stamps lose the "T", booleans read SI/NO,
+ * and text starting with = + - @ gets the apostrophe that keeps it from becoming a formula.
+ */
+function xlsCell(value) {
+  if (value === undefined || value === null) return '';
+  if (value instanceof Date) return configValueAsText(value);
+  if (typeof value === 'boolean') return value ? 'SI' : 'NO';
+  if (typeof value === 'number') return value;
+  var s = String(value);
+  var time = s.match(/^1899-12-3\d[T ](\d{2}:\d{2})/);
+  if (time) return time[1];
+  var stamp = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(:\d{2}(\.\d+)?)?$/);
+  if (stamp) return stamp[1] + ' ' + stamp[2];
+  return cellValue(s);
+}
+
+function xlsTone(key, value) {
+  var v = normalizarComparable(value).replace(/[\s-]+/g, '_');
+  if (!v) return '';
+  if (key === 'alerta' || key === 'member_alert') return 'WARN';
+  if (XLS_TONE_BY_KEY.hasOwnProperty(key)) return XLS_TONE_BY_KEY[key][v] || '';
+  if (XLS_STATE_KEYS.indexOf(key) === -1) return '';
+  return XLS_TONE_BY_VALUE[v] || '';
+}
+
+/** Masks document numbers, e-mails and phones for roles that only see the registry masked. */
+function xlsMask(key, value) {
+  if (!normalizarTexto(value)) return value;
+  if (key === 'id_number') return maskIdNumber(value);
+  if (key === 'email') return maskEmail(value);
+  if (key === 'whatsapp') return maskPhone(value);
+  if (key === 'recipient' || key === 'contact') return String(value).indexOf('@') !== -1 ? maskEmail(value) : maskPhone(value);
+  return value;
+}
+
+var XLS_MASKED_KEYS = ['id_number', 'email', 'whatsapp', 'recipient', 'contact'];
+
+function xlsEnsureSize(sheet, rows, cols) {
+  if (sheet.getMaxColumns() < cols) sheet.insertColumnsAfter(sheet.getMaxColumns(), cols - sheet.getMaxColumns());
+  if (sheet.getMaxRows() < rows) sheet.insertRowsAfter(sheet.getMaxRows(), rows - sheet.getMaxRows());
+}
+
+/** Column widths from content, bucketed so contiguous columns share one call. */
+function xlsColumnWidths(sheet, matrix, width) {
+  if (typeof sheet.setColumnWidths !== 'function') {
+    if (typeof sheet.autoResizeColumns === 'function') sheet.autoResizeColumns(1, width);
+    return;
+  }
+  var widths = [];
+  for (var j = 0; j < width; j++) {
+    var longest = 0;
+    for (var i = 0; i < matrix.length && i < 300; i++) longest = Math.max(longest, String(matrix[i][j]).length);
+    widths.push(Math.ceil(Math.max(80, Math.min(360, 7 * longest + 24)) / 40) * 40);
+  }
+  var start = 0;
+  for (var k = 1; k <= width; k++) {
+    if (k === width || widths[k] !== widths[start]) {
+      sheet.setColumnWidths(start + 1, k - start, widths[start]);
+      start = k;
+    }
+  }
+}
+
+/**
+ * Writes one table: header + rows in ONE setValues, text format on non-numeric columns first
+ * (so "0012345", "15:00" and B-001 survive), branded header, frozen header row, a filter over
+ * the table, widths, alternating band + state tones in ONE setBackgrounds, and a warning-only
+ * protection. Rows may carry `_background` to tint the whole row (legend rows).
+ * Banding is painted in the same background matrix instead of applyRowBanding: Sheets draws
+ * alternating colours over plain fills, which would hide the state tones.
+ * @returns {number} data rows written
+ */
+function xlsWriteTable(sheet, columns, rows, options) {
+  options = options || {};
+  var cols = columns.length ? columns : [xlsCol('aviso', 'AVISO')];
+  var width = cols.length;
+  var height = rows.length + 1;
+  xlsEnsureSize(sheet, height + 1, width);
+
+  var textKeys = cols.filter(function (c) { return !c.num; }).map(function (c) { return c.key; });
+  plainTextRuns(cols.map(function (c) { return c.key; }), textKeys).forEach(function (run) {
+    sheet.getRange(1, run[0] + 1, height, run[1]).setNumberFormat('@');
+  });
+
+  var masked = !!options.masked;
+  var matrix = [cols.map(function (c) { return c.label; })];
+  var backgrounds = [cols.map(function () { return XLS_COLOR.HEADER_BG; })];
+  rows.forEach(function (r, i) {
+    var band = r._background || (i % 2 === 1 ? XLS_COLOR.BAND : null);
+    matrix.push(cols.map(function (c) {
+      var v = r[c.key];
+      if (masked && XLS_MASKED_KEYS.indexOf(c.key) !== -1) v = xlsMask(c.key, v);
+      return xlsCell(v);
+    }));
+    backgrounds.push(cols.map(function (c) {
+      var tone = xlsTone(c.key, r[c.key]);
+      return tone ? XLS_COLOR[tone] : band;
+    }));
+  });
+
+  var table = sheet.getRange(1, 1, height, width);
+  table.setValues(matrix);
+  table.setBackgrounds(backgrounds);
+  sheet.getRange(1, 1, 1, width).setFontWeight('bold').setFontColor(XLS_COLOR.HEADER_FG);
+  if (typeof sheet.setFrozenRows === 'function') sheet.setFrozenRows(1);
+  if (typeof table.createFilter === 'function') {
+    try { table.createFilter(); } catch (e) { console.warn('Filtro no creado en ' + sheet.getName() + ': ' + e.message); }
+  }
+  xlsColumnWidths(sheet, matrix, width);
+  if (typeof sheet.protect === 'function') {
+    sheet.protect().setDescription('Foto de la base EL BÚNKER. Editar aquí no cambia el sistema.').setWarningOnly(true);
+  }
+  return rows.length;
+}
+
+/**
+ * Columns + rows of a master sheet copied as they are (every column, every row). Header
+ * titles are translated for staff; a column is numeric only when every value in it is a number.
+ */
+function xlsMasterCopy(sheetName) {
+  var sheet = libro().getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 1 || sheet.getLastColumn() < 1) {
+    return { columns: [xlsCol('aviso', 'AVISO')], rows: [{ aviso: 'La hoja ' + sheetName + ' no existe o está vacía en la base.' }] };
+  }
+  var values = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
+  var used = {};
+  var columns = values[0].map(function (h, j) {
+    var key = String(h).trim() || 'col_' + (j + 1);
+    while (used[key]) key += '_';
+    used[key] = true;
+    var numeric = values.length > 1 && values.slice(1).every(function (row) {
+      return row[j] === '' || row[j] === null || typeof row[j] === 'number';
+    }) && values.slice(1).some(function (row) { return typeof row[j] === 'number'; });
+    return xlsCol(key, String(h).trim() ? xlsLabel(key) : '', numeric);
+  });
+  var rows = values.slice(1).map(function (line) {
+    var o = {};
+    columns.forEach(function (c, j) { o[c.key] = line[j]; });
+    return o;
+  });
+  return { columns: columns, rows: rows };
+}
+
+/** yyyyMMdd-HHmm stamped file name; test files say so in the name. */
+function xlsFileName(name, kind) {
+  var base = normalizarTexto(name) || 'EL-BUNKER-' + kind + '-' + Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd-HHmm');
+  if (esPruebas() && !/PRUEBAS/i.test(base)) base = 'PRUEBAS-' + base;
+  return base.replace(/\.xlsx$/i, '') + '.xlsx';
+}
+
+/**
+ * Builds a temporary spreadsheet with `tables` ([{ name, columns, rows }], in tab order),
+ * exports it as .xlsx into the backups folder and trashes the temporary spreadsheet,
+ * also when anything fails half way (it holds personal data).
+ */
+function xlsBuildWorkbook(fileName, tables, options) {
+  var temp = SpreadsheetApp.create('TEMP-EXPORT ' + fileName.replace(/\.xlsx$/i, ''));
+  var tempId = temp.getId();
+  var result = null;
+  var trashed = false;
+  try {
+    try { temp.setSpreadsheetTimeZone(zonaHoraria()); } catch (e) { /* keeps the account zone */ }
+    var names = tables.map(function (t) { return t.name; });
+    var hojas = {};
+    tables.forEach(function (t) {
+      hojas[t.name] = xlsWriteTable(temp.insertSheet(t.name), t.columns, t.rows, options);
+    });
+    temp.getSheets().forEach(function (s) {
+      if (names.indexOf(s.getName()) === -1) temp.deleteSheet(s);
+    });
+    SpreadsheetApp.flush();                                   // the export URL reads what is committed, not what is pending
+    result = exportSpreadsheetAsXlsx(tempId, fileName);
+    result.hojas = hojas;
+  } finally {
+    try { DriveApp.getFileById(tempId).setTrashed(true); trashed = true; }
+    catch (e) { console.error('No se pudo enviar a la papelera la hoja temporal ' + tempId + ': ' + e.message); }
+  }
+  result.temporal_id = tempId;
+  result.temporal_en_papelera = trashed;
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// The 15 sheets
+// ---------------------------------------------------------------------------
+
+/** Everything the workbooks read, in one pass over the master spreadsheet. */
+function xlsReadSources() {
+  return {
+    projects: leerHoja(HOJA.REGISTRO),
+    members: leerHoja(HOJA.INTEGRANTES),
+    offers: leerHoja(HOJA.OFERTAS),
+    changes: leerHoja(HOJA.CAMBIOS),
+    users: leerHoja(HOJA.USUARIOS),
+    jury: [HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3].map(function (n) { return leerHoja(n); })
+  };
+}
+
+function xlsGenre(r) {
+  return typeof projectGenre === 'function' ? projectGenre(r) : (normalizarTexto(r.genre_primary) || normalizarTexto(r.discipline));
+}
+
+function xlsPendingOffers(offers) {
+  var pending = {};
+  (offers || []).forEach(function (o) {
+    if (normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE) pending[normalizarTexto(o.submission_id)] = true;
+  });
+  return pending;
+}
+
+function xlsMasterProjects(src, relations) {
+  var pending = xlsPendingOffers(src.offers);
+  var counts = {};
+  relations.forEach(function (r) {
+    var c = counts[r.submission_id] = counts[r.submission_id] || { interpretes: 0, equipo: 0 };
+    if (r.person_type === PERSON_ROLE.EQUIPO_TRABAJO) c.equipo++; else c.interpretes++;
+  });
+  var columns = [
+    xlsCol('submission_id'), xlsCol('code'), xlsCol('created_at'), xlsCol('artistic_name'), xlsCol('participation_mode'),
+    xlsCol('full_name', 'RESPONSABLE'), xlsCol('document_type'), xlsCol('id_number'), xlsCol('email'), xlsCol('whatsapp'),
+    xlsCol('members_declared', null, true), xlsCol('interpretes', null, true), xlsCol('equipo', null, true),
+    xlsCol('genre'), xlsCol('presentation_format'), xlsCol('eligibility_status'), xlsCol('eligibility_auto'),
+    xlsCol('priority_rank', null, true), xlsCol('pool_status'), xlsCol('participation_status'),
+    xlsCol('final_block', null, true), xlsCol('arrival_time'), xlsCol('final_time'), xlsCol('final_confirmation'),
+    xlsCol('attendance_status'), xlsCol('withdrawal_status'), xlsCol('previous_code'), xlsCol('evaluation_status'),
+    xlsCol('ranking_status'), xlsCol('dq_status'), xlsCol('team_code'), xlsCol('group_code'), xlsCol('terms_version'),
+    xlsCol('consent_terms'), xlsCol('consent_data'), xlsCol('consent_whatsapp'), xlsCol('consent_image'),
+    xlsCol('firma'), xlsCol('signature_at')
+  ];
+  var rows = src.projects.map(function (r) {
+    var c = counts[r.submission_id] || { interpretes: 0, equipo: 0 };
+    return {
+      submission_id: r.submission_id, code: r.code, created_at: r.created_at, artistic_name: r.artistic_name,
+      participation_mode: r.participation_mode || 'SOLISTA', full_name: r.full_name,
+      document_type: normalizeDocumentType(r.document_type), id_number: r.id_number, email: r.email, whatsapp: r.whatsapp,
+      members_declared: r.members_declared, interpretes: c.interpretes, equipo: c.equipo, genre: xlsGenre(r),
+      presentation_format: r.presentation_format, eligibility_status: r.eligibility_status, eligibility_auto: r.eligibility_auto,
+      priority_rank: r.priority_rank, pool_status: r.pool_status,
+      participation_status: normalizarTexto(r.participation_status) ||
+        participationStatus(r, !!pending[normalizarTexto(r.submission_id)]),
+      final_block: r.final_block || r.original_block, arrival_time: clockText(r.arrival_time) || r.arrival_time,
+      final_time: clockText(r.final_time || r.original_time), final_confirmation: r.final_confirmation,
+      attendance_status: r.attendance_status, withdrawal_status: r.withdrawal_status, previous_code: r.previous_code,
+      evaluation_status: r.evaluation_status, ranking_status: r.ranking_status, dq_status: r.dq_status,
+      team_code: r.team_code, group_code: r.group_code, terms_version: r.terms_version,
+      consent_terms: xlsYesNo(r.consent_terms), consent_data: xlsYesNo(r.consent_data),
+      consent_whatsapp: xlsYesNo(r.consent_whatsapp), consent_image: xlsYesNo(r.consent_image),
+      firma: normalizarTexto(r.signature_at) || normalizarTexto(r.signature_file_id) ? 'SI' : 'NO',
+      signature_at: r.signature_at
+    };
+  });
+  return { name: 'MASTER_PROYECTOS', columns: columns, rows: rows };
+}
+
+function xlsPeople(relations) {
+  var byPerson = {};
+  var order = [];
+  relations.forEach(function (r, i) {
+    var key = r.person_id || 'SIN-DOCUMENTO-' + i;
+    if (!byPerson[key]) {
+      byPerson[key] = { person_id: r.person_id, full_name: r.full_name, document_type: r.document_type, id_number: r.id_number,
+                        list: [] };
+      order.push(key);
+    }
+    byPerson[key].list.push(r);
+  });
+  var rows = order.map(function (key) {
+    var p = byPerson[key];
+    var projects = {};
+    var types = {};
+    p.list.forEach(function (r) { projects[r.code || r.submission_id] = true; types[r.person_type] = true; });
+    var codes = Object.keys(projects).sort();
+    return {
+      person_id: p.person_id, full_name: p.full_name, document_type: p.document_type, id_number: p.id_number,
+      proyectos: codes.length, codigos: codes.join(', '),
+      tipos: Object.keys(types).sort().join(' + '),
+      relaciones: p.list.map(function (r) {
+        return (r.code || 'sin código ' + r.submission_id) + ' · ' + r.artistic_name + ' · ' + r.person_type + ' (' + r.role_detail + ')';
+      }).join(' | '),
+      firma_completa: p.list.every(function (r) { return r.signed; }) ? 'SI' : 'NO',
+      alerta: codes.length > 1 ? 'PERSONA_EN_VARIOS_PROYECTOS: ' + codes.join(',') : ''
+    };
+  });
+  rows.sort(function (a, b) { return normalizarComparable(a.full_name) < normalizarComparable(b.full_name) ? -1 : 1; });
+  return {
+    name: 'PERSONAS',
+    columns: [xlsCol('person_id'), xlsCol('full_name'), xlsCol('document_type'), xlsCol('id_number'),
+              xlsCol('proyectos', null, true), xlsCol('codigos'), xlsCol('tipos'), xlsCol('relaciones'),
+              xlsCol('firma_completa'), xlsCol('alerta')],
+    rows: rows
+  };
+}
+
+function xlsRelationTable(name, relations, personType) {
+  var rows = relations.filter(function (r) { return r.person_type === personType; }).map(function (r) {
+    return Object.assign({}, r, { firma: r.signed ? 'SI' : 'NO' });
+  });
+  return {
+    name: name,
+    columns: [xlsCol('code'), xlsCol('artistic_name'), xlsCol('submission_id'), xlsCol('participation_mode'),
+              xlsCol('eligibility_status'), xlsCol('person_id'), xlsCol('full_name'), xlsCol('document_type'),
+              xlsCol('id_number'), xlsCol('role_detail'), xlsCol('on_stage'), xlsCol('is_leader'),
+              xlsCol('authorization_status'), xlsCol('firma'), xlsCol('signature_at'), xlsCol('consent_terms'),
+              xlsCol('consent_data'), xlsCol('consent_image'), xlsCol('origen'), xlsCol('alerta')],
+    rows: rows
+  };
+}
+
+function xlsAgenda(src) {
+  var agendaCfg = agendaConfigurada();
+  var bySubmission = {};
+  src.projects.forEach(function (r) { bySubmission[normalizarTexto(r.submission_id)] = r; });
+  var pending = xlsPendingOffers(src.offers);
+  var rows = slotStatuses(src.projects, src.offers, { cupo: cfgNumero('cupo_total', 100) }).map(function (s) {
+    var holder = bySubmission[normalizarTexto(s.holder_submission_id)] || null;
+    var planned = horarioDeCodigo(s.slot_code, agendaCfg) || {};
+    var block = holder ? Number(holder.final_block || holder.original_block) || planned.block_id : planned.block_id;
+    var window = block ? horarioDeBloque(block, agendaCfg) : null;
+    var offered = bySubmission[normalizarTexto(s.offered_to)];
+    return {
+      slot_code: s.slot_code, slot_status: s.status, final_block: block || '', ventana: window ? window.ventana : '',
+      arrival_time: holder ? clockText(holder.arrival_time) || planned.arrival_time : planned.arrival_time,
+      audition_time: holder ? clockText(holder.final_time || holder.original_time) || planned.audition_time : planned.audition_time,
+      artistic_name: holder ? holder.artistic_name : '', submission_id: holder ? holder.submission_id : '',
+      participation_mode: holder ? holder.participation_mode || 'SOLISTA' : '',
+      participation_status: holder ? (normalizarTexto(holder.participation_status) ||
+        participationStatus(holder, !!pending[normalizarTexto(holder.submission_id)])) : '',
+      final_confirmation: holder ? holder.final_confirmation : '',
+      attendance_status: holder ? holder.attendance_status : '', check_in_time: holder ? holder.check_in_time : '',
+      offered_to: offered ? offered.artistic_name + ' (' + offered.submission_id + ')' : (s.offered_to || '')
+    };
+  });
+  return {
+    name: 'AGENDA',
+    columns: [xlsCol('slot_code'), xlsCol('slot_status'), xlsCol('final_block', null, true), xlsCol('ventana'),
+              xlsCol('arrival_time'), xlsCol('audition_time'), xlsCol('artistic_name'), xlsCol('submission_id'),
+              xlsCol('participation_mode'), xlsCol('participation_status'), xlsCol('final_confirmation'),
+              xlsCol('attendance_status'), xlsCol('check_in_time'), xlsCol('offered_to')],
+    rows: rows
+  };
+}
+
+function xlsScheduleChanges(src) {
+  var names = {};
+  src.projects.forEach(function (r) { if (normalizarTexto(r.code)) names[normalizarComparable(r.code)] = r.artistic_name; });
+  var rows = src.changes.map(function (c) {
+    return {
+      solicitud_id: c.solicitud_id, code: c.code, artistic_name: names[normalizarComparable(c.code)] || '',
+      original_block: c.original_block, original_time: clockText(c.original_time) || c.original_time, at: c.at,
+      can_attend_original: c.can_attend_original === '' ? '' : xlsYesNo(c.can_attend_original), reason_short: c.reason_short,
+      estado: c.estado, nuevo_bloque: c.nuevo_bloque, nueva_hora: clockText(c.nueva_hora) || c.nueva_hora,
+      resuelto_at: c.resuelto_at, resuelto_by: c.resuelto_by, observacion: c.observacion,
+      notificacion_estado: c.notificacion_estado
+    };
+  });
+  return {
+    name: 'CAMBIOS_TURNO',
+    columns: [xlsCol('solicitud_id'), xlsCol('code'), xlsCol('artistic_name'), xlsCol('original_block', null, true),
+              xlsCol('original_time'), xlsCol('at', 'SOLICITADO EL'), xlsCol('can_attend_original'), xlsCol('reason_short'),
+              xlsCol('estado'), xlsCol('nuevo_bloque', null, true), xlsCol('nueva_hora'), xlsCol('resuelto_at'),
+              xlsCol('resuelto_by'), xlsCol('observacion'), xlsCol('notificacion_estado')],
+    rows: rows
+  };
+}
+
+/** JURADO_1..3 for a user: "jurado N" in the note, else a trailing digit in the alias (same rule as hojaDeJurado). */
+function xlsJurySheetOf(user) {
+  var m = String(user.nota || '').match(/jurado\s*([123])/i) || String(user.email_o_alias || '').match(/([123])\s*$/);
+  return m ? 'JURADO_' + m[1] : '';
+}
+
+/** Jurors with their sheet and card counts. The token column is never read into the export. */
+function xlsJurors(src) {
+  var bySheet = {};
+  src.jury.forEach(function (cards, i) {
+    var c = { borradores: 0, enviadas: 0 };
+    cards.forEach(function (card) {
+      if (!normalizarTexto(card.code)) return;
+      if (normalizarComparable(card.estado) === EVALUATION_STATE.ENVIADA) c.enviadas++; else c.borradores++;
+    });
+    bySheet['JURADO_' + (i + 1)] = c;
+  });
+  var rows = src.users.filter(function (u) { return normalizarComparable(u.rol) === 'JURADO'; }).map(function (u) {
+    var sheet = xlsJurySheetOf(u);
+    var c = bySheet[sheet] || { borradores: 0, enviadas: 0 };
+    return {
+      email_o_alias: u.email_o_alias, hoja: sheet || '(sin hoja: revisar la nota en _USUARIOS)',
+      // Same rule as estadoUsuario(): only NO / FALSE disables an account.
+      activo: ['NO', 'FALSE'].indexOf(normalizarComparable(u.activo)) !== -1 ? 'NO' : 'SI', creado_at: u.creado_at, nota: u.nota,
+      borradores: c.borradores, enviadas: c.enviadas, tarjetas: c.borradores + c.enviadas
+    };
+  });
+  return {
+    name: 'JURADOS',
+    columns: [xlsCol('email_o_alias'), xlsCol('hoja'), xlsCol('activo'), xlsCol('creado_at'), xlsCol('nota'),
+              xlsCol('borradores', null, true), xlsCol('enviadas', null, true), xlsCol('tarjetas', null, true)],
+    rows: rows
+  };
+}
+
+function xlsScores(src) {
+  var categories = activeRubricCategories();
+  var rows = [];
+  src.jury.forEach(function (cards, i) {
+    cards.forEach(function (card) {
+      if (!normalizarTexto(card.code)) return;
+      var row = {
+        jurado: i + 1, code: card.code, artistic_name: card.artistic_name, rubric_version: card.rubric_version,
+        total: card.total, desempate: card.desempate, estado: normalizarTexto(card.estado) || EVALUATION_STATE.BORRADOR,
+        dq_flag: xlsYesNo(card.dq_flag), dq_causa: card.dq_causa, observaciones: card.observaciones,
+        evaluado_by: card.evaluado_by, enviado_at: card.enviado_at
+      };
+      categories.forEach(function (c) { row[c.id] = card[c.id]; });
+      rows.push(row);
+    });
+  });
+  rows.sort(function (a, b) { return String(a.code) < String(b.code) ? -1 : (String(a.code) > String(b.code) ? 1 : a.jurado - b.jurado); });
+  var columns = [xlsCol('jurado', null, true), xlsCol('code'), xlsCol('artistic_name'), xlsCol('rubric_version')]
+    .concat(categories.map(function (c) { return xlsCol(c.id, String(c.corta || c.categoria).toUpperCase() + ' (x' + c.factor + ')', true); }))
+    .concat([xlsCol('total', null, true), xlsCol('desempate', null, true), xlsCol('estado'), xlsCol('dq_flag'),
+             xlsCol('dq_causa'), xlsCol('observaciones'), xlsCol('evaluado_by'), xlsCol('enviado_at')]);
+  return { name: 'CALIFICACIONES', columns: columns, rows: rows };
+}
+
+function xlsInsuranceTable(rows) {
+  return { name: 'SEGURO_MAYORCA', columns: COLUMNAS_SEGURO.map(function (k) { return xlsCol(k); }), rows: rows };
+}
+
+function xlsCopyTable(name, masterSheet) {
+  var copy = xlsMasterCopy(masterSheet);
+  return { name: name, columns: copy.columns, rows: copy.rows };
+}
+
+/** Normalized catalogs. Values come from the constants in force, so a new state shows up by itself. */
+function xlsLists() {
+  var rows = [];
+  function add(list, values, labels) {
+    values.forEach(function (v) {
+      rows.push({ lista: list, valor: v, etiqueta: (labels && labels[v]) || XLS_STATE_MEANING[v] || '' });
+    });
+  }
+  function valuesOf(obj) { return Object.keys(obj || {}).map(function (k) { return obj[k]; }); }
+  add('APTITUD', valuesOf(ESTADO_ELEGIBILIDAD).filter(function (v) { return v !== 'REVISION' && v !== 'NO_CUMPLE'; }));
+  add('PARTICIPACIÓN', valuesOf(PARTICIPATION));
+  add('EVALUACIÓN DEL PROYECTO', valuesOf(EVALUATION_STATUS));
+  add('TARJETA DE JURADO', valuesOf(EVALUATION_STATE));
+  add('RANKING', valuesOf(RANKING_STATUS));
+  add('DESCALIFICACIÓN', valuesOf(DQ_STATUS));
+  add('BOLSA', valuesOf(POOL_STATUS));
+  add('OFERTA DE CUPO', valuesOf(OFFER_STATUS));
+  add('ESTADO DEL CUPO', valuesOf(SLOT_STATUS));
+  add('MODALIDAD', valuesOf(PARTICIPATION_MODE));
+  add('TIPO DE PERSONA', valuesOf(PERSON_ROLE));
+  add('AUTORIZACIÓN', valuesOf(MEMBER_STATUS));
+  add('ROL DE EQUIPO', CREW_ROLES, CREW_ROLE_LABELS);
+  add('TIPO DE DOCUMENTO', DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS);
+  DQ_CAUSES.forEach(function (c) { rows.push({ lista: 'CAUSAL DE DESCALIFICACIÓN', valor: c.id, etiqueta: c.etiqueta }); });
+  RUBRIC_SCALE.forEach(function (s) { rows.push({ lista: 'ESCALA DE LA RÚBRICA', valor: s.nota, etiqueta: s.etiqueta }); });
+  ['SIN_FIRMA', 'SIN_FIRMA_INDIVIDUAL', 'PERSONA_EN_VARIOS_PROYECTOS'].forEach(function (a, i) {
+    rows.push({ lista: 'ALERTA', valor: a, etiqueta: [
+      'La persona no tiene firma registrada.',
+      'Proyecto sin fila de integrante: la persona sólo aceptó en el Formulario 1, sin firma individual.',
+      'La misma persona (mismo documento) aparece en varios proyectos. Revisar; nunca se elimina sola.'][i] });
+  });
+  return { name: 'LISTAS', columns: [xlsCol('lista'), xlsCol('valor'), xlsCol('etiqueta')], rows: rows };
+}
+
+function xlsReadme(kind, insurance, options) {
+  var rows = [];
+  function add(seccion, concepto, detalle, background) {
+    rows.push({ seccion: seccion, concepto: concepto, detalle: detalle, _background: background || null });
+  }
+  var rubric = activeRubric();
+  add('GENERAL', 'Documento', kind === 'SEGURO' ? 'EL BÚNKER — Personas para la póliza del C.C. Mayorca'
+                                                : 'EL BÚNKER — Exportación corporativa de la convocatoria');
+  add('GENERAL', 'Generado el', ahoraISO());
+  add('GENERAL', 'Versión del sistema', VERSION_SISTEMA);
+  add('GENERAL', 'Entorno', entorno() === 'PRUEBAS' ? 'PRUEBAS (datos ficticios)' : 'PRODUCCIÓN');
+  add('GENERAL', 'Rúbrica vigente', rubric.version + (rubric.valida ? '' : ' (INVÁLIDA: ' + rubric.errores.join(' ') + ')'));
+  add('GENERAL', 'Fuente de verdad', 'La base maestra del sistema. Este archivo es una foto de ese momento: ' +
+      'lo que se edite aquí NO vuelve al sistema.');
+  add('GENERAL', 'Datos personales', options && options.masked
+    ? 'Enmascarados: el rol que generó el archivo no ve documentos, correos ni teléfonos completos.'
+    : 'Completos. Documento privado: no se comparte fuera del equipo autorizado.');
+  add('GENERAL', 'Cómo filtrar', 'Cada hoja tiene fila de títulos congelada y filtro: usa los botones de la fila 1 ' +
+      '(código, nombre artístico, modalidad, tipo de persona, firma, estado).');
+  (kind === 'SEGURO' ? ['README_OPERACION', 'SEGURO_MAYORCA'] : CORPORATE_SHEETS).forEach(function (name) {
+    add('HOJAS', name, XLS_SHEET_LEGEND[name]);
+  });
+  add('COLORES', 'Verde', 'Cumplido: APTO, ENVIADA, AUTORIZADO, CONFIRMADO, TOP10_SELECCIONADO, ASIGNADO…', XLS_COLOR.OK);
+  add('COLORES', 'Ámbar', 'Pendiente o por revisar: EN_REVISION, PENDIENTE, BORRADOR, SUPLENTE, alertas…', XLS_COLOR.WARN);
+  add('COLORES', 'Rojo', 'Negativo o fuera: NO_APTO, DUPLICADO, DESCALIFICADO, RETIRADO, NO_SHOW, RECHAZADO…', XLS_COLOR.BAD);
+  if (kind !== 'SEGURO') {
+    add('ESTADOS', 'Aptitud', 'RECIBIDO → EN_REVISION → APTO / NO_APTO / INCOMPLETO / DUPLICADO');
+    add('ESTADOS', 'Participación', 'SIN_TURNO, INVITADO, CONFIRMADO, CAMBIO_PENDIENTE, CAMBIO_APROBADO, NO_CONFIRMADO, ' +
+        'NO_SHOW, CONTINGENCIA, AUDICIONADO, NO_AUDICIONADO, RETIRADO');
+    add('ESTADOS', 'Evaluación', 'SIN_CALIFICAR, PARCIAL, COMPLETA, BLOQUEADA, DQ_PENDIENTE, DESCALIFICADO');
+    add('ESTADOS', 'Ranking', 'SIN_RANKING, RANKED, TOP20 (privado), TOP10_SELECCIONADO, TIE_REVIEW_REQUIRED, NO_SELECCIONADO');
+    add('ESTADOS', 'Detalle', 'El significado de cada valor está en la hoja LISTAS.');
+  } else {
+    add('ALERTAS', 'SIN_FIRMA', 'La persona no tiene firma registrada.');
+    add('ALERTAS', 'SIN_FIRMA_INDIVIDUAL', 'Sólo aceptó en el Formulario 1, sin firma individual.');
+    add('ALERTAS', 'PERSONA_EN_VARIOS_PROYECTOS', 'Mismo documento en varios proyectos: revisar, no se elimina sola.');
+  }
+  var s = insuranceSummary(insurance);
+  add('SEGURO', 'Proyectos con código vigente', s.proyectos);
+  add('SEGURO', 'Personas distintas', s.personas);
+  add('SEGURO', 'Intérpretes (filas)', s.interpretes);
+  add('SEGURO', 'Equipo de trabajo (filas)', s.equipo);
+  add('SEGURO', 'Filas sin firma', s.sin_firma);
+  add('SEGURO', 'Personas en varios proyectos', s.repetidas);
+  return { name: 'README_OPERACION', columns: [xlsCol('seccion'), xlsCol('concepto'), xlsCol('detalle')], rows: rows };
+}
+
+/**
+ * The corporate workbook: 15 sheets, read from the master spreadsheet only (RESULTADOS and
+ * DASHBOARD are copied as materialized: run refrescarVistas() first). Returns
+ * { nombre, id, url, bytes, hojas: { sheet: dataRows }, temporal_id, temporal_en_papelera }.
+ * options.masked hides document numbers, e-mails and phones.
+ */
+function buildCorporateWorkbook(name, options) {
+  options = options || {};
+  var src = xlsReadSources();
+  var relations = xlsRelationAlerts(projectPeople(src.projects, src.members));
+  relations.sort(xlsByProjectThenPerson);
+  var insurance = insuranceRows(src.projects, src.members);
+  var tables = [
+    xlsReadme('CORPORATIVO', insurance, options),
+    xlsMasterProjects(src, relations),
+    xlsPeople(relations),
+    xlsRelationTable('INTERPRETES', relations, PERSON_ROLE.INTERPRETE),
+    xlsRelationTable('EQUIPO_TRABAJO', relations, PERSON_ROLE.EQUIPO_TRABAJO),
+    xlsAgenda(src),
+    xlsScheduleChanges(src),
+    xlsJurors(src),
+    xlsScores(src),
+    xlsCopyTable('RESULTADOS', HOJA.RESULTADOS),
+    xlsCopyTable('DASHBOARD', HOJA.DASHBOARD),
+    xlsCopyTable('EMAIL_LOG', HOJA.EMAIL_LOG),
+    xlsInsuranceTable(insurance),
+    xlsCopyTable('PARAMETROS_RUBRICA', HOJA.PARAMETROS_RUBRICA),
+    xlsLists()
+  ];
+  return xlsBuildWorkbook(xlsFileName(name, 'EXCEL'), tables, options);
+}
+
+/** The venue insurance workbook: a short README_OPERACION and SEGURO_MAYORCA (full documents). */
+function buildInsuranceWorkbook(name) {
+  var insurance = insuranceRows(leerHoja(HOJA.REGISTRO), leerHoja(HOJA.INTEGRANTES));
+  var tables = [xlsReadme('SEGURO', insurance, {}), xlsInsuranceTable(insurance)];
+  var r = xlsBuildWorkbook(xlsFileName(name, 'SEGURO-MAYORCA'), tables, {});
+  r.resumen = insuranceSummary(insurance);
+  return r;
+}
+
+/** Panel action (capability 'exportar'): refreshes the views, then writes the corporate workbook. */
+function accionExportarExcel(datos, sesion) {
+  datos = datos || {};
+  sesion = sesion || {};
+  if (typeof refrescarVistas === 'function') refrescarVistas();
+  var masked = !(typeof puede === 'function' && puede(sesion.rol, 'registro_lectura'));
+  var r = buildCorporateWorkbook(datos.nombre, { masked: masked });
+  registrar(sesion.alias, sesion.rol, 'EXPORTAR_EXCEL', r.nombre, r.bytes + ' bytes' + (masked ? ' (datos enmascarados)' : ''));
+  return r;
+}
+
+/** Panel action (capability 'seguro'): the insurance workbook for the venue policy. */
+function accionExportarSeguro(datos, sesion) {
+  datos = datos || {};
+  sesion = sesion || {};
+  var r = buildInsuranceWorkbook(datos.nombre);
+  registrar(sesion.alias, sesion.rol, 'EXPORTAR_SEGURO', r.nombre,
+            r.bytes + ' bytes · ' + r.resumen.personas + ' personas en ' + r.resumen.proyectos + ' proyectos');
+  return r;
+}
+
 // ========================================================================
 // 32_comunicacion.gs
 // ========================================================================
 
 /**
- * EL BUNKER - Message templates for e-mail and WhatsApp.
+ * EL BUNKER - E-mail (queue, templates, log) and WhatsApp message texts.
  *
- * WhatsApp is never automated from here: sending through WhatsApp needs the
- * paid Business API (or a provider such as Twilio), so the system produces the
- * exact text plus a click-to-chat link and a human presses send from the
- * official number. Only the reception e-mail is automatic (Gmail quota).
+ * Every e-mail goes through ONE queue, the _EMAIL_LOG sheet:
+ *   enqueueEmail()  - adds a row, idempotent by key (a retried action never mails twice)
+ *   processEmailQueue() - sends pending rows within the daily Gmail quota, retries errors
+ * Every message is sent as HTML + plain text, states the status and the next step, and
+ * carries the visible "revisa Spam y Promociones" notice.
+ *
+ * WhatsApp is never automated: the panel produces the exact text plus a click-to-chat link
+ * and a person presses send from the official number. WhatsApp is a channel, never a database.
  */
+
+var EMAIL_TEMPLATE_VERSION = 'T3-2026-09-29';
+
+var EMAIL_STATUS = {
+  PENDIENTE: 'PENDIENTE', ENVIANDO: 'ENVIANDO', ENVIADO: 'ENVIADO', ERROR: 'ERROR', FALLIDO: 'FALLIDO', OMITIDO: 'OMITIDO'
+};
+var EMAIL_MAX_RETRIES = 3;
+var EMAIL_QUOTA_RESERVE = 3;
+
+/** Lower number = sent first when the daily quota is short. */
+var EMAIL_PRIORITY = {
+  RECEPCION: 1, OFERTA_SUPLENTE: 1, ASIGNACION: 2, CAMBIO_APROBADO: 2, CAMBIO_RECHAZADO: 2, CAMBIO_SOLICITADO: 3,
+  RETIRO_CONFIRMADO: 3, CONFIRMACION_FINAL: 3, APTITUD: 4, SIN_CUPO: 5, FIRMAS_PENDIENTES: 6, PISTA_PENDIENTE: 6,
+  RECORDATORIO_24H: 4, RECORDATORIO_DIA: 3, RESULTADO_FINAL: 5, CONTINGENCIA: 2, GRUPO_WHATSAPP: 7
+};
 
 function commsContext() {
   var fecha = cfgFecha('evento_fecha', '2026-10-23');
   return {
     evento: cfg('evento_nombre', 'EL BÚNKER by Arte es la Solución'),
     fecha_texto: humanDate(fecha),
+    hora_texto: humanTime(cfgHora('evento_hora_inicio', '15:00')) + ' a ' + humanTime(cfgHora('evento_hora_fin', '21:00')),
     sede: cfg('evento_sede', ''),
     municipio_sede: cfg('evento_municipio_sede', 'Sabaneta, Antioquia'),
     punto: cfg('evento_direccion', ''),
@@ -5718,9 +8784,15 @@ function commsContext() {
     contingencia: humanTime(cfgHora('contingencia_inicio', '20:30')) + ' a ' + humanTime(cfgHora('cierre_audiciones', '21:00')),
     cierre: humanTime(cfgHora('cierre_audiciones', '21:00')),
     cupo: cfgNumero('cupo_total', 100),
+    top: cfgNumero('top_seleccionados', 10),
     numero: phoneText(cfg('whatsapp_oficial', '')),
     nombre_contacto: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución'),
-    correo_datos: cfg('data_protection_email', '')
+    correo_datos: cfg('data_protection_email', ''),
+    sitio: cfg('sitio_url', ''),
+    horas_suplente: cfgNumero('suplente_horas_respuesta', 24),
+    reemplazos_desde: deadlineText(cfg('reemplazos_desde', '')),
+    confirmacion_desde: deadlineText(cfg('confirmacion_final_desde', '')),
+    confirmacion_hasta: deadlineText(cfg('confirmacion_final_hasta', ''))
   };
 }
 
@@ -5739,107 +8811,201 @@ function groupInviteLink() {
 /** The line every message repeats: WhatsApp broadcast lists only reach people who saved the number. */
 function saveNumberLine(c) {
   return c.numero
-    ? 'Importante: guarda el número ' + c.numero + ' en tus contactos como "' + c.nombre_contacto +
-      '". Desde ese número recibirás tu código, horario, recordatorios y novedades de la convocatoria.'
+    ? 'Guarda el número ' + c.numero + ' en tus contactos como "' + c.nombre_contacto +
+      '": desde ahí te escribiremos novedades de la convocatoria.'
     : '';
 }
 
+var SPAM_NOTICE = 'Revisa también las carpetas Spam y Promociones y marca nuestros correos como "No es spam" para no perderte los siguientes.';
+
+/**
+ * Templates. `cuerpo` is plain text; the HTML version is built from it (same words, so the two
+ * versions can never disagree). {{placeholders}} come from the REGISTRO row or from extras.
+ * `audiencia` is used by the manual bulk sending in the panel; automatic events enqueue directly.
+ */
 function plantillas() {
   var c = commsContext();
   var firma = '\n\n— Equipo ' + c.evento;
   var lugar = lugarTexto(c);
+  var evento = 'EVENTO: ' + c.fecha_texto + ', ' + c.hora_texto + ' · ' + lugar;
 
   return {
     RECEPCION: {
-      id: 'RECEPCION', nombre: '1. Recepción de inscripción',
-      audiencia: function (r) { var e = normalizarComparable(r.eligibility_status); return e === 'APTO' || e === 'REVISION'; },
-      asunto: c.evento + ' — recibimos tu inscripción',
+      id: 'RECEPCION', nombre: 'Recepción de inscripción (automático)',
+      audiencia: function (r) { return !!normalizarTexto(r.submission_id); },
+      asunto: c.evento + ' — recibimos tu inscripción ({{submission_id}})',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Recibimos tu inscripción a ' + c.evento + ' (comprobante {{submission_id}}).\n\n' +
-        'La organización revisa cada inscripción —datos, requisitos y muestra artística— y asigna los ' + c.cupo +
-        ' cupos en orden de inscripción entre quienes cumplen. Si quedas dentro, te enviaremos tu CÓDIGO y tu HORARIO.\n' +
-        '{{bloque_grupo}}\n' +
+        'ESTADO: RECIBIDA. Tu comprobante es {{submission_id}}.\n\n' +
+        'Recibir tu inscripción NO significa que ya seas apto: la organización revisa datos, requisitos y muestra artística. ' +
+        'Te escribiremos con el resultado de esa revisión.\n\n' +
+        'SIGUIENTE PASO: espera el correo con tu resultado (apto o no apto). Los ' + c.cupo + ' turnos se asignan en orden de ' +
+        'inscripción entre quienes resulten aptos; si pasas de ' + c.cupo + ', quedas en la bolsa de suplentes.\n' +
+        '{{bloque_equipo}}\n' + evento + '\n\n' +
+        'Consulta tu inscripción cuando quieras: {{url_mi_inscripcion}}\n' +
         saveNumberLine(c) + '\n\n' +
-        'Puedes consultar tu inscripción en: {{url_mi_inscripcion}}\n\n' +
         'Inscribirte no garantiza selección, contratación ni presentación.\n' +
         'Dudas sobre tus datos personales: ' + c.correo_datos + '.' + firma
     },
 
+    APTITUD: {
+      id: 'APTITUD', nombre: 'Resultado de la revisión de aptitud (automático)',
+      audiencia: function (r) {
+        var e = normalizeEligibility(r.eligibility_status);
+        return e === 'APTO' || e === 'NO_APTO' || e === 'DUPLICADO' || e === 'INCOMPLETO';
+      },
+      asunto: c.evento + ' — resultado de tu inscripción: {{estado_aptitud}}',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'ESTADO: {{estado_aptitud}} (comprobante {{submission_id}}).\n\n' +
+        '{{detalle_aptitud}}\n\n' +
+        'SIGUIENTE PASO: {{siguiente_aptitud}}\n\n' +
+        evento + '\n\n' +
+        'Tu inscripción: {{url_mi_inscripcion}}' + firma
+    },
+
     ASIGNACION: {
-      id: 'ASIGNACION', nombre: '2. Asignación de código y horario',
+      id: 'ASIGNACION', nombre: 'Código y horario (automático al asignar)',
       audiencia: function (r) { return !!normalizarTexto(r.code); },
       asunto: c.evento + ' — tu código {{code}} y tu horario',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        '¡Quedaste dentro de los ' + c.cupo + ' cupos de ' + c.evento + '!\n\n' +
+        'ESTADO: TIENES TURNO. Estás dentro de los ' + c.cupo + ' turnos de audición.\n\n' +
         'CÓDIGO: {{code}}\n' +
         'FECHA: ' + c.fecha_texto + '\n' +
         'LLEGADA (check-in): {{hora_llegada_texto}}\n' +
         'AUDICIÓN: {{hora_audicion_texto}} ({{bloque_texto}})\n' +
         'LUGAR: ' + lugar + '\n\n' +
-        'IMPORTANTE:\n' +
-        '- Llega a la hora de llegada, no a la de audición.\n' +
-        '- Trae tu documento de identidad original: sin él no hay check-in.\n' +
-        '- Tu audición dura máximo ' + c.duracion + ' minutos.\n' +
-        '- Tolerancia de ' + c.tolerancia + ' minutos. Si llegas más tarde pierdes tu turno y pasas a contingencia (' +
-        c.contingencia + '), solo si queda tiempo.\n' +
-        '{{bloque_pista}}{{bloque_grupo}}\n' +
-        'Tu código NO cambia nunca. Si tienes un impedimento real para asistir en tu horario, tienes UNA sola ' +
-        'solicitud de cambio aquí: {{url_cambio}}\n\n' +
+        'SIGUIENTE PASO:\n' +
+        '- Llega a la hora de llegada, no a la de audición, con tu documento de identidad original.\n' +
+        '- Tu audición dura máximo ' + c.duracion + ' minutos. Tolerancia de ' + c.tolerancia + ' minutos; después pasas a ' +
+        'contingencia (' + c.contingencia + '), solo si queda tiempo.\n' +
+        '{{bloque_pista}}{{bloque_equipo}}' +
+        '- El ' + c.confirmacion_desde + ' confirma tu asistencia en "Mi inscripción": {{url_mi_inscripcion}}\n\n' +
+        'Si tienes un impedimento real con tu horario, tienes UNA solicitud de cambio: {{url_cambio}} ' +
+        '(tu horario no cambia hasta que producción la apruebe). Si no podrás asistir, desde el ' + c.reemplazos_desde +
+        ' puedes liberar tu cupo en "Mi inscripción" para que lo reciba un suplente.\n\n' +
         saveNumberLine(c) + firma
     },
 
+    SIN_CUPO: {
+      id: 'SIN_CUPO', nombre: 'Apto sin turno: suplente o fuera de bolsa (automático al asignar)',
+      audiencia: function (r) {
+        var p = normalizarComparable(r.pool_status);
+        return !normalizarTexto(r.code) && (p === 'SUPLENTE' || p === 'FUERA_DE_BOLSA');
+      },
+      asunto: c.evento + ' — tu inscripción es apta: {{estado_bolsa}}',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'ESTADO: APTO · {{estado_bolsa}}.\n\n' +
+        '{{detalle_bolsa}}\n\n' +
+        'SIGUIENTE PASO: {{siguiente_bolsa}}\n\n' +
+        evento + '\n\n' +
+        'Tu inscripción: {{url_mi_inscripcion}}' + firma
+    },
+
+    OFERTA_SUPLENTE: {
+      id: 'OFERTA_SUPLENTE', nombre: 'Oferta de cupo a un suplente (automático)',
+      audiencia: function () { return false; },
+      asunto: c.evento + ' — se liberó un cupo para ti ({{slot_code}}): responde antes de {{vence_texto}}',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'ESTADO: SUPLENTE CON CUPO OFRECIDO. Se liberó el turno {{slot_code}} y eres la siguiente persona de la bolsa de suplentes.\n\n' +
+        'TURNO OFRECIDO: {{slot_code}} · llegada {{slot_arrival}} · audición {{slot_time}}\n' +
+        'FECHA Y LUGAR: ' + c.fecha_texto + ' · ' + lugar + '\n\n' +
+        'SIGUIENTE PASO: entra a "Mi inscripción" y elige ACEPTAR o NO PUEDO antes de {{vence_texto}}: {{url_mi_inscripcion}}\n' +
+        'Si no respondes a tiempo, el cupo pasa a la siguiente persona.' + firma
+    },
+
+    RETIRO_CONFIRMADO: {
+      id: 'RETIRO_CONFIRMADO', nombre: 'Retiro confirmado (automático)',
+      audiencia: function () { return false; },
+      asunto: c.evento + ' — registramos que liberaste el cupo {{slot_code}}',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'ESTADO: RETIRADO. Liberaste el cupo {{slot_code}}; lo recibirá la siguiente persona de la bolsa de suplentes.\n\n' +
+        'SIGUIENTE PASO: ninguno. Gracias por avisar a tiempo. Si fue un error, escríbenos por WhatsApp' +
+        (c.numero ? ' al ' + c.numero : '') + '.' + firma
+    },
+
+    CAMBIO_SOLICITADO: {
+      id: 'CAMBIO_SOLICITADO', nombre: 'Solicitud de cambio recibida (automático)',
+      audiencia: function (r) { return normalizarComparable(r.change_status) === 'PENDIENTE'; },
+      asunto: c.evento + ' — recibimos tu solicitud de cambio de horario ({{code}})',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'ESTADO: CAMBIO SOLICITADO (pendiente de revisión).\n\n' +
+        'Tu horario NO cambia hasta que producción apruebe la solicitud. Mientras tanto sigue vigente:\n' +
+        'CÓDIGO: {{code}} · LLEGADA: {{hora_llegada_texto}} · AUDICIÓN: {{hora_audicion_texto}}\n\n' +
+        'SIGUIENTE PASO: espera nuestra respuesta (APROBADO o NO APROBADO) por correo o WhatsApp.' + firma
+    },
+
     CAMBIO_APROBADO: {
-      id: 'CAMBIO_APROBADO', nombre: '3. Cambio aprobado',
+      id: 'CAMBIO_APROBADO', nombre: 'Cambio aprobado (automático)',
       audiencia: function (r) { return normalizarComparable(r.change_status) === 'APROBADO'; },
       asunto: c.evento + ' — cambio APROBADO, tu nuevo horario',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Tu solicitud de cambio fue APROBADA.\n\n' +
+        'ESTADO: CAMBIO APROBADO.\n\n' +
         'CÓDIGO: {{code}} (no cambia)\n' +
         'NUEVA LLEGADA: {{hora_llegada_texto}}\n' +
-        'NUEVA AUDICIÓN: {{hora_audicion_texto}} ({{bloque_texto}})\n\n' +
-        'Este es tu horario definitivo. El día del evento no hay más cambios.' + firma
+        'NUEVA AUDICIÓN: {{hora_audicion_texto}} ({{bloque_texto}})\n' +
+        'FECHA Y LUGAR: ' + c.fecha_texto + ' · ' + lugar + '\n\n' +
+        'SIGUIENTE PASO: preséntate a tu nueva hora de llegada con tu documento original. Este es tu horario definitivo.' + firma
     },
 
     CAMBIO_RECHAZADO: {
-      id: 'CAMBIO_RECHAZADO', nombre: '4. Cambio no aprobado',
+      id: 'CAMBIO_RECHAZADO', nombre: 'Cambio no aprobado (automático)',
       audiencia: function (r) { return normalizarComparable(r.change_status) === 'RECHAZADO'; },
       asunto: c.evento + ' — tu solicitud de cambio no fue aprobada',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Revisamos tu solicitud de cambio y NO fue aprobada por disponibilidad de la agenda.\n\n' +
+        'ESTADO: CAMBIO NO APROBADO, por disponibilidad de la agenda.\n\n' +
         'Tu horario sigue siendo:\n' +
-        'CÓDIGO: {{code}}\nLLEGADA: {{hora_llegada_texto}}\nAUDICIÓN: {{hora_audicion_texto}}\n\n' +
-        'Si no puedes asistir, tu cupo quedará como no audicionado. Gracias por avisarnos.' + firma
+        'CÓDIGO: {{code}} · LLEGADA: {{hora_llegada_texto}} · AUDICIÓN: {{hora_audicion_texto}}\n' +
+        'FECHA Y LUGAR: ' + c.fecha_texto + ' · ' + lugar + '\n\n' +
+        'SIGUIENTE PASO: si no podrás asistir, libera tu cupo en "Mi inscripción" ({{url_mi_inscripcion}}) desde el ' +
+        c.reemplazos_desde + ' para que lo reciba un suplente.' + firma
+    },
+
+    CONFIRMACION_FINAL: {
+      id: 'CONFIRMACION_FINAL', nombre: 'Confirmación final de asistencia (22-oct)',
+      audiencia: function (r) { return !!normalizarTexto(r.code) && !normalizarTexto(r.final_confirmation); },
+      asunto: c.evento + ' — confirma tu asistencia ({{code}})',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'ESTADO: TIENES TURNO, falta tu confirmación final.\n\n' +
+        'CÓDIGO: {{code}} · LLEGADA: {{hora_llegada_texto}} · AUDICIÓN: {{hora_audicion_texto}}\n' +
+        'FECHA Y LUGAR: ' + c.fecha_texto + ' · ' + lugar + '\n\n' +
+        'SIGUIENTE PASO: entra a "Mi inscripción" y marca SÍ CONFIRMO o NO PODRÉ ASISTIR antes de ' + c.confirmacion_hasta +
+        ': {{url_mi_inscripcion}}\nConfirmar no cambia tu horario.' + firma
     },
 
     RECORDATORIO_24H: {
-      id: 'RECORDATORIO_24H', nombre: '5. Recordatorio 24 h antes',
+      id: 'RECORDATORIO_24H', nombre: 'Recordatorio 24 h antes',
       audiencia: function (r) { return !!normalizarTexto(r.code); },
       asunto: c.evento + ' — mañana es tu audición ({{code}})',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Mañana, ' + c.fecha_texto + ', es tu audición en ' + c.evento + '.\n\n' +
+        'ESTADO: TIENES TURNO. Mañana, ' + c.fecha_texto + ', es tu audición.\n\n' +
         'CÓDIGO: {{code}}\nLLEGADA: {{hora_llegada_texto}} · AUDICIÓN: {{hora_audicion_texto}}\nLUGAR: ' + lugar + '\n\n' +
-        'Lleva tu documento original. Prepara máximo ' + c.duracion + ' minutos.\n' +
-        '{{bloque_pista}}Recuerda la tolerancia de ' + c.tolerancia + ' minutos.' + firma
+        'SIGUIENTE PASO: lleva tu documento original y prepara máximo ' + c.duracion + ' minutos.\n' +
+        '{{bloque_pista}}Tolerancia de ' + c.tolerancia + ' minutos.' + firma
     },
 
     RECORDATORIO_DIA: {
-      id: 'RECORDATORIO_DIA', nombre: '6. Recordatorio del día',
+      id: 'RECORDATORIO_DIA', nombre: 'Recordatorio del día',
       audiencia: function (r) { return !!normalizarTexto(r.code); },
       asunto: c.evento + ' — hoy es tu audición ({{code}})',
       cuerpo:
         '{{full_name}}, hoy es tu audición.\n\n' +
-        'CÓDIGO {{code}} · LLEGADA {{hora_llegada_texto}} · AUDICIÓN {{hora_audicion_texto}}\n' +
+        'ESTADO: TIENES TURNO. CÓDIGO {{code}} · LLEGADA {{hora_llegada_texto}} · AUDICIÓN {{hora_audicion_texto}}\n' +
         'LUGAR: ' + lugar + '\n\n' +
-        'Documento original obligatorio. Tolerancia de ' + c.tolerancia + ' minutos.' + firma
+        'SIGUIENTE PASO: llega a tu hora de llegada con tu documento original. Tolerancia de ' + c.tolerancia + ' minutos.' + firma
     },
 
     CONTINGENCIA: {
-      id: 'CONTINGENCIA', nombre: '7. Contingencia / no show',
+      id: 'CONTINGENCIA', nombre: 'Contingencia / no show',
       audiencia: function (r) {
         var e = normalizarEstado(r.attendance_status);
         return e === 'CONTINGENCIA' || e === 'NO SHOW';
@@ -5847,28 +9013,30 @@ function plantillas() {
       asunto: c.evento + ' — tu turno pasó a contingencia',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Tu turno ({{code}}, {{hora_audicion_texto}}) pasó a CONTINGENCIA.\n\n' +
-        'La contingencia funciona de ' + c.contingencia + ' y solo alcanza para quienes quepan en el tiempo ' +
-        'disponible, en orden de llegada a la lista.\n\n' +
-        'Acércate al punto de check-in y espera el llamado. A las ' + c.cierre +
+        'ESTADO: CONTINGENCIA. Tu turno ({{code}}, {{hora_audicion_texto}}) pasó a contingencia.\n\n' +
+        'La contingencia funciona de ' + c.contingencia + ' y solo alcanza para quienes quepan en el tiempo disponible.\n\n' +
+        'SIGUIENTE PASO: acércate al punto de check-in y espera el llamado. A las ' + c.cierre +
         ' se cierran definitivamente las audiciones.' + firma
     },
 
-    INTEGRANTES_PENDIENTES: {
-      id: 'INTEGRANTES_PENDIENTES', nombre: '8. Agrupación: faltan autorizaciones',
-      audiencia: function (r, extra) { return !!r.group_code && extra.integrantes_autorizados < extra.integrantes_declarados; },
-      asunto: c.evento + ' — faltan autorizaciones de tu agrupación',
+    FIRMAS_PENDIENTES: {
+      id: 'FIRMAS_PENDIENTES', nombre: 'Faltan firmas del equipo',
+      audiencia: function (r, extra) {
+        return !!normalizarTexto(r.code) && extra.integrantes_declarados > 0 && extra.integrantes_autorizados < extra.integrantes_declarados;
+      },
+      asunto: c.evento + ' — faltan firmas de tu proyecto ({{code}})',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'En {{artistic_name}} ({{group_code}}) llevan {{integrantes_autorizados}} de {{integrantes_declarados}} ' +
-        'integrantes con su autorización individual.\n\n' +
-        'Cada integrante debe completar la suya en este enlace (tú no puedes autorizar por otra persona):\n' +
+        'ESTADO: FIRMAS INCOMPLETAS. En {{artistic_name}} ({{code}}) van {{integrantes_autorizados}} de {{integrantes_declarados}} ' +
+        'intérpretes con su autorización individual.\n\n' +
+        'SIGUIENTE PASO: cada persona firma por sí misma en este enlace (tú no puedes firmar por otra persona). ' +
+        'Si viene equipo de trabajo (manager, técnico, fotógrafo...), también se registra ahí para la póliza del lugar:\n' +
         '{{members_link}}\n\n' +
-        'Sin la autorización de todos, quien falte deberá firmar la constancia física el día del evento.' + firma
+        'Quien no firme en línea deberá firmar la constancia física el día del evento.\n' + evento + firma
     },
 
     PISTA_PENDIENTE: {
-      id: 'PISTA_PENDIENTE', nombre: '9. Pista pendiente',
+      id: 'PISTA_PENDIENTE', nombre: 'Pista pendiente',
       audiencia: function (r) {
         return !!normalizarTexto(r.code) && esVerdadero(r.track_uses) &&
                normalizarComparable(r.track_status) === normalizarComparable(TRACK_STATUS.PENDIENTE);
@@ -5876,25 +9044,40 @@ function plantillas() {
       asunto: c.evento + ' — envíanos tu pista ({{code}})',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Aún no hemos recibido la pista de {{code}}.\n\n' +
-        'Envía el archivo indicando tu código {{code}}:\n' +
+        'ESTADO: PISTA PENDIENTE. Aún no hemos recibido la pista de {{code}}.\n\n' +
+        'SIGUIENTE PASO: envía el archivo indicando tu código {{code}}:\n' +
         '- Por la web (recomendado): {{url_mi_inscripcion}}\n' +
         (c.numero ? '- O por WhatsApp al ' + c.numero + ', escribiendo tu código {{code}} en el mensaje.\n' : '') +
-        '\nEl día del evento lleva también una copia en USB. Bluetooth no es el método principal.' + firma
+        '\nEl día del evento lleva también una copia en USB.\n' + evento + firma
+    },
+
+    RESULTADO_FINAL: {
+      id: 'RESULTADO_FINAL', nombre: 'Resultado final (tras cerrar resultados)',
+      disponible: function () { return cfgBool('resultados_cerrados', false); },
+      audiencia: function (r) { return normalizarComparable(r.participation_status) === 'AUDICIONADO' ||
+                                       normalizarEstado(r.attendance_status) === 'REALIZADA'; },
+      asunto: c.evento + ' — resultado de tu audición ({{code}})',
+      cuerpo:
+        'Hola {{full_name}},\n\n' +
+        'ESTADO: {{estado_resultado}}.\n\n' +
+        '{{detalle_resultado}}\n\n' +
+        'SIGUIENTE PASO: {{siguiente_resultado}}\n\n' +
+        'Gracias por subir al escenario de ' + c.evento + '.' + firma
     },
 
     GRUPO_WHATSAPP: {
-      id: 'GRUPO_WHATSAPP', nombre: '10. Invitación al grupo de WhatsApp',
+      id: 'GRUPO_WHATSAPP', nombre: 'Invitación al grupo de WhatsApp',
       disponible: function () { return !!groupInviteLink(); },
       audiencia: function (r) {
         return esVerdadero(r.consent_whatsapp) &&
-               (normalizarComparable(r.eligibility_status) === 'APTO' || !!normalizarTexto(r.code));
+               (normalizeEligibility(r.eligibility_status) === 'APTO' || !!normalizarTexto(r.code));
       },
       asunto: c.evento + ' — grupo de WhatsApp de la convocatoria',
       cuerpo:
         'Hola {{full_name}},\n\n' +
-        'Tu inscripción cumple los requisitos. Por aquí compartiremos las indicaciones operativas finales:\n' +
+        'ESTADO: APTO. Por aquí compartiremos las indicaciones operativas finales:\n' +
         '{{enlace_grupo_whatsapp}}\n\n' +
+        'SIGUIENTE PASO: únete al grupo. El sistema sigue siendo la fuente oficial de tu estado: consúltalo en {{url_mi_inscripcion}}\n' +
         saveNumberLine(c) + firma
     }
   };
@@ -5903,15 +9086,15 @@ function plantillas() {
 /** Templates that can be used right now: one that needs missing data is not offered at all. */
 function plantillasDisponibles() {
   var all = plantillas();
-  return Object.keys(all).filter(function (k) { return !all[k].disponible || all[k].disponible(); })
-    .map(function (k) { return { id: k, nombre: all[k].nombre }; });
+  return Object.keys(all).filter(function (k) {
+    return (!all[k].disponible || all[k].disponible()) && all[k].audiencia.length > 0;
+  }).map(function (k) { return { id: k, nombre: all[k].nombre }; });
 }
 
 /**
  * Fills {{placeholders}} from a participant row plus explicit extras.
  * A placeholder whose value is missing from the row stays visible on purpose,
- * so a half-filled message is never sent unnoticed; extras (optional blocks)
- * may legitimately be empty.
+ * so a half-filled message is never sent unnoticed; extras may legitimately be empty.
  */
 function renderizarPlantilla(plantilla, registro, extras) {
   extras = extras || {};
@@ -5925,11 +9108,85 @@ function renderizarPlantilla(plantilla, registro, extras) {
   return { asunto: sustituir(plantilla.asunto), cuerpo: sustituir(plantilla.cuerpo).replace(/\n{3,}/g, '\n\n') };
 }
 
+/** Plain text with the spam notice first, then the message. */
+function emailPlainText(body) {
+  return SPAM_NOTICE + '\n\n' + body;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** HTML version of the same words: paragraphs, bullet lists, absolute links, spam notice box. */
+function emailHtml(subject, body) {
+  var linkify = function (text) {
+    return escapeHtml(text).replace(/https:\/\/[^\s<]+/g, function (u) {
+      var clean = u.replace(/[.,;)]+$/, '');
+      return '<a href="' + clean + '" style="color:#B5121B">' + clean + '</a>' + u.slice(clean.length);
+    });
+  };
+  var html = String(body).split(/\n{2,}/).map(function (block) {
+    var lines = block.split('\n');
+    if (lines.every(function (l) { return /^- /.test(l); })) {
+      return '<ul style="padding-left:18px;margin:0 0 14px">' +
+        lines.map(function (l) { return '<li style="margin:0 0 6px">' + linkify(l.slice(2)) + '</li>'; }).join('') + '</ul>';
+    }
+    return '<p style="margin:0 0 14px">' + lines.map(linkify).join('<br>') + '</p>';
+  }).join('');
+  return '<!doctype html><html><body style="margin:0;background:#F4F4F2">' +
+    '<div style="max-width:600px;margin:0 auto;background:#FFFFFF;font-family:Arial,Helvetica,sans-serif;color:#1D1D1B;font-size:15px;line-height:1.5">' +
+    '<div style="background:#1D1D1B;color:#FFFFFF;padding:16px 20px;font-weight:bold;letter-spacing:1px">EL BÚNKER · Arte es la Solución</div>' +
+    '<div style="margin:16px 20px 0;padding:10px 12px;background:#FFF2CC;border-left:4px solid #E0A800;font-size:13px">' +
+    escapeHtml(SPAM_NOTICE) + '</div>' +
+    '<div style="padding:16px 20px 8px">' + html + '</div>' +
+    '<div style="padding:12px 20px 18px;color:#6B6B6B;font-size:12px">' + escapeHtml(subject) + '</div>' +
+    '</div></body></html>';
+}
+
+/**
+ * Links a production e-mail must never carry (test/staging hosts, old repositories, dev URLs).
+ * Returns the offending fragment, or ''.
+ */
+function forbiddenLink(text) {
+  var m = String(text).match(/localhost|127\.0\.0\.1|\/dev\b|staging|juanma1725|github\.io\/el-bunker|\{\{\w+\}\}/i);
+  return m ? m[0] : '';
+}
+
+/** The team code of a project: its members/crew/signatures live under it (groups: GRP-xxx, soloists: EQ-xxx). */
+function teamCodeOf(r) {
+  return normalizarTexto(r.team_code) || normalizarTexto(r.group_code);
+}
+
 /** Per-row values the templates need that are not columns of REGISTRO. */
 function messageExtras(r, base, members) {
-  var summary = r.group_code ? groupSummary(r.group_code, members) : { authorized: 0, registered: 0 };
-  var declared = Number(r.members_declared) || 0;
-  var link = r.group_code ? membersLink(r.group_code) : '';
+  var team = teamCodeOf(r);
+  var summary = team ? groupSummary(team, members) : { authorized: 0, registered: 0 };
+  var declared = Number(r.members_declared) || (team ? 1 : 0);
+  var link = team ? membersLink(team) : '';
+  var e = normalizeEligibility(r.eligibility_status);
+  var c = commsContext();
+  var aptitude = {
+    APTO: ['APTO', 'Tu inscripción cumple los requisitos de la convocatoria.',
+           'Los ' + c.cupo + ' turnos se asignan en orden de inscripción entre quienes son aptos. Te enviaremos tu código y horario, ' +
+           'o te avisaremos si quedas en la bolsa de suplentes.'],
+    NO_APTO: ['NO APTO', 'Tu inscripción no cumple los requisitos de la convocatoria' +
+              (r.validation_notes && /EDAD/.test(r.validation_notes) ? ' (edad el día del evento)' : '') +
+              (r.validation_notes && /RESIDENCIA/.test(r.validation_notes) ? ' (residencia)' : '') + '.',
+              'Ninguno. Si crees que hay un error en tus datos, escríbenos' + (c.numero ? ' por WhatsApp al ' + c.numero : '') + '.'],
+    DUPLICADO: ['DUPLICADA', 'Ya teníamos una inscripción con tu documento; conservamos la primera.',
+                'Ninguno: no necesitas volver a inscribirte. Consulta la primera inscripción en "Mi inscripción".'],
+    INCOMPLETO: ['INCOMPLETA', 'A tu inscripción le faltan datos obligatorios.',
+                 'Envía el formulario de nuevo con todos los datos: la nueva inscripción no se marca como duplicada por esta.']
+  }[e] || ['EN REVISIÓN', 'Tu inscripción sigue en revisión.', 'Espera nuestro correo.'];
+  var pool = normalizarComparable(r.pool_status);
+  var poolText = pool === 'FUERA_DE_BOLSA'
+    ? ['FUERA DE LA BOLSA', 'Los ' + c.cupo + ' turnos y la bolsa de suplentes ya están completos, en orden de inscripción. ' +
+       'Tu inscripción queda registrada como apta.', 'Ninguno por ahora. Si la bolsa se mueve, te escribiremos.']
+    : ['SUPLENTE', 'Los ' + c.cupo + ' turnos ya se asignaron en orden de inscripción y quedaste en la bolsa de suplentes. ' +
+       'Ser suplente NO es ser finalista ni seleccionado: significa que puedes recibir un turno si alguien libera el suyo.',
+       'Si se libera un cupo para ti te escribiremos y tendrás ' + c.horas_suplente + ' horas para aceptarlo en "Mi inscripción".'];
+  var ranking = normalizarComparable(r.ranking_status);
+  var selected = ranking === 'TOP10_SELECCIONADO';
   var groupLink = groupInviteLink();
   return {
     url_cambio: base + '?p=cambio-horario&code=' + encodeURIComponent(r.code || ''),
@@ -5941,9 +9198,18 @@ function messageExtras(r, base, members) {
     integrantes_autorizados: summary.authorized,
     integrantes_declarados: declared,
     enlace_grupo_whatsapp: groupLink,
-    bloque_grupo: r.group_code
-      ? '\nAGRUPACIÓN ' + r.group_code + ': cada integrante debe dar su propia autorización en ' + link +
-        ' (van ' + summary.authorized + ' de ' + (declared || summary.registered) + ').\n'
+    estado_aptitud: aptitude[0], detalle_aptitud: aptitude[1], siguiente_aptitud: aptitude[2],
+    estado_bolsa: poolText[0], detalle_bolsa: poolText[1], siguiente_bolsa: poolText[2],
+    estado_resultado: selected ? 'SELECCIONADO' : 'NO SELECCIONADO',
+    detalle_resultado: selected
+      ? '¡Felicitaciones! Tu proyecto está entre los ' + c.top + ' seleccionados de la convocatoria.'
+      : 'Tu proyecto no quedó entre los ' + c.top + ' seleccionados. El jurado calificó cada audición con la rúbrica oficial.',
+    siguiente_resultado: selected
+      ? 'La organización te contactará con los siguientes pasos. Mantén tu teléfono disponible.'
+      : 'Ninguno. Sigue atento a nuestras redes para las próximas convocatorias.',
+    bloque_equipo: link
+      ? '\nEQUIPO Y FIRMAS: cada intérprete' + (isGroupMode(r.participation_mode) ? '' : ' y cada persona de tu equipo de trabajo') +
+        ' firma por sí mismo en ' + link + (declared > 1 ? ' (van ' + summary.authorized + ' de ' + declared + ' intérpretes).' : '.') + '\n'
       : '',
     bloque_pista: esVerdadero(r.track_uses)
       ? '- PISTA: envíala antes del evento desde "Mi inscripción" (' + base + '?p=mi-inscripcion) indicando tu código ' +
@@ -5952,27 +9218,167 @@ function messageExtras(r, base, members) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Queue
+// ---------------------------------------------------------------------------
+
+/**
+ * Adds one e-mail to the queue unless the same idempotency key is already queued or sent.
+ * Must run inside the script lock (it appends a row). Never throws: mail must not break the operation.
+ */
+function enqueueEmail(templateKey, row, trigger, extras, idempotencyKey) {
+  try {
+    if (!row || !row.submission_id) return { encolado: false, motivo: 'SIN_REGISTRO' };
+    var key = idempotencyKey || (templateKey + ':' + row.submission_id);
+    var existing = leerHoja(HOJA.EMAIL_LOG).filter(function (e) { return e.idempotency_key === key; })[0];
+    if (existing && normalizarComparable(existing.status) !== EMAIL_STATUS.FALLIDO) {
+      return { encolado: false, motivo: 'YA_EXISTE', email_id: existing.email_id };
+    }
+    var email = normalizarEmail(row.email);
+    var skip = !esEmailValido(email) ? 'SIN_CORREO_VALIDO' : (/\.test$/i.test(email) ? 'DATO_DE_PRUEBA' : '');
+    var id = nuevoId('EM');
+    agregarFila(HOJA.EMAIL_LOG, {
+      email_id: id, at: isoWithOffset(), template_key: templateKey, template_version: EMAIL_TEMPLATE_VERSION,
+      trigger: trigger || 'manual', idempotency_key: key, recipient: email, submission_id: row.submission_id,
+      person_id: row.person_id || '', code: row.code || row.previous_code || '',
+      status: skip ? EMAIL_STATUS.OMITIDO : EMAIL_STATUS.PENDIENTE, provider_message_id: '', retry_count: 0,
+      last_attempt_at: '', error: skip, subject: '', payload: JSON.stringify(extras || {}).slice(0, 2000)
+    });
+    return { encolado: !skip, email_id: id, motivo: skip };
+  } catch (e) {
+    try { registrar('sistema', '', 'CORREO_ENCOLAR_FALLO', templateKey, e.message); } catch (ignored) { /* nothing left to do */ }
+    return { encolado: false, motivo: e.message };
+  }
+}
+
+/**
+ * Sends queued e-mails. Claims rows under the lock, sends outside it, records the results under
+ * the lock again, so a concurrent run never sends the same row twice. Rows stuck in ENVIANDO
+ * (a run that died) are retried after 15 minutes.
+ * @param {{limit?:number, keys?:string[]}} options
+ */
+function processEmailQueue(options) {
+  options = options || {};
+  var limit = options.limit || 40;
+  var now = Date.now();
+  var quota = 0;
+  try { quota = MailApp.getRemainingDailyQuota(); } catch (e) { quota = 0; }
+  var budget = Math.max(0, Math.min(limit, quota - EMAIL_QUOTA_RESERVE));
+  var result = { enviados: 0, errores: 0, pendientes_por_cuota: 0, cuota_restante: quota };
+
+  var claimed = conBloqueo(function () {
+    var rows = leerHoja(HOJA.EMAIL_LOG).filter(function (e) {
+      if (options.keys && options.keys.indexOf(e.idempotency_key) === -1) return false;
+      var st = normalizarComparable(e.status);
+      if (st === EMAIL_STATUS.PENDIENTE) return true;
+      if (st === EMAIL_STATUS.ERROR) return Number(e.retry_count || 0) < EMAIL_MAX_RETRIES;
+      if (st === EMAIL_STATUS.ENVIANDO) return now - new Date(e.last_attempt_at).getTime() > 15 * 60000;
+      return false;
+    });
+    rows.sort(function (a, b) {
+      var pa = EMAIL_PRIORITY[a.template_key] || 9, pb = EMAIL_PRIORITY[b.template_key] || 9;
+      if (pa !== pb) return pa - pb;
+      return String(a.at) < String(b.at) ? -1 : 1;
+    });
+    result.pendientes_por_cuota = Math.max(0, rows.length - budget);
+    var take = rows.slice(0, budget);
+    var stamp = isoWithOffset();
+    actualizarFilasEnLote(HOJA.EMAIL_LOG, take.map(function (e) {
+      return { fila: e._fila, cambios: { status: EMAIL_STATUS.ENVIANDO, last_attempt_at: stamp } };
+    }));
+    return take;
+  });
+  if (!claimed.length) return result;
+
+  var registry = {};
+  leerHoja(HOJA.REGISTRO).forEach(function (r) { registry[r.submission_id] = r; });
+  var members = leerHoja(HOJA.INTEGRANTES);
+  var templates = plantillas();
+  var base = webAppUrl();
+  var production = environmentName() === 'production';
+  var outcomes = claimed.map(function (e) {
+    var out = { e: e, cambios: {} };
+    try {
+      var tpl = templates[e.template_key];
+      var row = registry[e.submission_id];
+      if (!tpl || !row) throw new Error(!tpl ? 'PLANTILLA_DESCONOCIDA' : 'REGISTRO_NO_ENCONTRADO');
+      var payload = {};
+      try { payload = JSON.parse(e.payload || '{}'); } catch (ignored) { payload = {}; }
+      var msg = renderizarPlantilla(tpl, row, Object.assign(messageExtras(row, base, members), payload));
+      var bad = forbiddenLink(msg.asunto + '\n' + msg.cuerpo);
+      if (bad && (production || /\{\{/.test(bad))) throw new Error('CONTENIDO_NO_PERMITIDO: ' + bad);
+      MailApp.sendEmail({
+        to: e.recipient, subject: msg.asunto, body: emailPlainText(msg.cuerpo),
+        htmlBody: emailHtml(msg.asunto, msg.cuerpo), name: cfg('whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución')
+      });
+      out.cambios = { status: EMAIL_STATUS.ENVIADO, subject: msg.asunto.slice(0, 250), error: '', last_attempt_at: isoWithOffset() };
+      out.sent = true;
+      out.payload = payload;
+    } catch (err) {
+      var retries = Number(e.retry_count || 0) + 1;
+      var permanent = /^(PLANTILLA_DESCONOCIDA|REGISTRO_NO_ENCONTRADO|CONTENIDO_NO_PERMITIDO)/.test(err.message);
+      out.cambios = { status: permanent || retries >= EMAIL_MAX_RETRIES ? EMAIL_STATUS.FALLIDO : EMAIL_STATUS.ERROR,
+                      retry_count: retries, error: String(err.message).slice(0, 300), last_attempt_at: isoWithOffset() };
+    }
+    return out;
+  });
+
+  conBloqueo(function () {
+    actualizarFilasEnLote(HOJA.EMAIL_LOG, outcomes.map(function (o) { return { fila: o.e._fila, cambios: o.cambios }; }));
+    outcomes.forEach(function (o) {
+      if (o.payload && o.payload.solicitud_id) markChangeNotification(o.payload.solicitud_id, o.sent ? 'CORREO ENVIADO ' + isoWithOffset() : 'CORREO FALLIDO');
+      if (!o.sent && o.e && o.cambios.status === EMAIL_STATUS.FALLIDO) {
+        registrar('sistema', '', 'CORREO_FALLIDO', o.e.template_key, o.e.submission_id + ' ' + o.cambios.error);
+      }
+    });
+  });
+  outcomes.forEach(function (o) { if (o.sent) result.enviados++; else result.errores++; });
+  try { result.cuota_restante = MailApp.getRemainingDailyQuota(); } catch (e2) { /* keep the earlier value */ }
+  return result;
+}
+
+function markChangeNotification(requestId, text) {
+  var row = leerHoja(HOJA.CAMBIOS).filter(function (c) { return c.solicitud_id === requestId; })[0];
+  if (row) actualizarFila(HOJA.CAMBIOS, row._fila, { notificacion_estado: text });
+}
+
+/** Time trigger (every 15 minutes). */
+function procesarColaCorreos() {
+  try { return processEmailQueue({ limit: 40 }); }
+  catch (e) { registrar('sistema', '', 'COLA_CORREOS_FALLO', '', e.message); return { error: e.message }; }
+}
+
+/** Sends one queued e-mail right away (e.g. the reception receipt), outside any lock. Never throws. */
+function sendNow(key) {
+  try { return processEmailQueue({ keys: [key], limit: 1 }); }
+  catch (e) { return { error: e.message }; }
+}
+
+// ---------------------------------------------------------------------------
+// Panel: preview, bulk queueing, WhatsApp texts, the log
+// ---------------------------------------------------------------------------
+
 /**
  * Builds every message for a template without sending anything.
- * Returns WhatsApp click-to-chat links (only for people who authorized
- * WhatsApp) so a human sends them one by one from the official number.
+ * Returns WhatsApp click-to-chat links (only for people who authorized WhatsApp)
+ * so a person sends them one by one from the official number.
  */
 function accionMensajes(datos, sesion) {
   var todas = plantillas();
   var plantilla = todas[String(datos.plantilla || '').toUpperCase()];
-  if (!plantilla) {
-    return { ok: false, error: 'Plantilla desconocida.', disponibles: Object.keys(todas) };
-  }
+  if (!plantilla) return { ok: false, error: 'Plantilla desconocida.', disponibles: Object.keys(todas) };
   if (plantilla.disponible && !plantilla.disponible()) {
-    return { ok: false, error: 'Esta plantilla aún no se puede usar: falta el enlace del grupo de WhatsApp en CONFIG (whatsapp_grupo_enlace).' };
+    return { ok: false, error: plantilla.id === 'GRUPO_WHATSAPP'
+      ? 'Esta plantilla aún no se puede usar: falta el enlace del grupo de WhatsApp en CONFIG (whatsapp_grupo_enlace).'
+      : 'Esta plantilla aún no se puede usar: primero hay que cerrar los resultados.' };
   }
-
   var base = webAppUrl();
   var members = leerHoja(HOJA.INTEGRANTES);
   var mensajes = [];
   leerHoja(HOJA.REGISTRO).forEach(function (r) {
     if (datos.code && normalizarComparable(r.code) !== normalizarComparable(datos.code)) return;
     if (datos.bloque && String(r.final_block || r.original_block) !== String(datos.bloque)) return;
+    if (isWithdrawn(r)) return;
     var extras = messageExtras(r, base, members);
     if (!plantilla.audiencia(r, extras)) return;
     var render = renderizarPlantilla(plantilla, r, extras);
@@ -5985,50 +9391,79 @@ function accionMensajes(datos, sesion) {
       sin_whatsapp: !allowsWhatsapp ? 'No autorizó WhatsApp: usar correo' : (!tel ? 'Sin número válido' : '')
     });
   });
-
   registrar(sesion.alias, sesion.rol, 'GENERAR_MENSAJES', plantilla.id, mensajes.length + ' destinatarios');
   return { plantilla: plantilla.id, nombre: plantilla.nombre, total: mensajes.length, mensajes: mensajes,
            plantillas: plantillasDisponibles() };
 }
 
 /**
- * Sends the e-mails for a template.
- * A consumer Gmail account can send ~100 e-mails per day, so this reports the
- * remaining quota and stops cleanly instead of failing halfway through.
+ * Queues the e-mails of a template for everyone in its audience and starts sending.
+ * Idempotent: a person already mailed with this template (same day for reminders of
+ * signatures/tracks) is not mailed again. What the quota does not allow today goes out
+ * with the next runs of the queue.
  */
 function accionEnviarCorreos(datos, sesion) {
   var preparado = accionMensajes(datos, sesion);
   if (preparado.ok === false) return preparado;
-
-  var restantes = MailApp.getRemainingDailyQuota();
-  var limite = Math.min(preparado.mensajes.length, restantes, Number(datos.max || 100));
-
-  var enviados = [];
-  var omitidos = [];
-
-  for (var i = 0; i < preparado.mensajes.length; i++) {
-    var m = preparado.mensajes[i];
-    if (enviados.length >= limite) { omitidos.push({ code: m.code, motivo: 'CUOTA_O_LIMITE' }); continue; }
-    if (!esEmailValido(m.email)) { omitidos.push({ code: m.code, motivo: 'SIN_CORREO_VALIDO' }); continue; }
-    if (/\.test$/i.test(normalizarEmail(m.email))) { omitidos.push({ code: m.code, motivo: 'DATO_DE_PRUEBA' }); continue; }
-    try {
-      MailApp.sendEmail({ to: m.email, subject: m.asunto, body: m.cuerpo, name: cfg('evento_nombre', 'EL BUNKER') });
-      enviados.push(m.code || m.submission_id);
-    } catch (e) {
-      omitidos.push({ code: m.code, motivo: e.message });
-    }
-  }
-
+  var day = Utilities.formatDate(new Date(), zonaHoraria(), 'yyyyMMdd');
+  var repeatable = { FIRMAS_PENDIENTES: true, PISTA_PENDIENTE: true };
+  var registry = {};
+  leerHoja(HOJA.REGISTRO).forEach(function (r) { registry[r.submission_id] = r; });
+  var queued = 0, repeated = 0, skipped = 0;
+  conBloqueo(function () {
+    preparado.mensajes.forEach(function (m) {
+      var row = registry[m.submission_id];
+      var key = preparado.plantilla + ':' + m.submission_id + ':' + (row.code || '') + (repeatable[preparado.plantilla] ? ':' + day : '');
+      var r = enqueueEmail(preparado.plantilla, row, 'panel:' + sesion.alias, {}, key);
+      if (r.encolado) queued++; else if (r.motivo === 'YA_EXISTE') repeated++; else skipped++;
+    });
+  });
+  var sent = processEmailQueue({ limit: 40 });
   registrar(sesion.alias, sesion.rol, 'ENVIAR_CORREOS', preparado.plantilla,
-            'enviados=' + enviados.length + ' omitidos=' + omitidos.length);
-
+            'encolados=' + queued + ' ya_enviados=' + repeated + ' omitidos=' + skipped + ' enviados_ahora=' + sent.enviados);
   return {
-    plantilla: preparado.plantilla, enviados: enviados.length, omitidos: omitidos,
-    cuota_restante: MailApp.getRemainingDailyQuota(),
-    nota: omitidos.length
-      ? 'Quedaron mensajes sin enviar. Reintenta mañana o envíalos por WhatsApp con los enlaces generados.'
+    plantilla: preparado.plantilla, encolados: queued, ya_enviados_antes: repeated, omitidos: skipped,
+    enviados_ahora: sent.enviados, errores: sent.errores, pendientes_por_cuota: sent.pendientes_por_cuota,
+    cuota_restante: sent.cuota_restante,
+    nota: sent.pendientes_por_cuota
+      ? 'El resto sale solo en las próximas horas (el sistema revisa la cola cada 15 minutos y respeta el límite diario de Gmail).'
       : ''
   };
+}
+
+/** The e-mail log for the panel, newest first, with counts per status. */
+function accionRegistroCorreos(datos) {
+  var rows = leerHoja(HOJA.EMAIL_LOG);
+  var counts = {};
+  rows.forEach(function (e) { var s = normalizarComparable(e.status); counts[s] = (counts[s] || 0) + 1; });
+  var filter = normalizarComparable(datos.estado || '');
+  var list = rows.filter(function (e) { return !filter || filter === 'TODOS' || normalizarComparable(e.status) === filter; })
+    .slice(-300).reverse().map(function (e) {
+      return { email_id: e.email_id, at: humanDateTime(e.at), plantilla: e.template_key, version: e.template_version,
+               destinatario: maskEmail(e.recipient), code: e.code, submission_id: e.submission_id, estado: e.status,
+               reintentos: e.retry_count, error: e.error, asunto: e.subject, trigger: e.trigger };
+    });
+  var quota = 0;
+  try { quota = MailApp.getRemainingDailyQuota(); } catch (e) { quota = 0; }
+  return { por_estado: counts, correos: list, cuota_restante: quota };
+}
+
+/** Puts FALLIDO e-mails back in the queue (after fixing the cause, e.g. a wrong address). */
+function accionReintentarCorreos(datos, sesion) {
+  return conBloqueo(function () {
+    var failed = leerHoja(HOJA.EMAIL_LOG).filter(function (e) {
+      return normalizarComparable(e.status) === EMAIL_STATUS.FALLIDO && (!datos.email_id || e.email_id === datos.email_id);
+    });
+    var registry = {};
+    leerHoja(HOJA.REGISTRO).forEach(function (r) { registry[r.submission_id] = r; });
+    actualizarFilasEnLote(HOJA.EMAIL_LOG, failed.map(function (e) {
+      var row = registry[e.submission_id];
+      return { fila: e._fila, cambios: { status: EMAIL_STATUS.PENDIENTE, retry_count: 0, error: '',
+                                         recipient: row ? normalizarEmail(row.email) : e.recipient } };
+    }));
+    registrar(sesion.alias, sesion.rol, 'REINTENTAR_CORREOS', '', failed.length + ' correos');
+    return { reencolados: failed.length };
+  });
 }
 
 // ========================================================================
@@ -6415,6 +9850,58 @@ function instalarDisparadores() {
   if (existentes.indexOf('verificarVideosPendientes') === -1) {
     ScriptApp.newTrigger('verificarVideosPendientes').timeBased().everyHours(1).create();
   }
+  if (existentes.indexOf('vencerOfertas') === -1) {
+    ScriptApp.newTrigger('vencerOfertas').timeBased().everyHours(1).create();
+  }
+  if (existentes.indexOf('procesarColaCorreos') === -1) {
+    ScriptApp.newTrigger('procesarColaCorreos').timeBased().everyMinutes(15).create();
+  }
+}
+
+/** Time triggers the system needs; systemHealth reports any that is missing. */
+var REQUIRED_TRIGGERS = ['respaldoAutomatico', 'refrescarVistas', 'verificarVideosPendientes', 'vencerOfertas', 'procesarColaCorreos'];
+
+/**
+ * Iteration-3 data migration of existing rows (idempotent): old eligibility words to the new
+ * states, a team code for every project (soloists get EQ-xxx), person_id, and the pool order.
+ * Never deletes, never changes a code.
+ */
+function migrateRowsToV3() {
+  return conBloqueo(function () {
+    var rows = leerHoja(HOJA.REGISTRO);
+    var nextTeam = nextTeamNumber(rows);
+    var updates = [];
+    rows.forEach(function (r) {
+      var changes = {};
+      var e = normalizeEligibility(r.eligibility_status);
+      if (e && e !== normalizarComparable(r.eligibility_status)) changes.eligibility_status = e;
+      var o = normalizeEligibility(r.eligibility_override);
+      if (o && o !== normalizarComparable(r.eligibility_override)) changes.eligibility_override = o;
+      if (!normalizarTexto(r.eligibility_auto) && e) changes.eligibility_auto = e === ESTADO_ELEGIBILIDAD.RECIBIDO ? '' : e;
+      if (!normalizarTexto(r.team_code)) {
+        changes.team_code = normalizarTexto(r.group_code) || formatTeamCode(nextTeam++);
+      }
+      if (!normalizarTexto(r.person_id) && normalizarCedula(r.id_number)) changes.person_id = personIdFor(normalizarCedula(r.id_number));
+      if (!normalizarTexto(r.document_type)) changes.document_type = 'CC';
+      if (Object.keys(changes).length) updates.push({ fila: r._fila, cambios: changes });
+    });
+    actualizarFilasEnLote(HOJA.REGISTRO, updates);
+    var members = leerHoja(HOJA.INTEGRANTES);
+    var memberUpdates = [];
+    members.forEach(function (m) {
+      var changes = {};
+      if (!normalizarTexto(m.person_role)) changes.person_role = PERSON_ROLE.INTERPRETE;
+      if (!normalizarTexto(m.person_id) && normalizarCedula(m.normalized_id_number || m.id_number)) {
+        changes.person_id = personIdFor(normalizarCedula(m.normalized_id_number || m.id_number));
+      }
+      if (!normalizarTexto(m.document_type)) changes.document_type = 'CC';
+      if (m.on_stage === '' || m.on_stage === undefined) changes.on_stage = true;
+      if (Object.keys(changes).length) memberUpdates.push({ fila: m._fila, cambios: changes });
+    });
+    actualizarFilasEnLote(HOJA.INTEGRANTES, memberUpdates);
+    var pool = refreshPoolLocked();
+    return { registros_actualizados: updates.length, integrantes_actualizados: memberUpdates.length, bolsa: pool };
+  });
 }
 
 /** Operating accounts: one link per person, never shared between roles. */
@@ -6495,6 +9982,8 @@ function migrarBase() {
   var schema = ensureSchema(book);
   var config = ensureConfig(book, true);
   invalidarCacheConfig();
+  invalidateRubricCache();
+  var rowsV3 = migrateRowsToV3();
   instalarDisparadores();
   refrescarVistas();
 
@@ -6504,10 +9993,11 @@ function migrarBase() {
   var report = {
     entorno: env, marca_hoja: marker, version: VERSION_SISTEMA,
     filas_antes: countsOnly(before), filas_despues: countsOnly(after),
-    datos_intactos: intact, respaldo_previo: safety, esquema: schema, config: config,
+    datos_intactos: intact, respaldo_previo: safety, esquema: schema, config: config, filas_v3: rowsV3,
+    rubrica: { version: activeRubric().version, valida: activeRubric().valida, origen: activeRubric().origen },
     cuentas_nuevas: accounts.map(function (a) { return a.alias; })
   };
-  registrar('sistema', 'admin', 'MIGRAR_V2', book.getId(), JSON.stringify({ intactos: intact, conflictos: config.conflictos.length }));
+  registrar('sistema', 'admin', 'MIGRAR_V3', book.getId(), JSON.stringify({ intactos: intact, conflictos: config.conflictos.length }));
   if (!intact) throw new Error('ATENCION: cambio el numero de filas durante la migracion. Revisa el respaldo ' + safety.json);
   return report;
 }
@@ -6546,6 +10036,16 @@ function systemHealth() {
   });
   var triggers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   var audit = auditTestData();
+  var rubric = activeRubric();
+  var foreignCards = [];
+  var cards = evaluationCards();
+  Object.keys(cards).forEach(function (code) {
+    cards[code].forEach(function (c) {
+      if (c.row.rubric_fingerprint && String(c.row.rubric_fingerprint) !== String(rubric.fingerprint)) foreignCards.push(code + '/J' + c.jurado);
+    });
+  });
+  var mail = {};
+  leerHoja(HOJA.EMAIL_LOG).forEach(function (e) { var st = normalizarComparable(e.status); mail[st] = (mail[st] || 0) + 1; });
   var legalPending = ['legal_name', 'nit', 'legal_address', 'data_protection_email', 'institutional_phone', 'terms_version']
     .filter(function (k) { return String(cfg(k, 'PENDIENTE')).indexOf('PENDIENTE') === 0; });
   return {
@@ -6559,12 +10059,19 @@ function systemHealth() {
     esquema_completo: Object.keys(missingColumns).length === 0,
     columnas_faltantes: missingColumns,
     disparadores: triggers,
+    disparadores_faltantes: REQUIRED_TRIGGERS.filter(function (t) { return triggers.indexOf(t) === -1; }),
+    rubrica: { version: rubric.version, origen: rubric.origen, valida: rubric.valida, errores: rubric.errores,
+               maximo: rubricMaxTotal(rubric.categorias), minimo: rubricMinTotal(rubric.categorias),
+               tarjetas_con_otra_rubrica: foreignCards },
+    correos: mail,
+    etapas: { lista_oficial_bloqueada: cfgBool('lista_oficial_bloqueada', false), resultados_cerrados: cfgBool('resultados_cerrados', false) },
     formularios: {
       inscripcion: cfgBool('inscripciones_abiertas', true), cambios: cfgBool('cambios_abiertos', true),
       integrantes: cfgBool('integrantes_abierto', true), pistas: cfgBool('pistas_abiertas', true)
     },
     evento: { fecha: cfgFecha('evento_fecha', ''), inicio: cfgHora('evento_hora_inicio', ''), sede: cfg('evento_sede', ''),
-              edades: cfgNumero('edad_minima', 18) + '-' + cfgNumero('edad_maxima', 30), top: cfgNumero('top_seleccionados', 7) },
+              edades: cfgNumero('edad_minima', 18) + '-' + cfgNumero('edad_maxima', 30), top: cfgNumero('top_seleccionados', 10),
+              top_privado: cfgNumero('top_privado', 20), bolsa: cfgNumero('bolsa_aptos', 200) },
     legal: { datos_verificados: cfgBool('datos_legales_verificados', false), pendientes: legalPending,
              terms_version: cfg('terms_version', ''), policy_version: cfg('policy_version', '') },
     datos_de_prueba: audit,
@@ -6584,12 +10091,27 @@ function borrarDatosDePrueba(confirmacion) {
   }
   return conBloqueo(function () {
     [HOJA.REGISTRO, HOJA.INTEGRANTES, HOJA.DELIBERACIONES, HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3,
-     HOJA.INCIDENTES, HOJA.CAMBIOS, HOJA.LOG, HOJA.IDEMPOTENCIA].forEach(limpiarDatos);
+     HOJA.INCIDENTES, HOJA.CAMBIOS, HOJA.LOG, HOJA.IDEMPOTENCIA, HOJA.OFERTAS, HOJA.SLOTS_HISTORIAL,
+     HOJA.EMAIL_LOG, HOJA.DESCALIFICACIONES, HOJA.BOLSA, HOJA.SEGURO].forEach(limpiarDatos);
+    removeRosterSnapshots();
+    ['lista_oficial_version', 'lista_oficial_at', 'lista_oficial_by'].forEach(function (k) { setConfigValue(k, ''); });
+    setConfigValue('lista_oficial_bloqueada', 'NO');
+    setConfigValue('resultados_cerrados', 'NO');
     var trashed = trashTestFiles();
     resetRehearsalState();
     refrescarVistas();
     registrar('sistema', 'admin', 'BORRAR_DATOS_PRUEBA', '', 'confirmado; archivos a la papelera=' + trashed);
     return { ok: true, archivos_a_papelera: trashed, mensaje: 'Datos operativos de PRUEBAS borrados. CONFIG y usuarios intactos.' };
+  });
+}
+
+/** Deletes the ROSTER_FINAL snapshot sheets (test environment reset only). */
+function removeRosterSnapshots() {
+  exigirEntornoPruebas('LIMPIAR');
+  var base = cfg('lista_oficial_nombre', 'ROSTER_FINAL_2026-10-22');
+  var book = libro();
+  book.getSheets().forEach(function (sh) {
+    if (sh.getName().indexOf(base) === 0 && book.getSheets().length > 1) book.deleteSheet(sh);
   });
 }
 
@@ -6624,7 +10146,9 @@ function quitarInscripciones(ids, confirmacion) {
     var groups = {}, codes = {};
     rows.forEach(function (r) {
       if (r.group_code) groups[normalizarComparable(r.group_code)] = true;
+      if (r.team_code) groups[normalizarComparable(r.team_code)] = true;
       if (r.code) codes[normalizarComparable(r.code)] = true;
+      String(r.previous_code || '').split(',').forEach(function (c) { if (normalizarTexto(c)) codes[normalizarComparable(c)] = true; });
     });
     var removeWhere = function (sheetName, test) {
       var sheet = libro().getSheetByName(sheetName);
@@ -6635,8 +10159,16 @@ function quitarInscripciones(ids, confirmacion) {
     };
     var removed = {
       registro: removeWhere(HOJA.REGISTRO, function (r) { return wanted[normalizarComparable(r.submission_id)]; }),
-      integrantes: removeWhere(HOJA.INTEGRANTES, function (m) { return groups[normalizarComparable(m.group_code)]; }),
-      cambios: removeWhere(HOJA.CAMBIOS, function (c) { return codes[normalizarComparable(c.code)]; })
+      integrantes: removeWhere(HOJA.INTEGRANTES, function (m) {
+        return groups[normalizarComparable(m.group_code)] || wanted[normalizarComparable(m.project_submission_id)];
+      }),
+      cambios: removeWhere(HOJA.CAMBIOS, function (c) { return codes[normalizarComparable(c.code)]; }),
+      ofertas: removeWhere(HOJA.OFERTAS, function (o) { return wanted[normalizarComparable(o.submission_id)]; }),
+      correos: removeWhere(HOJA.EMAIL_LOG, function (e) { return wanted[normalizarComparable(e.submission_id)]; }),
+      descalificaciones: removeWhere(HOJA.DESCALIFICACIONES, function (d) { return wanted[normalizarComparable(d.submission_id)]; }),
+      tarjetas: [HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3].reduce(function (n, sheetName) {
+        return n + removeWhere(sheetName, function (c) { return codes[normalizarComparable(c.code)]; });
+      }, 0)
     };
     registrar('sistema', 'admin', 'QUITAR_INSCRIPCIONES', rows.map(function (r) { return r.submission_id; }).join(','),
               JSON.stringify(removed) + ' respaldo=' + backup.json);
@@ -6752,6 +10284,8 @@ function construirDatasetPrueba(total) {
       accept_data_processing: true,
       accept_whatsapp_operational: true,
       accept_image_voice: i % 5 !== 0,
+      document_type: 'CC',
+      signature_png: TEST_SIGNATURE_PNG,
       source: 'seed'
     };
 
@@ -6771,6 +10305,7 @@ function construirDatasetPrueba(total) {
     if (i === 120) fila.whatsapp = '6044441111';                   // landline -> invalid
     if (i === 121) fila.birth_date = '31/02/2003';                 // impossible date
     if (i === 122) fila.full_name = '';                            // incomplete
+    if (i === 123) fila.signature_png = '';                        // registrant did not sign -> incomplete
     if (i === 124 || i === 125) {                                  // same group, typed differently
       fila.participation_mode = 'AGRUPACION';
       fila.members_declared = '4';
@@ -6831,6 +10366,16 @@ function buildTestMembers(groups) {
       if (gi === 1 && k === 0) { member.signature_png = ''; }
       if (gi === 3 && k === 0 && firstMemberOfGroup0) { member.id_number = firstMemberOfGroup0; }
       out.push(member);
+      if (k === 0 && gi % 3 === 0) {
+        counter++;
+        out.push({
+          client_submission_id: 'SEED-C-' + g.group_code, form_elapsed_ms: 60000, source: 'seed', group_code: g.group_code,
+          person_role: 'EQUIPO_TRABAJO', crew_role: gi % 2 ? 'TECNICO' : 'MANAGER', on_stage: false, document_type: 'CC',
+          full_name: NOMBRES_PRUEBA[(counter * 5) % NOMBRES_PRUEBA.length] + ' Equipo', id_number: String(base + counter * 101),
+          birth_date: '1990-02-15', adult_confirmation: true, accept_terms: true, accept_data_processing: true,
+          accept_image_voice: true, signature_png: TEST_SIGNATURE_PNG
+        });
+      }
       if (gi === 4 && k === 0) {
         out.push(JSON.parse(JSON.stringify(member)));                       // identical retry
         var resign = JSON.parse(JSON.stringify(member));
@@ -6912,10 +10457,19 @@ function seedRegistrationSummary(retries) {
 /** Registers the seed members of every group project through the real action. */
 function cargarIntegrantesDePrueba(deadline) {
   exigirEntornoPruebas('CARGAR INTEGRANTES DE PRUEBA');
-  var groups = leerHoja(HOJA.REGISTRO).filter(function (r) {
-    return r.group_code && normalizarComparable(r.eligibility_status) !== 'INCOMPLETO';
-  });
+  var rows = leerHoja(HOJA.REGISTRO).filter(function (r) { return normalizarComparable(r.eligibility_status) !== 'INCOMPLETO'; });
+  var groups = rows.filter(function (r) { return r.group_code; });
   var payloads = buildTestMembers(groups);
+  // A soloist with crew: the same "equipo y firmas" link serves every project.
+  var soloist = rows.filter(function (r) { return !r.group_code && r.team_code; })[0];
+  if (soloist) {
+    payloads.push({
+      client_submission_id: 'SEED-C-' + soloist.team_code, form_elapsed_ms: 60000, source: 'seed', group_code: soloist.team_code,
+      person_role: 'EQUIPO_TRABAJO', crew_role: 'TECNICO', on_stage: false, document_type: 'CC',
+      full_name: 'Tecnico Prueba Solista', id_number: '2099000001', birth_date: '1988-04-10', adult_confirmation: true,
+      accept_terms: true, accept_data_processing: true, accept_image_voice: true, signature_png: TEST_SIGNATURE_PNG
+    });
+  }
   var summary = { total: payloads.length, por_estado: {}, repetidos: 0, errores: 0 };
   var stored = storedIdempotencyKeys();
   for (var i = 0; i < payloads.length; i++) {
@@ -6938,6 +10492,7 @@ function seedMemberSummary(total) {
   var out = { total: total, por_estado: {} };
   leerHoja(HOJA.INTEGRANTES).forEach(function (m) {
     if (esVerdadero(m.is_leader)) return;
+    if (normalizePersonRole(m.person_role) === PERSON_ROLE.EQUIPO_TRABAJO) { out.equipo = (out.equipo || 0) + 1; return; }
     out.por_estado[m.member_status] = (out.por_estado[m.member_status] || 0) + 1;
   });
   return out;
@@ -6965,23 +10520,34 @@ function ensayoIntegral() {
   var phases = [
     ['1. Inscripciones (130 + reintento)', function () { return cargarDatosDePrueba(deadline); }],
     ['2. Integrantes de agrupaciones', function () { return cargarIntegrantesDePrueba(deadline); }],
-    ['3. Agrupacion repetida: el operador decide', function () { return rehearsalResolveRepeatedGroup(admin); }],
-    ['4. Revalidar', function () { return accionRevalidarTodo({}, admin).resumen; }],
-    ['5. Emitir codigos', function () {
+    ['3. Aplicar verificacion de aptitud', function () {
+      var a = accionAplicarVerificacion({}, admin);
+      return { aplicadas: a.aplicadas, por_estado: a.por_estado };
+    }],
+    ['4. Agrupacion repetida: el operador decide', function () { return rehearsalResolveRepeatedGroup(admin); }],
+    ['5. Revalidar', function () { return accionRevalidarTodo({}, admin).resumen; }],
+    ['6. Emitir codigos', function () {
       var c = accionAsignarCodigos({}, admin);
-      return { asignados: c.asignados, sin_cupo: c.sin_cupo, total: c.total_con_codigo };
+      return { asignados: c.asignados, sin_cupo: c.sin_cupo, suplentes: c.suplentes, total: c.total_con_codigo };
     }],
-    ['6. Carpetas de audio y pistas', function () { return rehearsalTracks(admin); }],
-    ['7. Verificar videos (muestra)', function () { return verifyPendingVideos({ limit: 15 }); }],
-    ['8. Cambios de horario', function () { return rehearsalScheduleChanges(admin); }],
-    ['9. Jornada simulada', function () { return rehearsalEventDay(admin); }],
-    ['10. Tres jurados', function () { return rehearsalJury(); }],
-    ['11. Cerrar jornada', function () { return accionCerrarJornada({}, admin).cerrados; }],
-    ['12. Resultados', function () {
+    ['7. Carpetas de audio y pistas', function () { return rehearsalTracks(admin); }],
+    ['8. Verificar videos (muestra)', function () { return verifyPendingVideos({ limit: 15 }); }],
+    ['9. Cambios de horario', function () { return rehearsalScheduleChanges(admin); }],
+    ['10. Retiro y suplentes', function () { return rehearsalSubstitutes(admin); }],
+    ['11. Consolidar lista oficial', function () {
+      var l = accionConsolidarLista({ confirmacion: 'CONSOLIDAR' }, admin);
+      return l.lista ? { lista: l.lista, conteos: l.conteos } : l;
+    }],
+    ['12. Jornada simulada', function () { return rehearsalEventDay(admin); }],
+    ['13. Tres jurados', function () { return rehearsalJury(); }],
+    ['14. Descalificacion validada', function () { return rehearsalDisqualification(admin); }],
+    ['15. Cerrar jornada', function () { return accionCerrarJornada({}, admin).cerrados; }],
+    ['16. Resultados', function () {
       var r = accionResultados({}, admin);
-      return { top: r.top.map(function (t) { return t.code + ' ' + t.artist_final; }), requiere_comite: r.requiere_comite };
+      return { top10: r.top.map(function (t) { return t.code + ' ' + scoreText(t.artist_final); }),
+               top20: r.top20.length, empates: r.cortes.map(function (c) { return c.cut; }) };
     }],
-    ['13. Respaldo', function () { return accionRespaldar({ etiqueta: 'ENSAYO' }, admin).xlsx.nombre; }]
+    ['17. Respaldo', function () { return accionRespaldar({ etiqueta: 'ENSAYO' }, admin).xlsx.nombre; }]
   ];
 
   for (var i = 0; i < phases.length; i++) {
@@ -7127,9 +10693,16 @@ function rehearsalEventDay(admin) {
   return counts;
 }
 
-/** Three jurors score every performed audition; one card is left incomplete on purpose. */
+/**
+ * Three jurors score every performed audition with the official rubric (1-5 per category) and
+ * submit. One card is left as an incomplete draft on purpose (that project lacks 3 jurors), and
+ * one juror reports a disqualification.
+ */
 function rehearsalJury() {
   var azar = seudoAleatorio(777);
+  var rubric = activeRubricCategories();
+  var version = activeRubric().version;
+  var fingerprint = activeRubric().fingerprint;
   var performed = leerHoja(HOJA.REGISTRO).filter(function (r) {
     return normalizarEstado(r.audition_status) === ESTADO.REALIZADA;
   });
@@ -7137,17 +10710,66 @@ function rehearsalJury() {
     var rows = [];
     performed.forEach(function (r, idx) {
       var scores = {};
-      RUBRICA.forEach(function (f) { scores[f.id] = 4 + Math.floor(azar() * 7); });
-      if (n === 3 && idx === 0) scores.digital = '';                    // incomplete card -> invalid
-      var calc = calcularPuntajeJurado(scores);
+      rubric.forEach(function (c) { scores[c.id] = 1 + Math.floor(azar() * 5); });
+      var draft = n === 3 && idx === 0;
+      if (draft) scores[rubric[rubric.length - 1].id] = '';
+      var calc = calcularPuntajeJurado(scores, rubric);
       var row = { code: r.code, artistic_name: r.artistic_name, discipline: projectGenre(r),
-                  total: calc.valido ? calc.total : '', valido: calc.valido ? 'TRUE' : 'FALSE',
-                  observaciones: 'Ensayo integral', evaluado_at: ahoraISO(), evaluado_by: 'jurado-' + n };
-      RUBRICA.forEach(function (f) { row[f.id] = scores[f.id]; });
+                  presentation_format: r.presentation_format || '', rubric_version: version, rubric_fingerprint: fingerprint,
+                  total: calc.valido ? calc.total : '', desempate: calc.valido ? calc.desempate : '',
+                  estado: draft ? EVALUATION_STATE.BORRADOR : EVALUATION_STATE.ENVIADA,
+                  observaciones: 'Ensayo integral', dq_flag: n === 2 && idx === 1 ? 'TRUE' : 'FALSE',
+                  dq_causa: n === 2 && idx === 1 ? 'PLAYBACK' : '', dq_nota: n === 2 && idx === 1 ? 'Ensayo: playback no avisado' : '',
+                  evaluado_at: ahoraISO(), enviado_at: draft ? '' : ahoraISO(), evaluado_by: 'jurado-' + n };
+      rubric.forEach(function (c) { row[c.id] = scores[c.id]; });
       rows.push(row);
     });
     limpiarDatos('JURADO_' + n);
     agregarFilas('JURADO_' + n, rows);
   });
-  return { jurados: 3, tarjetas_por_jurado: performed.length };
+  if (performed[1]) {
+    conBloqueo(function () {
+      reportDisqualification(performed[1], 'PLAYBACK', 'Ensayo: playback no avisado', { alias: 'jurado-2', rol: ROL.JURADO });
+    });
+  }
+  return { jurados: 3, tarjetas_por_jurado: performed.length, borradores: performed.length ? 1 : 0 };
+}
+
+/** Direction validates the rehearsal's disqualification report: that project leaves the ranking. */
+function rehearsalDisqualification(admin) {
+  var pending = leerHoja(HOJA.DESCALIFICACIONES).filter(function (d) { return normalizarComparable(d.estado) === DQ_STATUS.PENDIENTE; });
+  return pending.map(function (d) {
+    var r = accionResolverDescalificacion({ dq_id: d.dq_id, decision: DQ_STATUS.VALIDADA, motivo: 'Ensayo: causal verificada por direccion' }, admin);
+    return d.code + ' -> ' + (r.estado || r.error);
+  });
+}
+
+/**
+ * The week-before contingency: logistics withdraws B-037; the slot is offered to the first
+ * substitute, who turns it down; the next one accepts and inherits B-037 with its schedule.
+ * B-036 and B-038 must not move.
+ */
+function rehearsalSubstitutes(admin) {
+  var before = leerHoja(HOJA.REGISTRO);
+  var neighbours = function (rows) {
+    return ['B-036', 'B-038'].map(function (c) {
+      var r = rows.filter(function (x) { return x.code === c; })[0];
+      return r ? c + '@' + clockText(r.final_time || r.original_time) + '=' + r.submission_id : c + ':-';
+    }).join(' ');
+  };
+  var neighboursBefore = neighbours(before);
+  var withdrawn = accionRetirarParticipante({ code: 'B-037', motivo: 'Ensayo: avisa que no puede asistir' }, admin);
+  if (withdrawn.ok === false) return { error: withdrawn.error };
+  var steps = [withdrawn.mensaje];
+  for (var i = 0; i < 2; i++) {
+    var offer = leerHoja(HOJA.OFERTAS).filter(function (o) { return normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE; })[0];
+    if (!offer) break;
+    var sub = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === offer.submission_id; })[0];
+    var answer = accionResponderOferta({ id_number: sub.id_number, submission_id: sub.submission_id, oferta_id: offer.oferta_id,
+                                         respuesta: i === 0 ? 'RECHAZAR' : 'ACEPTAR', source: 'seed', form_elapsed_ms: 60000 });
+    steps.push(offer.slot_code + ' -> ' + sub.submission_id + ': ' + (answer.mensaje || answer.error));
+  }
+  var holder = buscarPorCodigo('B-037');
+  return { pasos: steps, nuevo_titular: holder ? holder.submission_id : '(vacante)',
+           vecinos_intactos: neighbours(leerHoja(HOJA.REGISTRO)) === neighboursBefore };
 }

@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <title>Reglas de la convocatoria — {{evento.nombre}} {{evento.marca}}</title>
-<meta name="description" content="Reglas operativas de {{evento.nombre}}: cupos, códigos y horarios, cambio de horario, puntualidad y contingencia, audición y rúbrica, pistas, video y agrupaciones.">
+<meta name="description" content="Reglas operativas de {{evento.nombre}}: turnos y suplentes, firmas y equipo de trabajo, códigos y horarios, cambios y reemplazos, confirmación final, puntualidad, audición y evaluación, pistas y video.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="{{pagina.url}}">
 <meta property="og:url" content="{{pagina.url}}">
 <meta property="og:title" content="Reglas de la convocatoria — {{evento.nombre}}">
-<meta property="og:description" content="Cupos, horarios, puntualidad, audición, pistas y agrupaciones: cómo funciona {{evento.nombre}} el {{calc.fecha_larga}} en el {{evento.lugar}}.">
+<meta property="og:description" content="Turnos, suplentes, horarios, reemplazos, audición y equipo de trabajo: cómo funciona {{evento.nombre}} el {{calc.fecha_larga}} en el {{evento.lugar}}.">
 {{> head}}
 </head>
 <body>
@@ -31,35 +31,57 @@
           <a href="terminos.html">Términos y condiciones</a> y el uso de tus datos en la
           <a href="politica-datos.html">Política de tratamiento de datos</a>.</p>
 
-        <h2 id="inscripcion">1. Inscripción y cupos</h2>
+        <h2 id="inscripcion">1. Inscripción, revisión y turnos</h2>
         <ul>
-          <li>Te inscribes <b>una sola vez por proyecto</b>, con el formulario oficial.</li>
-          <li>Hay <b>{{evento.cupos}} cupos</b> para proyectos únicos que cumplan los requisitos: tener entre
-            {{evento.edad_minima}} y {{evento.edad_maxima}} años cumplidos el día de la audición y vivir en {{evento.municipio}}.</li>
-          <li>La organización revisa cada inscripción —datos, requisitos y muestra artística— y asigna los cupos
-            <b>en orden de inscripción</b> entre quienes cumplen. Por eso conviene inscribirse cuanto antes.</li>
+          <li>Te inscribes <b>una sola vez por proyecto</b>, con el formulario oficial. Las inscripciones siguen abiertas
+            aunque ya haya más de {{evento.cupos}}.</li>
+          <li>Requisitos: tener entre {{evento.edad_minima}} y {{evento.edad_maxima}} años cumplidos el día de la audición y
+            vivir en {{evento.municipio}}.</li>
+          <li>Al enviar recibes un <b>comprobante</b> y un correo de recibido, y tu estado queda en <b>RECIBIDO</b>.
+            Eso todavía no quiere decir que seas apto. Revisa también Spam y Promociones.</li>
+          <li>La organización revisa cada inscripción —datos, requisitos y muestra artística— y te escribe por correo con el
+            resultado: <b>APTO</b>, <b>NO APTO</b>, <b>INCOMPLETO</b> o <b>DUPLICADO</b>.</li>
+          <li>Entre quienes quedan aptos, en <b>orden de inscripción</b> (fecha y hora de envío):
+            <ul>
+              <li>puestos 1 a {{evento.cupos}}: tienen <b>turno</b>, con código y horario;</li>
+              <li>puestos {{evento.suplentes_desde}} a {{evento.suplentes_hasta}}: son <b>suplentes</b>, sin horario; pueden
+                recibir un cupo si alguien se retira;</li>
+              <li>después del puesto {{evento.suplentes_hasta}}: la inscripción queda apta, sin turno ni suplencia.</li>
+            </ul>
+          </li>
+          <li>Ser suplente no es ser finalista ni garantiza un turno. Nadie se selecciona por puntaje antes de la audición.</li>
           <li>Si hay dos o más inscripciones con el mismo documento, <b>se conserva la primera válida</b>; las siguientes
             quedan marcadas como duplicadas, no consumen cupo y se conservan para trazabilidad.</li>
-          <li>Una inscripción incompleta, fuera del rango de edad o de otro municipio no recibe cupo.</li>
+          <li>Una inscripción incompleta, fuera del rango de edad o de otro municipio no recibe turno.</li>
+          <li>Si tu inscripción queda <b>INCOMPLETA</b>, corrígela <b>enviando el formulario de nuevo, completo</b>. La nueva
+            inscripción no se marca como duplicada por la incompleta anterior. Tu lugar en el orden de inscripción cuenta desde la
+            fecha y hora de ese envío completo.</li>
         </ul>
 
-        <h2 id="agrupaciones">2. Solistas, dúos y agrupaciones</h2>
+        <h2 id="agrupaciones">2. Solistas, dúos, agrupaciones y equipo de trabajo</h2>
         <ul>
           <li>Pueden participar solistas, dúos y agrupaciones.</li>
-          <li><b>Una agrupación cuenta como una sola inscripción</b> y ocupa <b>un solo cupo</b>, sin importar cuántos integrantes tenga.
+          <li><b>Un proyecto ocupa un solo cupo</b>, sin importar cuántos integrantes tenga.
             El código del proyecto no se multiplica por integrante.</li>
-          <li>La inscripción la hace el líder o vocero. Al terminar recibe un <b>enlace de integrantes</b> para compartir con su grupo.</li>
-          <li><b>Cada integrante debe ser mayor de edad</b> y dar <b>su propia autorización</b> desde ese enlace. El líder no puede
-            autorizar por los demás.</li>
+          <li>Quien inscribe —el solista, o el líder o vocero del dúo o la agrupación— <b>firma con el dedo al final del
+            formulario</b>. Esa firma es obligatoria.</li>
+          <li>Al terminar recibes el <b>enlace de equipo y firmas</b> de tu proyecto, también si eres solista. Compártelo con
+            cada persona que deba firmar.</li>
+          <li><b>Cada integrante que sube a tarima</b> debe ser mayor de edad y firma <b>por sí mismo</b> en ese enlace, como
+            intérprete. El líder nunca firma por otra persona.</li>
+          <li><b>Equipo de trabajo:</b> manager, productor, técnico, asistente, fotógrafo u otra persona que acompaña al proyecto
+            sin subir a tarima como intérprete. <b>No ocupa cupo</b> ni se evalúa, pero cada persona debe firmar en el enlace
+            de equipo y firmas del proyecto: queda registrada en la lista para la póliza del lugar del evento. Debe ser
+            <b>mayor de edad</b> el día del evento; el rango de {{evento.edad_minima}} a {{evento.edad_maxima}} años no aplica al equipo de trabajo.</li>
         </ul>
 
         <h2 id="codigo-horario">3. Código y horario</h2>
         <ul>
-          <li>Cada proyecto admitido recibe un <b>código</b> (<span class="nowrap">{{calc.codigo_primero}}</span> a <span class="nowrap">{{calc.codigo_ultimo}}</span>) y un horario.</li>
-          <li>El código es <b>estable</b>: no cambia por un cambio de horario ni se reasigna a otra persona.</li>
-          <li>El código y el horario llegan por WhatsApp desde el número oficial <b>{{contacto.whatsapp_oficial_texto}}</b>.
-            Guárdalo como «{{contacto.whatsapp_nombre_contacto}}». No existe un formulario de confirmación:
-            si no respondes, tu turno sigue vigente.</li>
+          <li>Cada proyecto con turno recibe un <b>código</b> (<span class="nowrap">{{calc.codigo_primero}}</span> a <span class="nowrap">{{calc.codigo_ultimo}}</span>) y un horario.</li>
+          <li>El código y el horario llegan por correo y por WhatsApp desde el número oficial <b>{{contacto.whatsapp_oficial_texto}}</b>.
+            Guárdalo como «{{contacto.whatsapp_nombre_contacto}}».</li>
+          <li>Tu código <b>no cambia</b> por un cambio de horario. Si un proyecto se retira, su código y su horario pasan al
+            suplente que acepte ese cupo (ver la <a href="#reemplazo">sección 5</a>).</li>
           <li>Al inscribirte declaras disponibilidad para <b>toda la jornada</b> y aceptas el horario que te asigne la organización.
             No se eligen franjas.</li>
         </ul>
@@ -84,53 +106,73 @@
         <h2 id="cambio-horario">4. Cambio de horario</h2>
         <ul>
           <li>Solo después de recibir tu horario y solo si tienes un <b>impedimento real</b> para asistir.</li>
-          <li><b>Una sola solicitud</b> por proyecto, desde el <a href="cambio-horario/">formulario de cambio de horario</a>.</li>
+          <li><b>Una sola solicitud</b> por código, desde el <a href="cambio-horario/">formulario de cambio de horario</a>,
+            hasta el <b>{{calendario.cambio_horario_limite_dia}} a las {{calendario.cambio_horario_limite_hora}}</b></li>
           <li><b>No eliges la nueva hora</b>: la asigna la organización según disponibilidad. Tu código no cambia.</li>
-          <li>La solicitud puede ser aprobada o no aprobada. Si no se aprueba, se mantiene tu horario original.</li>
+          <li><b>La solicitud no cambia tu turno.</b> Tu horario sigue siendo el original hasta que la coordinación logística
+            apruebe la solicitud. Si no se aprueba, se mantiene tu horario original.</li>
           <li>El día del evento no se hacen cambios de horario; solo aplica la contingencia.</li>
         </ul>
 
-        <h2 id="puntualidad">5. Puntualidad, contingencia y cierre</h2>
+        <h2 id="reemplazo">5. Si no puedes asistir: reemplazo por un suplente</h2>
+        <ul>
+          <li>Desde el <b>{{calendario.reemplazo_desde_dia}}</b>, en <a href="mi-inscripcion/">«Mi inscripción»</a> aparece el
+            botón <b>«No puedo asistir — solicitar reemplazo»</b>. Te pide confirmar dos veces.</li>
+          <li>Al confirmarlo liberas <b>solo tu cupo</b>. Ningún otro proyecto cambia de horario.</li>
+          <li>Tu cupo se ofrece al siguiente suplente en orden. El suplente tiene <b>{{calendario.suplente_horas_para_aceptar}} horas</b>
+            para aceptarlo desde «Mi inscripción»; si lo rechaza o no responde, pasa al siguiente. Un cupo nunca se ofrece a
+            dos suplentes a la vez.</li>
+          <li>El suplente que acepta recibe solo el código y el horario del cupo, <b>nunca los datos</b> de quien se retiró.</li>
+          <li>Úsalo solo si de verdad no vas a asistir: tu cupo pasa a otra persona.</li>
+        </ul>
+
+        <h2 id="confirmacion-final">6. Confirmación final y lista oficial</h2>
+        <ul>
+          <li>El <b>{{calendario.confirmacion_final_dia}}</b> confirmas tu asistencia en «Mi inscripción»:
+            <b>SÍ CONFIRMO</b> o <b>NO PODRÉ ASISTIR</b>.</li>
+          <li>La confirmación final <b>no cambia tu horario</b>.</li>
+          <li>Si <b>no respondes</b>, <b>conservas tu turno</b>: no se pierde por silencio. La organización te contacta y en la
+            lista oficial quedas marcado como «sin respuesta».</li>
+          <li>Solo la respuesta <b>NO PODRÉ ASISTIR</b> libera tu cupo: si todavía es posible, se ofrece a un suplente; si ya no
+            hay tiempo para reemplazarlo sin afectar la jornada, queda vacante.</li>
+          <li>Después de la confirmación final, la organización consolida la <b>lista oficial del evento</b>. Desde ese momento
+            no hay cambios ordinarios de turno ni de horario.</li>
+        </ul>
+
+        <h2 id="puntualidad">7. Puntualidad, contingencia y cierre</h2>
         <ul>
           <li>Llega <b>{{evento.antelacion_llegada_min}} minutos antes</b> de tu bloque para el check-in, con tu documento de identidad original.</li>
           <li>Hay una tolerancia de <b>{{evento.tolerancia_min}} minutos</b>. Con más retraso <b>pierdes tu turno</b> y pasas a contingencia.
             Nunca se desplaza a quien llegó puntual.</li>
           <li>Si no te presentas, tu turno queda libre.</li>
-          <li>La <b>contingencia</b> ({{evento.contingencia}}) no es un grupo adicional: son participantes de los {{evento.cupos}}
+          <li>La <b>contingencia</b> ({{evento.contingencia}}) no es un grupo adicional: son participantes de la lista oficial
             que perdieron su turno. Solo audiciona quien alcance en el tiempo disponible.</li>
           <li>A las <b>{{evento.cierre}}</b> se cierran las audiciones. Quien no haya audicionado no entra a la selección.</li>
         </ul>
 
-        <h2 id="audicion">6. La audición y la rúbrica</h2>
+        <h2 id="audicion">8. La audición y la evaluación</h2>
         <ul>
           <li>Recorrido: check-in con tu documento, precola y escenario.</li>
           <li>Duración máxima: <b>{{evento.duracion_audicion_min}} minutos</b>, cronometrados.</li>
-          <li><b>{{evento.jurados}} jurados</b> califican de forma independiente con una rúbrica común.</li>
-        </ul>
-        <div class="table-wrap" role="region" aria-label="Rúbrica de evaluación" tabindex="0">
-          <table>
-            <thead><tr><th scope="col">Criterio</th><th scope="col">Peso</th></tr></thead>
-            <tbody>
-              <tr><td>Talento / ejecución</td><td>20 %</td></tr>
-              <tr><td>Performance</td><td>20 %</td></tr>
-              <tr><td>Identidad artística</td><td>15 %</td></tr>
-              <tr><td>Repertorio</td><td>10 %</td></tr>
-              <tr><td>Profesionalismo</td><td>10 %</td></tr>
-              <tr><td>Presencia escénica</td><td>10 %</td></tr>
-              <tr><td>Comunidad digital</td><td>5 %</td></tr>
-              <tr><td>Proyecto</td><td>10 %</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <ul>
-          <li>Cada criterio se califica de 1 a 10 y se pondera por su peso. El resultado de cada jurado es sobre 100 y el
-            resultado final es el <b>promedio de los {{evento.jurados}} jurados</b>.</li>
+          <li><b>{{evento.jurados}} jurados</b> califican cada audición de forma independiente con la <b>rúbrica oficial</b> de la
+            convocatoria, sobre <b>100 puntos por jurado</b>. El resultado final es el promedio de los {{evento.jurados}} jurados.</li>
           <li>Se seleccionan <b>{{evento.seleccionados}} artistas o proyectos</b> entre las audiciones realizadas.</li>
-          <li>Desempate, en orden: performance, talento / ejecución, identidad artística y, si persiste, deliberación documentada del jurado.</li>
+          <li>Los empates se resuelven con el procedimiento de desempate de la rúbrica oficial; si persisten, los resuelve el
+            jurado y la decisión queda documentada.</li>
           <li>No se publica el ranking completo.</li>
         </ul>
 
-        <h2 id="pistas">7. Pistas</h2>
+        <h3 id="descalificacion">Causales de descalificación</h3>
+        <p>Una audición se descalifica por:</p>
+        <ul>
+          <li>Playback no avisado cuando el formato exige voz en vivo.</li>
+          <li>Incumplimiento grave de tiempos de soundcheck o ensayo sin justificación.</li>
+          <li>Contenido discriminatorio u ofensivo en el repertorio o en el comportamiento en tarima.</li>
+        </ul>
+        <p>Un jurado puede señalar la causal; la organización la valida y la documenta. Una audición descalificada no puede
+          quedar entre los seleccionados. Si tu presentación usa playback, avísalo a la organización antes de tu audición.</p>
+
+        <h2 id="pistas">9. Pistas</h2>
         <ul>
           <li>Si usas pista, envíala <b>antes del evento</b> desde <a href="mi-inscripcion/">«Mi inscripción»</a>.
             La entrega de la pista no bloquea tu inscripción: puedes completarla después.</li>
@@ -140,13 +182,13 @@
           <li>Si necesitas instrumento o equipo, lleva el tuyo: la organización no garantiza equipos que no estén confirmados.</li>
         </ul>
 
-        <h2 id="video">8. Video o muestra artística</h2>
+        <h2 id="video">10. Video o muestra artística</h2>
         <ul>
           <li>En la inscripción compartes un enlace a video o muestra artística: YouTube no listado, Drive con acceso, Vimeo u otra URL.</li>
           <li>El enlace debe poder verse sin pedir permisos: se revisa que sea accesible para la evaluación.</li>
         </ul>
 
-        <h2 id="conducta">9. Conducta y causales de exclusión</h2>
+        <h2 id="conducta">11. Conducta y causales de exclusión</h2>
         <ul>
           <li>Suministrar información falsa o suplantar a otra persona.</li>
           <li>Inscribirse varias veces para obtener más de un cupo.</li>
@@ -166,15 +208,17 @@
       <nav class="toc" aria-label="Secciones de las reglas">
         <p class="toc-title">En esta página</p>
         <ol>
-          <li><a href="#inscripcion">1. Inscripción y cupos</a></li>
-          <li><a href="#agrupaciones">2. Solistas, dúos y agrupaciones</a></li>
+          <li><a href="#inscripcion">1. Inscripción, revisión y turnos</a></li>
+          <li><a href="#agrupaciones">2. Solistas, dúos, agrupaciones y equipo</a></li>
           <li><a href="#codigo-horario">3. Código y horario</a></li>
           <li><a href="#cambio-horario">4. Cambio de horario</a></li>
-          <li><a href="#puntualidad">5. Puntualidad, contingencia y cierre</a></li>
-          <li><a href="#audicion">6. La audición y la rúbrica</a></li>
-          <li><a href="#pistas">7. Pistas</a></li>
-          <li><a href="#video">8. Video o muestra artística</a></li>
-          <li><a href="#conducta">9. Conducta y causales de exclusión</a></li>
+          <li><a href="#reemplazo">5. Reemplazo por un suplente</a></li>
+          <li><a href="#confirmacion-final">6. Confirmación final y lista oficial</a></li>
+          <li><a href="#puntualidad">7. Puntualidad, contingencia y cierre</a></li>
+          <li><a href="#audicion">8. La audición y la evaluación</a></li>
+          <li><a href="#pistas">9. Pistas</a></li>
+          <li><a href="#video">10. Video o muestra artística</a></li>
+          <li><a href="#conducta">11. Conducta y causales de exclusión</a></li>
         </ol>
       </nav>
     </div>

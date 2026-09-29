@@ -64,13 +64,20 @@ function invalidateHeaderCache() { _headerCache = {}; }
  */
 var PLAIN_TEXT_COLUMNS = {
   'REGISTRO': ['id_number', 'normalized_id_number', 'whatsapp', 'normalized_phone', 'birth_date', 'group_code', 'code',
-               'original_time', 'arrival_time', 'final_time', 'artistic_name', 'song_name'],
-  '_INTEGRANTES': ['id_number', 'normalized_id_number', 'birth_date', 'group_code'],
+               'original_time', 'arrival_time', 'final_time', 'artistic_name', 'song_name',
+               'team_code', 'person_id', 'signature_sha256', 'previous_code'],
+  '_INTEGRANTES': ['id_number', 'normalized_id_number', 'birth_date', 'group_code', 'person_id', 'signature_sha256'],
   '_CAMBIOS': ['code', 'contact', 'original_time', 'nueva_hora'],
   'AGENDA': ['arrival_time', 'audition_time', 'limite_tolerancia'],
   'CHECK-IN': ['arrival_time', 'final_time', 'check_in_time'],
   'PISTAS': ['final_time'],
-  'CONFIG': ['valor']
+  'CONFIG': ['valor'],
+  '_OFERTAS': ['slot_code', 'slot_arrival', 'slot_time'],
+  '_SLOTS_HISTORIAL': ['slot_code'],
+  '_EMAIL_LOG': ['code', 'recipient'],
+  'BOLSA': ['code'],
+  'SEGURO_MAYORCA': ['code', 'id_number'],
+  'PARAMETROS_RUBRICA': ['version', 'id']
 };
 
 /**
@@ -106,7 +113,56 @@ function ensureSchema(book) {
     applyPlainTextColumns(sheet, name);
   });
   invalidateHeaderCache();
+  var rubric = seedRubricParameters(book);
+  if (rubric.sembrada) report.rubrica_sembrada = rubric.version;
+  var juryHeaders = resetEmptyJuryHeaders(book);
+  if (juryHeaders.length) report.encabezados_jurado_rehechos = juryHeaders;
+  invalidateHeaderCache();
   return report;
+}
+
+/**
+ * Writes the official rubric into PARAMETROS_RUBRICA when the sheet has no rows.
+ * Existing rows are never touched: once staff edit the parameters, they are the rubric.
+ * The sheet gets a warning-only protection so an accidental edit asks for confirmation.
+ */
+function seedRubricParameters(book) {
+  var sheet = book.getSheetByName(HOJA.PARAMETROS_RUBRICA);
+  if (!sheet) return { sembrada: false };
+  if (!sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).length) {
+    sheet.protect().setDescription('Rúbrica oficial de jurados. Cambiarla durante el evento altera los puntajes.').setWarningOnly(true);
+  }
+  if (sheet.getLastRow() > 1) return { sembrada: false };
+  var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(function (c) { return String(c).trim(); });
+  var rows = rubricToRows(RUBRIC_DEFAULT, RUBRIC_VERSION_DEFAULT).map(function (o) {
+    return header.map(function (c) { return cellValue(o[c]); });
+  });
+  sheet.getRange(2, 1, rows.length, header.length).setValues(rows);
+  if (typeof invalidateRubricCache === 'function') invalidateRubricCache();
+  return { sembrada: true, version: RUBRIC_VERSION_DEFAULT };
+}
+
+/**
+ * A jury sheet with no cards is re-headed with exactly the columns of the rubric in force,
+ * so the columns of an older rubric do not linger next to the new ones. A sheet that already
+ * holds cards is never rewritten (ensureSchema only appends to it).
+ */
+function resetEmptyJuryHeaders(book) {
+  var expected = juryColumns(activeRubricCategories());
+  var rewritten = [];
+  [HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3].forEach(function (name) {
+    var sheet = book.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() > 1) return;
+    var lastCol = sheet.getLastColumn();
+    var current = lastCol ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (c) { return String(c).trim(); }) : [];
+    while (current.length && current[current.length - 1] === '') current.pop();
+    if (current.join('|') === expected.join('|')) return;
+    if (lastCol) sheet.getRange(1, 1, 1, lastCol).clearContent();
+    sheet.getRange(1, 1, 1, expected.length).setValues([expected])
+      .setFontWeight('bold').setBackground('#1D1D1B').setFontColor('#FFFFFF');
+    rewritten.push(name);
+  });
+  return rewritten;
 }
 
 function applyPlainTextColumns(sheet, name) {
@@ -356,4 +412,29 @@ function ahoraISO() {
 
 function nuevoId(prefijo) {
   return prefijo + '-' + Utilities.getUuid().split('-')[0].toUpperCase();
+}
+
+/**
+ * Writes one CONFIG value (the system's own stage flags: official list lock, results closed).
+ * Adds the key when it is missing. Clears the per-execution config cache.
+ */
+function setConfigValue(key, value) {
+  var sheet = hoja(HOJA.CONFIG);
+  var last = sheet.getLastRow();
+  var keys = last > 1 ? sheet.getRange(2, 1, last - 1, 1).getValues() : [];
+  var text = value === undefined || value === null ? '' : String(value);
+  for (var i = 0; i < keys.length; i++) {
+    if (String(keys[i][0]).trim() === key) {
+      sheet.getRange(i + 2, 2).setNumberFormat('@').setValue(text);
+      invalidarCacheConfig();
+      return;
+    }
+  }
+  sheet.getRange(last + 1, 1, 1, 3).setValues([[key, text, '']]);
+  invalidarCacheConfig();
+}
+
+/** Timestamp with the explicit -05:00 offset: Sheets keeps it as text and `new Date()` parses it exactly. */
+function isoWithOffset(date) {
+  return Utilities.formatDate(date || new Date(), zonaHoraria(), "yyyy-MM-dd'T'HH:mm:ssXXX");
 }

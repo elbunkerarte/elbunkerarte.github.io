@@ -23,11 +23,11 @@ describe('Event data of iteration 2', () => {
     expect(C.validarInscripcion(validSubmission()).eligibility_status).toBe('APTO');
     expect(C.validarInscripcion(validSubmission({ birth_date: '1996-10-23' })).eligibility_status).toBe('APTO');
     expect(C.validarInscripcion(validSubmission({ birth_date: '1996-10-24' })).eligibility_status).toBe('APTO');
-    expect(C.validarInscripcion(validSubmission({ birth_date: '1995-10-22' })).eligibility_status).toBe('NO_CUMPLE');
-    expect(C.validarInscripcion(validSubmission({ birth_date: '2008-10-24' })).eligibility_status).toBe('NO_CUMPLE');
+    expect(C.validarInscripcion(validSubmission({ birth_date: '1995-10-22' })).eligibility_status).toBe('NO_APTO');
+    expect(C.validarInscripcion(validSubmission({ birth_date: '2008-10-24' })).eligibility_status).toBe('NO_APTO');
   });
-  it('answering NO to living in Sabaneta is NO_CUMPLE, not incomplete', () => {
-    expect(C.validarInscripcion(validSubmission({ resides_in_sabaneta: 'NO' })).eligibility_status).toBe('NO_CUMPLE');
+  it('answering NO to living in Sabaneta is NO_APTO, not incomplete', () => {
+    expect(C.validarInscripcion(validSubmission({ resides_in_sabaneta: 'NO' })).eligibility_status).toBe('NO_APTO');
   });
   it('silence is not consent: unticked adult confirmation or availability makes it INCOMPLETO', () => {
     expect(C.validarInscripcion(validSubmission({ adult_confirmation: false })).eligibility_status).toBe('INCOMPLETO');
@@ -267,36 +267,37 @@ describe('Check-in flow: access -> check-in -> pre-queue -> audition -> exit', (
   });
 });
 
-describe('Selection: top 7 and minuted committee decisions', () => {
-  function artist(code, score) {
-    const p = {}; ['talento', 'performance', 'identidad', 'repertorio', 'profesionalismo', 'presencia', 'digital', 'proyecto']
-      .forEach(k => { p[k] = score; });
+describe('Selection: Top 10 and minuted committee decisions per cut', () => {
+  const all = (v) => ({ afinacion: v, presencia: v, interpretacion: v, originalidad: v, ritmo: v, repertorio: v, arena: v });
+  function artist(code, cards) {
     return { code, artistic_name: code, audition_status: 'REALIZADA',
-             tarjetas: [1, 2, 3].map(j => ({ jurado: j, puntajes: p })) };
+             tarjetas: cards.map((p, j) => ({ jurado: j + 1, puntajes: p })) };
   }
+  const code = (i) => 'B-' + String(i).padStart(3, '0');
+  // Nine clearly ordered projects, then B-010 and B-011 exactly tied at the cut, then a lower one.
   const list = [];
-  for (let i = 1; i <= 6; i++) list.push(artist('B-00' + i, 10 - i * 0.5));
-  list.push(artist('B-007', 5), artist('B-008', 5), artist('B-009', 3));
+  for (let i = 1; i <= 9; i++) { const p = all(5); p.ritmo = 5 - Math.floor((i - 1) / 2) % 5; p.repertorio = 5 - ((i - 1) % 2); list.push(artist(code(i), [p, all(5), all(5)])); }
+  list.push(artist('B-010', [all(3), all(3), all(3)]), artist('B-011', [all(3), all(3), all(3)]), artist('B-012', [all(2), all(2), all(2)]));
 
-  it('selects 7 by default', () => {
-    const r = C.seleccionarTop(list.slice(0, 6).concat([artist('B-011', 4), artist('B-012', 2), artist('B-013', 1)]));
-    expect(r.top).toHaveLength(7);
+  it('selects 10 by default', () => {
+    const r = C.seleccionarTop(list.slice(0, 10).concat([list[11]]));
+    expect(r.top).toHaveLength(10);
   });
   it('an exact tie at the cut is left for the committee, never invented', () => {
     const r = C.seleccionarTop(list);
     expect(r.requiere_comite).toBe(true);
-    expect(r.empates_sin_resolver.map(a => a.code).sort()).toEqual(['B-007', 'B-008']);
+    expect(r.empates_sin_resolver.map((a) => a.code).sort()).toEqual(['B-010', 'B-011']);
   });
-  it('the minuted decision orders exactly the tied artists and closes the tie', () => {
-    const r = C.seleccionarTop(list, { deliberacion: { deliberation_id: 'ACTA-1', codes_in_order: ['B-008', 'B-007'] } });
+  it('the minuted decision for cut 10 orders exactly the tied projects and closes the tie', () => {
+    const r = C.seleccionarTop(list, { deliberaciones: [{ deliberation_id: 'ACTA-1', cut_position: 10, codes_in_order: ['B-011', 'B-010'] }] });
     expect(r.requiere_comite).toBe(false);
-    expect(r.top[6].code).toBe('B-008');
-    expect(r.deliberacion_aplicada).toBe('ACTA-1');
+    expect(r.top[9].code).toBe('B-011');
+    expect(r.deliberaciones_aplicadas).toEqual([{ cut: 10, deliberation_id: 'ACTA-1' }]);
   });
-  it('a decision about a different set of artists does not apply', () => {
-    const r = C.seleccionarTop(list, { deliberacion: { deliberation_id: 'ACTA-2', codes_in_order: ['B-008', 'B-009'] } });
+  it('a decision about a different set of projects does not apply', () => {
+    const r = C.seleccionarTop(list, { deliberaciones: [{ deliberation_id: 'ACTA-2', cut_position: 10, codes_in_order: ['B-011', 'B-012'] }] });
     expect(r.requiere_comite).toBe(true);
-    expect(r.deliberacion_descartada.indexOf('ACTA-2')).toBe(0);
+    expect(r.deliberaciones_descartadas[0].deliberation_id).toBe('ACTA-2');
   });
 });
 

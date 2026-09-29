@@ -64,24 +64,43 @@
         <h2 id="preguntas">Preguntas frecuentes</h2>
         <div class="faq">
           <h3>No me llegó mi código</h3>
-          <p>Los códigos se envían después de revisar las inscripciones, por WhatsApp desde el número oficial
-            {{contacto.whatsapp_oficial_texto}}. Guárdalo en tus contactos para no perder los mensajes. Solo reciben código
-            los {{evento.cupos}} proyectos que quedan dentro de los cupos.</p>
+          <p>Los códigos se envían después de revisar las inscripciones, por correo y por WhatsApp desde el número oficial
+            {{contacto.whatsapp_oficial_texto}}. Guárdalo en tus contactos y revisa también Spam y Promociones en tu correo.
+            Solo reciben código los proyectos aptos que quedan dentro de los {{evento.cupos}} turnos; los aptos del
+            {{evento.suplentes_desde}} al {{evento.suplentes_hasta}} son suplentes y no tienen horario, salvo que acepten un cupo liberado.</p>
 
           <h3>No puedo asistir en el horario que me asignaron</h3>
-          <p>Usa el <a href="cambio-horario/">formulario de cambio de horario</a>. Es <b>una sola solicitud</b> y no eliges
-            la hora: la asigna la organización según disponibilidad. Tu código no cambia.</p>
+          <p>Usa el <a href="cambio-horario/">formulario de cambio de horario</a> hasta el {{calendario.cambio_horario_limite_dia}}
+            a las {{calendario.cambio_horario_limite_hora}} Es <b>una sola solicitud</b> y no eliges la hora: la asigna la
+            organización según disponibilidad. Tu horario no cambia hasta que la solicitud se apruebe. Tu código no cambia.</p>
+
+          <h3>Ya no puedo asistir</h3>
+          <p>Desde el {{calendario.reemplazo_desde_dia}}, usa el botón «No puedo asistir — solicitar reemplazo» en
+            <a href="mi-inscripcion/">«Mi inscripción»</a>. Liberas solo tu cupo, que se ofrece a un suplente; nadie más cambia de horario.</p>
 
           <h3>Me inscribí dos veces por error</h3>
           <p>Conservamos la primera inscripción válida; la segunda queda marcada como duplicada. No necesitas hacer nada.</p>
+
+          <h3>Mi inscripción quedó INCOMPLETA</h3>
+          <p>Envía el formulario de nuevo, completo. La nueva inscripción no se marca como duplicada por la incompleta anterior.
+            Tu lugar en el orden de inscripción cuenta desde la fecha y hora de ese envío completo.</p>
+
+          <h3>¿Qué pasa si no respondo la confirmación final?</h3>
+          <p>Conservas tu turno: no se pierde por silencio. La organización te contacta y en la lista oficial quedas marcado como
+            «sin respuesta». Solo la respuesta «NO PODRÉ ASISTIR» libera tu cupo.</p>
 
           <h3>¿Puedo cambiar un dato de mi inscripción?</h3>
           <p>Sí. Escríbenos al correo <a href="mailto:{{legal.correo_datos}}">{{legal.correo_datos}}</a> con tu nombre,
             tu documento y el dato correcto. No te inscribas de nuevo.</p>
 
           <h3>Somos una agrupación, ¿cuántos cupos usamos?</h3>
-          <p>Uno. La agrupación cuenta como una sola inscripción. Al inscribirte recibes un enlace para que cada integrante,
-            mayor de edad, dé su propia autorización.</p>
+          <p>Uno. La agrupación cuenta como una sola inscripción. Al inscribirte recibes el enlace de equipo y firmas para que
+            cada integrante, mayor de edad, firme y dé su propia autorización.</p>
+
+          <h3>¿Mi manager o mi técnico ocupan cupo?</h3>
+          <p>No. El equipo de trabajo (manager, productor, técnico, asistente, fotógrafo u otro) no ocupa cupo ni se evalúa,
+            pero cada persona debe firmar en el enlace de equipo y firmas de tu proyecto. Debe ser mayor de edad el día del
+            evento; el límite de {{evento.edad_maxima}} años no aplica al equipo de trabajo.</p>
 
           <h3>¿Cómo envío mi pista?</h3>
           <p>Antes del evento, desde <a href="mi-inscripcion/">«Mi inscripción»</a>. El día de la audición lleva además una
@@ -92,8 +111,8 @@
             ({{evento.contingencia}}), donde audicionas solo si queda tiempo. A las {{evento.cierre}} se cierran las audiciones.</p>
 
           <h3>¿Participar garantiza que me seleccionen?</h3>
-          <p>No. Se seleccionan {{evento.seleccionados}} artistas o proyectos entre las audiciones realizadas, con una rúbrica
-            común aplicada por {{evento.jurados}} jurados. Los artistas finalistas podrán tener la posibilidad de presentarse en
+          <p>No. Se seleccionan {{evento.seleccionados}} artistas o proyectos entre las audiciones realizadas; {{evento.jurados}}
+            jurados califican cada audición con la rúbrica oficial de la convocatoria. Los artistas finalistas podrán tener la posibilidad de presentarse en
             el Daviarena; ser seleccionado no garantiza una presentación en el Daviarena ni una contratación.</p>
         </div>
       </article>

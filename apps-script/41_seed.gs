@@ -101,6 +101,8 @@ function construirDatasetPrueba(total) {
       accept_data_processing: true,
       accept_whatsapp_operational: true,
       accept_image_voice: i % 5 !== 0,
+      document_type: 'CC',
+      signature_png: TEST_SIGNATURE_PNG,
       source: 'seed'
     };
 
@@ -120,6 +122,7 @@ function construirDatasetPrueba(total) {
     if (i === 120) fila.whatsapp = '6044441111';                   // landline -> invalid
     if (i === 121) fila.birth_date = '31/02/2003';                 // impossible date
     if (i === 122) fila.full_name = '';                            // incomplete
+    if (i === 123) fila.signature_png = '';                        // registrant did not sign -> incomplete
     if (i === 124 || i === 125) {                                  // same group, typed differently
       fila.participation_mode = 'AGRUPACION';
       fila.members_declared = '4';
@@ -180,6 +183,16 @@ function buildTestMembers(groups) {
       if (gi === 1 && k === 0) { member.signature_png = ''; }
       if (gi === 3 && k === 0 && firstMemberOfGroup0) { member.id_number = firstMemberOfGroup0; }
       out.push(member);
+      if (k === 0 && gi % 3 === 0) {
+        counter++;
+        out.push({
+          client_submission_id: 'SEED-C-' + g.group_code, form_elapsed_ms: 60000, source: 'seed', group_code: g.group_code,
+          person_role: 'EQUIPO_TRABAJO', crew_role: gi % 2 ? 'TECNICO' : 'MANAGER', on_stage: false, document_type: 'CC',
+          full_name: NOMBRES_PRUEBA[(counter * 5) % NOMBRES_PRUEBA.length] + ' Equipo', id_number: String(base + counter * 101),
+          birth_date: '1990-02-15', adult_confirmation: true, accept_terms: true, accept_data_processing: true,
+          accept_image_voice: true, signature_png: TEST_SIGNATURE_PNG
+        });
+      }
       if (gi === 4 && k === 0) {
         out.push(JSON.parse(JSON.stringify(member)));                       // identical retry
         var resign = JSON.parse(JSON.stringify(member));
@@ -261,10 +274,19 @@ function seedRegistrationSummary(retries) {
 /** Registers the seed members of every group project through the real action. */
 function cargarIntegrantesDePrueba(deadline) {
   exigirEntornoPruebas('CARGAR INTEGRANTES DE PRUEBA');
-  var groups = leerHoja(HOJA.REGISTRO).filter(function (r) {
-    return r.group_code && normalizarComparable(r.eligibility_status) !== 'INCOMPLETO';
-  });
+  var rows = leerHoja(HOJA.REGISTRO).filter(function (r) { return normalizarComparable(r.eligibility_status) !== 'INCOMPLETO'; });
+  var groups = rows.filter(function (r) { return r.group_code; });
   var payloads = buildTestMembers(groups);
+  // A soloist with crew: the same "equipo y firmas" link serves every project.
+  var soloist = rows.filter(function (r) { return !r.group_code && r.team_code; })[0];
+  if (soloist) {
+    payloads.push({
+      client_submission_id: 'SEED-C-' + soloist.team_code, form_elapsed_ms: 60000, source: 'seed', group_code: soloist.team_code,
+      person_role: 'EQUIPO_TRABAJO', crew_role: 'TECNICO', on_stage: false, document_type: 'CC',
+      full_name: 'Tecnico Prueba Solista', id_number: '2099000001', birth_date: '1988-04-10', adult_confirmation: true,
+      accept_terms: true, accept_data_processing: true, accept_image_voice: true, signature_png: TEST_SIGNATURE_PNG
+    });
+  }
   var summary = { total: payloads.length, por_estado: {}, repetidos: 0, errores: 0 };
   var stored = storedIdempotencyKeys();
   for (var i = 0; i < payloads.length; i++) {
@@ -287,6 +309,7 @@ function seedMemberSummary(total) {
   var out = { total: total, por_estado: {} };
   leerHoja(HOJA.INTEGRANTES).forEach(function (m) {
     if (esVerdadero(m.is_leader)) return;
+    if (normalizePersonRole(m.person_role) === PERSON_ROLE.EQUIPO_TRABAJO) { out.equipo = (out.equipo || 0) + 1; return; }
     out.por_estado[m.member_status] = (out.por_estado[m.member_status] || 0) + 1;
   });
   return out;
@@ -314,23 +337,34 @@ function ensayoIntegral() {
   var phases = [
     ['1. Inscripciones (130 + reintento)', function () { return cargarDatosDePrueba(deadline); }],
     ['2. Integrantes de agrupaciones', function () { return cargarIntegrantesDePrueba(deadline); }],
-    ['3. Agrupacion repetida: el operador decide', function () { return rehearsalResolveRepeatedGroup(admin); }],
-    ['4. Revalidar', function () { return accionRevalidarTodo({}, admin).resumen; }],
-    ['5. Emitir codigos', function () {
+    ['3. Aplicar verificacion de aptitud', function () {
+      var a = accionAplicarVerificacion({}, admin);
+      return { aplicadas: a.aplicadas, por_estado: a.por_estado };
+    }],
+    ['4. Agrupacion repetida: el operador decide', function () { return rehearsalResolveRepeatedGroup(admin); }],
+    ['5. Revalidar', function () { return accionRevalidarTodo({}, admin).resumen; }],
+    ['6. Emitir codigos', function () {
       var c = accionAsignarCodigos({}, admin);
-      return { asignados: c.asignados, sin_cupo: c.sin_cupo, total: c.total_con_codigo };
+      return { asignados: c.asignados, sin_cupo: c.sin_cupo, suplentes: c.suplentes, total: c.total_con_codigo };
     }],
-    ['6. Carpetas de audio y pistas', function () { return rehearsalTracks(admin); }],
-    ['7. Verificar videos (muestra)', function () { return verifyPendingVideos({ limit: 15 }); }],
-    ['8. Cambios de horario', function () { return rehearsalScheduleChanges(admin); }],
-    ['9. Jornada simulada', function () { return rehearsalEventDay(admin); }],
-    ['10. Tres jurados', function () { return rehearsalJury(); }],
-    ['11. Cerrar jornada', function () { return accionCerrarJornada({}, admin).cerrados; }],
-    ['12. Resultados', function () {
+    ['7. Carpetas de audio y pistas', function () { return rehearsalTracks(admin); }],
+    ['8. Verificar videos (muestra)', function () { return verifyPendingVideos({ limit: 15 }); }],
+    ['9. Cambios de horario', function () { return rehearsalScheduleChanges(admin); }],
+    ['10. Retiro y suplentes', function () { return rehearsalSubstitutes(admin); }],
+    ['11. Consolidar lista oficial', function () {
+      var l = accionConsolidarLista({ confirmacion: 'CONSOLIDAR' }, admin);
+      return l.lista ? { lista: l.lista, conteos: l.conteos } : l;
+    }],
+    ['12. Jornada simulada', function () { return rehearsalEventDay(admin); }],
+    ['13. Tres jurados', function () { return rehearsalJury(); }],
+    ['14. Descalificacion validada', function () { return rehearsalDisqualification(admin); }],
+    ['15. Cerrar jornada', function () { return accionCerrarJornada({}, admin).cerrados; }],
+    ['16. Resultados', function () {
       var r = accionResultados({}, admin);
-      return { top: r.top.map(function (t) { return t.code + ' ' + t.artist_final; }), requiere_comite: r.requiere_comite };
+      return { top10: r.top.map(function (t) { return t.code + ' ' + scoreText(t.artist_final); }),
+               top20: r.top20.length, empates: r.cortes.map(function (c) { return c.cut; }) };
     }],
-    ['13. Respaldo', function () { return accionRespaldar({ etiqueta: 'ENSAYO' }, admin).xlsx.nombre; }]
+    ['17. Respaldo', function () { return accionRespaldar({ etiqueta: 'ENSAYO' }, admin).xlsx.nombre; }]
   ];
 
   for (var i = 0; i < phases.length; i++) {
@@ -476,9 +510,16 @@ function rehearsalEventDay(admin) {
   return counts;
 }
 
-/** Three jurors score every performed audition; one card is left incomplete on purpose. */
+/**
+ * Three jurors score every performed audition with the official rubric (1-5 per category) and
+ * submit. One card is left as an incomplete draft on purpose (that project lacks 3 jurors), and
+ * one juror reports a disqualification.
+ */
 function rehearsalJury() {
   var azar = seudoAleatorio(777);
+  var rubric = activeRubricCategories();
+  var version = activeRubric().version;
+  var fingerprint = activeRubric().fingerprint;
   var performed = leerHoja(HOJA.REGISTRO).filter(function (r) {
     return normalizarEstado(r.audition_status) === ESTADO.REALIZADA;
   });
@@ -486,17 +527,66 @@ function rehearsalJury() {
     var rows = [];
     performed.forEach(function (r, idx) {
       var scores = {};
-      RUBRICA.forEach(function (f) { scores[f.id] = 4 + Math.floor(azar() * 7); });
-      if (n === 3 && idx === 0) scores.digital = '';                    // incomplete card -> invalid
-      var calc = calcularPuntajeJurado(scores);
+      rubric.forEach(function (c) { scores[c.id] = 1 + Math.floor(azar() * 5); });
+      var draft = n === 3 && idx === 0;
+      if (draft) scores[rubric[rubric.length - 1].id] = '';
+      var calc = calcularPuntajeJurado(scores, rubric);
       var row = { code: r.code, artistic_name: r.artistic_name, discipline: projectGenre(r),
-                  total: calc.valido ? calc.total : '', valido: calc.valido ? 'TRUE' : 'FALSE',
-                  observaciones: 'Ensayo integral', evaluado_at: ahoraISO(), evaluado_by: 'jurado-' + n };
-      RUBRICA.forEach(function (f) { row[f.id] = scores[f.id]; });
+                  presentation_format: r.presentation_format || '', rubric_version: version, rubric_fingerprint: fingerprint,
+                  total: calc.valido ? calc.total : '', desempate: calc.valido ? calc.desempate : '',
+                  estado: draft ? EVALUATION_STATE.BORRADOR : EVALUATION_STATE.ENVIADA,
+                  observaciones: 'Ensayo integral', dq_flag: n === 2 && idx === 1 ? 'TRUE' : 'FALSE',
+                  dq_causa: n === 2 && idx === 1 ? 'PLAYBACK' : '', dq_nota: n === 2 && idx === 1 ? 'Ensayo: playback no avisado' : '',
+                  evaluado_at: ahoraISO(), enviado_at: draft ? '' : ahoraISO(), evaluado_by: 'jurado-' + n };
+      rubric.forEach(function (c) { row[c.id] = scores[c.id]; });
       rows.push(row);
     });
     limpiarDatos('JURADO_' + n);
     agregarFilas('JURADO_' + n, rows);
   });
-  return { jurados: 3, tarjetas_por_jurado: performed.length };
+  if (performed[1]) {
+    conBloqueo(function () {
+      reportDisqualification(performed[1], 'PLAYBACK', 'Ensayo: playback no avisado', { alias: 'jurado-2', rol: ROL.JURADO });
+    });
+  }
+  return { jurados: 3, tarjetas_por_jurado: performed.length, borradores: performed.length ? 1 : 0 };
+}
+
+/** Direction validates the rehearsal's disqualification report: that project leaves the ranking. */
+function rehearsalDisqualification(admin) {
+  var pending = leerHoja(HOJA.DESCALIFICACIONES).filter(function (d) { return normalizarComparable(d.estado) === DQ_STATUS.PENDIENTE; });
+  return pending.map(function (d) {
+    var r = accionResolverDescalificacion({ dq_id: d.dq_id, decision: DQ_STATUS.VALIDADA, motivo: 'Ensayo: causal verificada por direccion' }, admin);
+    return d.code + ' -> ' + (r.estado || r.error);
+  });
+}
+
+/**
+ * The week-before contingency: logistics withdraws B-037; the slot is offered to the first
+ * substitute, who turns it down; the next one accepts and inherits B-037 with its schedule.
+ * B-036 and B-038 must not move.
+ */
+function rehearsalSubstitutes(admin) {
+  var before = leerHoja(HOJA.REGISTRO);
+  var neighbours = function (rows) {
+    return ['B-036', 'B-038'].map(function (c) {
+      var r = rows.filter(function (x) { return x.code === c; })[0];
+      return r ? c + '@' + clockText(r.final_time || r.original_time) + '=' + r.submission_id : c + ':-';
+    }).join(' ');
+  };
+  var neighboursBefore = neighbours(before);
+  var withdrawn = accionRetirarParticipante({ code: 'B-037', motivo: 'Ensayo: avisa que no puede asistir' }, admin);
+  if (withdrawn.ok === false) return { error: withdrawn.error };
+  var steps = [withdrawn.mensaje];
+  for (var i = 0; i < 2; i++) {
+    var offer = leerHoja(HOJA.OFERTAS).filter(function (o) { return normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE; })[0];
+    if (!offer) break;
+    var sub = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === offer.submission_id; })[0];
+    var answer = accionResponderOferta({ id_number: sub.id_number, submission_id: sub.submission_id, oferta_id: offer.oferta_id,
+                                         respuesta: i === 0 ? 'RECHAZAR' : 'ACEPTAR', source: 'seed', form_elapsed_ms: 60000 });
+    steps.push(offer.slot_code + ' -> ' + sub.submission_id + ': ' + (answer.mensaje || answer.error));
+  }
+  var holder = buscarPorCodigo('B-037');
+  return { pasos: steps, nuevo_titular: holder ? holder.submission_id : '(vacante)',
+           vecinos_intactos: neighbours(leerHoja(HOJA.REGISTRO)) === neighboursBefore };
 }

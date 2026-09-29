@@ -73,6 +73,20 @@
     </div>
   </section>
 
+  <div class="update-band surface-light">
+    <div class="wrap">
+      <aside class="notice" aria-labelledby="actualizacion-titulo">
+        <h2 class="kicker" id="actualizacion-titulo"><span>Actualización oficial ·
+          <time datetime="{{calendario.actualizacion_oficial_iso}}">{{calendario.actualizacion_oficial_fecha}}</time></span></h2>
+        <ul class="notice-list">
+          <li>Se seleccionan <b>{{evento.seleccionados}} proyectos</b>.</li>
+          <li>Las audiciones son en el <b>{{evento.lugar}}</b>, {{evento.municipio}}.</li>
+        </ul>
+        <p class="notice-link"><a href="#despues">¿Qué pasa después de inscribirme?</a></p>
+      </aside>
+    </div>
+  </div>
+
   <section class="section surface-light" id="requisitos" aria-labelledby="requisitos-titulo">
     <div class="wrap section-grid">
       <header class="section-head">
@@ -95,22 +109,60 @@
       <header class="section-head">
         <p class="kicker">Paso a paso</p>
         <h2 id="participar-titulo" class="section-title">Cómo participar</h2>
-        <p class="section-intro">Los cupos se asignan en orden de inscripción entre quienes cumplen los requisitos: inscríbete cuanto antes.</p>
+        <p class="section-intro">Los {{evento.cupos}} turnos se asignan en orden de inscripción entre quienes quedan aptos: inscríbete cuanto antes.
+          Las inscripciones siguen abiertas aunque ya haya más de {{evento.cupos}}.</p>
       </header>
       <ol class="steps">
         <li><div><span class="step-title">Inscríbete una sola vez</span>
           Una inscripción por proyecto, sea solista, dúo o agrupación.</div></li>
-        <li><div><span class="step-title">La organización revisa</span>
-          Cada inscripción —datos, requisitos y muestra artística— y asigna los {{evento.cupos}} cupos en orden
-          de inscripción entre quienes cumplen.</div></li>
-        <li><div><span class="step-title">Recibe tu código y tu horario</span>
-          Si quedas dentro de los {{evento.cupos}}, recibes tu código (<span class="nowrap">{{calc.codigo_primero}}</span> a <span class="nowrap">{{calc.codigo_ultimo}}</span>) y tu horario
-          por WhatsApp desde el número oficial <b>{{contacto.whatsapp_oficial_texto}}</b>. Guárdalo como
-          «{{contacto.whatsapp_nombre_contacto}}».</div></li>
-        <li><div><span class="step-title">Indicaciones finales</span>
-          Los recordatorios y las indicaciones del día te llegan desde ese mismo número oficial.</div></li>
-        <li><div><span class="step-title">Si eres agrupación</span>
-          Comparte con tus integrantes el enlace que recibes al inscribirte para que cada uno dé su autorización.</div></li>
+        <li><div><span class="step-title">Firma al final del formulario</span>
+          Quien inscribe —el solista, o el líder del dúo o la agrupación— firma con el dedo al final del formulario.
+          Es obligatorio.</div></li>
+        <li><div><span class="step-title">Comparte el enlace de equipo y firmas</span>
+          Al terminar recibes el enlace de tu proyecto. Ahí firma, cada uno por sí mismo, cada integrante que sube a tarima
+          y cada persona de tu equipo de trabajo (manager, productor, técnico, asistente, fotógrafo u otro).
+          Nadie firma por otra persona. El equipo de trabajo no ocupa cupo.</div></li>
+        <li><div><span class="step-title">Guarda el número oficial</span>
+          Te escribimos por correo y por WhatsApp desde el número oficial <b>{{contacto.whatsapp_oficial_texto}}</b>.
+          Guárdalo como «{{contacto.whatsapp_nombre_contacto}}» y revisa también Spam y Promociones en tu correo.</div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section surface-light" id="despues" aria-labelledby="despues-titulo">
+    <div class="wrap section-grid">
+      <header class="section-head">
+        <p class="kicker">Después de enviar</p>
+        <h2 id="despues-titulo" class="section-title">¿Qué pasa después de inscribirme?</h2>
+        <p class="section-intro">Todo lo gestionas desde <a href="mi-inscripcion/">«Mi inscripción»</a>.
+          Las reglas completas están en <a href="reglas.html">Reglas de la convocatoria</a>.</p>
+      </header>
+      <ol class="steps">
+        <li><div><span class="step-title">Comprobante y correo de recibido</span>
+          Al enviar ves tu comprobante y te llega un correo de recibido. Tu estado queda en <b>RECIBIDO</b>:
+          eso todavía no quiere decir que seas apto. Revisa también Spam y Promociones.</div></li>
+        <li><div><span class="step-title">Revisión y resultado</span>
+          La organización revisa tus datos, los requisitos y tu muestra artística, y te escribe por correo con el
+          resultado: <b>APTO</b> o <b>NO APTO</b>.</div></li>
+        <li><div><span class="step-title">Turnos y suplentes</span>
+          Los {{evento.cupos}} turnos se asignan en orden de inscripción entre quienes quedan aptos. Los aptos del puesto
+          {{evento.suplentes_desde}} al {{evento.suplentes_hasta}} quedan como <b>suplentes</b>: no tienen horario, pero pueden
+          recibir un cupo si alguien se retira.</div></li>
+        <li><div><span class="step-title">Tu código y tu horario</span>
+          Si tienes turno, recibes tu código (<span class="nowrap">{{calc.codigo_primero}}</span> a <span class="nowrap">{{calc.codigo_ultimo}}</span>)
+          y tu horario por correo y por WhatsApp. Si usas pista, súbela desde «Mi inscripción».</div></li>
+        <li><div><span class="step-title">Cambios de horario</span>
+          Si tienes un impedimento real, pide el cambio hasta el <b>{{calendario.cambio_horario_limite_dia}} a las
+          {{calendario.cambio_horario_limite_hora}}</b> Tu turno no cambia hasta que la organización apruebe la solicitud.</div></li>
+        <li><div><span class="step-title">Si ya no puedes asistir</span>
+          Desde el <b>{{calendario.reemplazo_desde_dia}}</b>, el botón «No puedo asistir» de «Mi inscripción» libera tu
+          cupo para un suplente. Solo se mueve tu cupo: nadie más cambia de horario.</div></li>
+        <li><div><span class="step-title">Confirmación final</span>
+          El <b>{{calendario.confirmacion_final_dia}}</b> confirmas en «Mi inscripción» si asistes. Esa confirmación no
+          cambia tu horario.</div></li>
+        <li><div><span class="step-title">Tu audición</span>
+          El {{calc.fecha_larga}}, en el {{evento.lugar}}. Llega {{evento.antelacion_llegada_min}} minutos antes con tu
+          documento de identidad original. {{evento.jurados}} jurados califican y se seleccionan {{evento.seleccionados}} proyectos.</div></li>
       </ol>
     </div>
   </section>
@@ -137,12 +189,10 @@
             <p>cronometrados para mostrar tu propuesta.</p>
           </li>
           <li>
-            <h3>{{evento.jurados}} jurados, una rúbrica común</h3>
-            <p>Califican los mismos criterios para todas las propuestas:</p>
-            <ul class="tags" aria-label="Criterios de la rúbrica">
-              <li>Talento</li><li>Performance</li><li>Identidad</li><li>Repertorio</li>
-              <li>Profesionalismo</li><li>Presencia escénica</li><li>Comunidad digital</li><li>Proyecto</li>
-            </ul>
+            <h3>{{evento.jurados}} jurados, rúbrica oficial</h3>
+            <p>Cada jurado califica cada audición con la rúbrica oficial de la convocatoria, sobre <b>100 puntos</b>.
+              Se seleccionan <b>{{evento.seleccionados}} proyectos</b>. Conoce las
+              <a href="reglas.html#descalificacion">causales de descalificación</a>.</p>
           </li>
           <li>
             <h3>Puntualidad</h3>
@@ -205,7 +255,8 @@
       <div>
         <p class="kicker">Convocatoria abierta</p>
         <h2 id="cierre-titulo" class="section-title">Inscríbete cuanto antes</h2>
-        <p>Los {{evento.cupos}} cupos se asignan en orden de inscripción entre quienes cumplen los requisitos.</p>
+        <p>Los {{evento.cupos}} turnos se asignan en orden de inscripción entre quienes quedan aptos; los aptos del
+          {{evento.suplentes_desde}} al {{evento.suplentes_hasta}} quedan como suplentes.</p>
         <div class="cta-row">
           <a class="btn btn-dark" href="inscripcion/">Inscríbete</a>
           <a class="btn btn-ghost-dark" href="mi-inscripcion/">Ya me inscribí</a>

@@ -443,6 +443,33 @@ ul, ol { margin: 0; padding: 0; }
 .notice-text + .notice-text { margin-top: .6em; }
 @media (min-width: 980px) { .notice { padding: 40px 48px; } }
 
+/* Official update notice (home page, right below the hero) */
+.update-band { padding: 40px 0 0; }
+.notice h2.kicker { font-family: var(--font-body); line-height: 1.6; letter-spacing: .18em; }
+.notice-list { list-style: none; display: grid; gap: .35em; }
+.notice-list li {
+  position: relative;
+  padding-left: 1.1em;
+  font-size: clamp(1.2rem, 4.6vw, 1.45rem);
+  line-height: 1.45;
+  font-weight: 500;
+}
+.notice-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: .55em;
+  width: .45em;
+  height: .45em;
+  background: var(--amber);
+}
+.notice-list b { color: var(--amber); font-weight: 600; }
+.notice-link { margin: 1em 0 0; font-weight: 500; }
+.notice-link a { color: var(--white); text-decoration-color: var(--amber); }
+/* Black boxes on light surfaces keep the amber focus ring (black would be invisible). */
+.surface-light .notice :focus-visible,
+.surface-light .callout--strong :focus-visible { outline-color: var(--amber); }
+
 /* Closing call to action */
 .closing-grid { display: grid; gap: 36px; align-items: center; }
 .closing .section-title { max-width: 12em; }
@@ -559,6 +586,7 @@ td:first-child { font-weight: 600; }
 .redirect-page p { color: var(--on-dark-muted); max-width: 26em; margin: 0 auto 22px; }
 .footer-social { margin: 18px 0 0; }
 .footer-social a { color: var(--white); }
+.footer-social--secondary { margin-top: 4px; }
 .section--flush-top { padding-top: 0; }
 .nowrap { white-space: nowrap; }
 .filename { overflow-wrap: anywhere; }

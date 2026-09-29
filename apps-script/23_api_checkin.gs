@@ -17,7 +17,8 @@ function membersByGroup() {
     byGroup[code].push({
       full_name: m.full_name,
       id_number: String(m.id_number || ''),
-      artistic_role: m.artistic_role,
+      artistic_role: isCrew(m) ? 'Equipo: ' + (CREW_ROLE_LABELS[m.crew_role] || m.crew_role || '') : m.artistic_role,
+      crew: isCrew(m),
       is_leader: esVerdadero(m.is_leader),
       member_status: m.member_status,
       signature: !!normalizarTexto(m.signature_file_id),
@@ -29,7 +30,8 @@ function membersByGroup() {
 
 /** One participant as the desk sees it. */
 function deskView(r, members) {
-  var list = r.group_code ? (members[normalizarComparable(r.group_code)] || []) : [];
+  var team = teamCodeOf(r);
+  var list = team ? (members[normalizarComparable(team)] || []) : [];
   return {
     code: r.code,
     full_name: r.full_name,
@@ -40,7 +42,7 @@ function deskView(r, members) {
     group_code: r.group_code || '',
     members_declared: Number(r.members_declared) || (r.group_code ? '' : 1),
     members: list,
-    members_authorized: list.filter(function (m) { return normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length,
+    members_authorized: list.filter(function (m) { return !m.crew && normalizarComparable(m.member_status) === 'AUTORIZADO'; }).length,
     final_block: r.final_block || r.original_block,
     block_label: blockLabel(r.final_block || r.original_block, agendaConfigurada()),
     arrival_time: clockText(r.arrival_time),

@@ -75,6 +75,8 @@ function MIGRAR() {
     'CONFIG actualizada: ' + (r.config.actualizadas.join(' | ') || 'nada'),
     'CONFIG agregada: ' + (r.config.agregadas.join(', ') || 'nada'),
     'CONFIG en conflicto (se conserva lo que habia): ' + (r.config.conflictos.join(' | ') || 'ninguno'),
+    'Filas migradas a v3: ' + JSON.stringify(r.filas_v3),
+    'Rubrica: ' + JSON.stringify(r.rubrica),
     'Cuentas nuevas: ' + (r.cuentas_nuevas.join(', ') || 'ninguna'),
     'SIGUIENTE PASO: Gestionar implementaciones > lapiz > Version nueva > Implementar.',
     '===================================================='
@@ -113,12 +115,17 @@ function LIMPIAR() {
 }
 
 /**
- * The two registrations made in production before launch were tests (confirmed
- * by the organization on 2026-09-24). Removes exactly those rows, after a raw
- * backup, and logs it. Running it again finds nothing and changes nothing.
+ * Registrations made in production before the public launch were tests: two confirmed by the
+ * organization on 2026-09-24 and five made by the organization between 2026-09-25 and 2026-09-27
+ * (release QA reset, 2026-09-29). Removes exactly those rows (with their team members, change
+ * requests, offers, e-mail log and cards), after a raw backup, and logs it. Any other row is
+ * treated as real and kept. Running it again finds nothing and changes nothing.
  */
+var PRELAUNCH_TEST_SUBMISSIONS = ['S-07BE9C53', 'S-E780AA04',
+  'S-5F23127D', 'S-67ACAFA8', 'S-2B643606', 'S-494D927B', 'S-433834E6'];
+
 function QUITAR_PRUEBAS_PRELANZAMIENTO() {
-  var r = quitarInscripciones(['S-07BE9C53', 'S-E780AA04'], 'SI-QUITAR');
+  var r = quitarInscripciones(PRELAUNCH_TEST_SUBMISSIONS, 'SI-QUITAR');
   console.log(JSON.stringify(r, null, 2));
   return r;
 }

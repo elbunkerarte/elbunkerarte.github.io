@@ -5,7 +5,7 @@
  * CONFIG sheet so a non-technical operator can change it without touching code.
  */
 
-var VERSION_SISTEMA = '2.0.0';
+var VERSION_SISTEMA = '3.0.0';
 
 /** Script Properties keys (the Apps Script equivalent of environment vars). */
 var PROP = {
@@ -115,7 +115,15 @@ var HOJA = {
   CAMBIOS: '_CAMBIOS',
   USUARIOS: '_USUARIOS',
   LOG: '_LOG',
-  IDEMPOTENCIA: '_IDEMPOTENCIA'
+  IDEMPOTENCIA: '_IDEMPOTENCIA',
+  // ---- iteration 3 ----
+  PARAMETROS_RUBRICA: 'PARAMETROS_RUBRICA',   // the official rubric as editable parameters
+  BOLSA: 'BOLSA',                             // view: principal + substitute pool in priority order
+  SEGURO: 'SEGURO_MAYORCA',                   // view: people for the venue insurance policy (private)
+  OFERTAS: '_OFERTAS',                        // substitute offers per freed slot
+  SLOTS_HISTORIAL: '_SLOTS_HISTORIAL',        // append-only history of every slot hand-over
+  EMAIL_LOG: '_EMAIL_LOG',                    // one row per e-mail attempt, idempotent by key
+  DESCALIFICACIONES: '_DESCALIFICACIONES'     // disqualification reports and their validation
 };
 
 /**
@@ -155,7 +163,14 @@ var COLUMNAS_REGISTRO = [
   'video_check_status', 'video_checked_at', 'video_check_detail',
   'consent_at', 'terms_version', 'policy_version', 'data_controller', 'capture_source',
   'precola_at', 'stage_at', 'done_at',
-  'eligibility_override', 'override_by', 'override_at'
+  'eligibility_override', 'override_by', 'override_at',
+  // ---- iteration 3 ----
+  'eligibility_auto', 'eligibility_decided_at', 'eligibility_decided_by', 'aptitude_notified_at',
+  'team_code', 'document_type', 'person_id', 'signature_file_id', 'signature_sha256', 'signature_at',
+  'priority_rank', 'pool_status',
+  'withdrawal_status', 'withdrawn_at', 'withdrawn_by', 'withdrawal_reason', 'previous_code',
+  'final_confirmation', 'final_confirmation_at',
+  'participation_status', 'evaluation_status', 'ranking_status', 'dq_status'
 ];
 
 /** Group members. One row per person; the project row lives in REGISTRO. */
@@ -166,7 +181,9 @@ var COLUMNAS_INTEGRANTES = [
   'consent_terms', 'consent_data', 'consent_image', 'consent_at',
   'terms_version', 'policy_version', 'data_controller', 'capture_source',
   'signature_file_id', 'signature_sha256', 'signature_at',
-  'member_status', 'member_alert', 'notes'
+  'member_status', 'member_alert', 'notes',
+  // ---- iteration 3: every project (also a soloist) lists its people here ----
+  'person_role', 'crew_role', 'on_stage', 'document_type', 'person_id'
 ];
 
 /** Operator view: one master row per group, its members nested (collapsible) below. */
@@ -185,7 +202,8 @@ var COLUMNAS_PISTAS = [
 ];
 
 var COLUMNAS_DELIBERACIONES = [
-  'deliberation_id', 'at', 'by', 'codes_in_order', 'cut_position', 'minutes', 'status'
+  'deliberation_id', 'at', 'by', 'codes_in_order', 'cut_position', 'minutes', 'status',
+  'method', 'participants', 'result'
 ];
 
 var COLUMNAS_AGENDA = [
@@ -201,17 +219,23 @@ var COLUMNAS_CHECK_IN = [
   'precola_at', 'stage_at', 'done_at'
 ];
 
-var COLUMNAS_JURADO = [
-  'code', 'artistic_name', 'discipline',
-  'talento', 'performance', 'identidad', 'repertorio',
-  'profesionalismo', 'presencia', 'digital', 'proyecto',
-  'total', 'valido', 'observaciones', 'evaluado_at', 'evaluado_by'
-];
+/**
+ * One row per project per juror. The rating columns are the rubric category ids (1-5 each);
+ * `total` is the weighted sum (20-100) and `estado` is BORRADOR until the juror submits and
+ * locks it (ENVIADA). Only ENVIADA cards count.
+ */
+function juryColumns(rubric) {
+  // Evaluated at call time: RUBRIC_DEFAULT lives in a file loaded after this one.
+  return ['code', 'artistic_name', 'discipline', 'presentation_format', 'rubric_version', 'rubric_fingerprint']
+    .concat((rubric || RUBRIC_DEFAULT).map(function (c) { return c.id; }))
+    .concat(['total', 'desempate', 'estado', 'observaciones', 'dq_flag', 'dq_causa', 'dq_nota',
+             'evaluado_at', 'enviado_at', 'evaluado_by', 'reabierta_at', 'reabierta_by', 'reabierta_motivo']);
+}
 
 var COLUMNAS_RESULTADOS = [
   'posicion', 'code', 'artistic_name', 'full_name', 'discipline',
   'jurado_1', 'jurado_2', 'jurado_3', 'jurados_validos',
-  'artist_final', 'seleccionado', 'requiere_comite', 'observacion'
+  'artist_final', 'tie_break', 'ranking_status', 'seleccionado', 'requiere_comite', 'dq', 'observacion'
 ];
 
 var COLUMNAS_INCIDENTES = [
@@ -221,7 +245,36 @@ var COLUMNAS_INCIDENTES = [
 var COLUMNAS_CAMBIOS = [
   'solicitud_id', 'at', 'code', 'full_name', 'original_block', 'original_time',
   'can_attend_original', 'reason_short', 'contact', 'acceptance',
-  'estado', 'nuevo_bloque', 'nueva_hora', 'resuelto_at', 'resuelto_by', 'observacion'
+  'estado', 'nuevo_bloque', 'nueva_hora', 'resuelto_at', 'resuelto_by', 'observacion',
+  'notificacion_estado'
+];
+
+var COLUMNAS_OFERTAS = [
+  'oferta_id', 'slot_code', 'slot_block', 'slot_arrival', 'slot_time', 'submission_id', 'priority_rank',
+  'estado', 'created_at', 'expires_at', 'responded_at', 'actor', 'released_by', 'notas'
+];
+
+var COLUMNAS_SLOTS_HISTORIAL = ['at', 'slot_code', 'evento', 'submission_id', 'actor', 'detalle'];
+
+var COLUMNAS_EMAIL_LOG = [
+  'email_id', 'at', 'template_key', 'template_version', 'trigger', 'idempotency_key', 'recipient',
+  'submission_id', 'person_id', 'code', 'status', 'provider_message_id', 'retry_count', 'last_attempt_at',
+  'error', 'subject', 'payload'
+];
+
+var COLUMNAS_DESCALIFICACIONES = [
+  'dq_id', 'code', 'submission_id', 'causa', 'nota', 'reportado_por', 'reportado_at',
+  'estado', 'resuelto_por', 'resuelto_at', 'motivo'
+];
+
+var COLUMNAS_BOLSA = [
+  'priority_rank', 'pool_status', 'code', 'submission_id', 'artistic_name', 'participation_mode',
+  'created_at', 'eligibility_status', 'participation_status', 'oferta', 'observacion'
+];
+
+var COLUMNAS_SEGURO = [
+  'code', 'artistic_name', 'participation_mode', 'person_type', 'full_name', 'document_type', 'id_number',
+  'role_detail', 'on_stage', 'authorization_status', 'signature_at', 'person_id', 'alerta'
 ];
 
 var COLUMNAS_USUARIOS = ['email_o_alias', 'rol', 'token', 'activo', 'creado_at', 'nota'];
@@ -238,9 +291,9 @@ function sheetDefinitions() {
     [HOJA.AGENDA, COLUMNAS_AGENDA],
     [HOJA.CHECK_IN, COLUMNAS_CHECK_IN],
     [HOJA.PISTAS, COLUMNAS_PISTAS],
-    [HOJA.JURADO_1, COLUMNAS_JURADO],
-    [HOJA.JURADO_2, COLUMNAS_JURADO],
-    [HOJA.JURADO_3, COLUMNAS_JURADO],
+    [HOJA.JURADO_1, juryColumns(activeRubricCategories())],
+    [HOJA.JURADO_2, juryColumns(activeRubricCategories())],
+    [HOJA.JURADO_3, juryColumns(activeRubricCategories())],
     [HOJA.RESULTADOS, COLUMNAS_RESULTADOS],
     [HOJA.DASHBOARD, ['INDICADOR', 'VALOR']],
     [HOJA.INCIDENTES, COLUMNAS_INCIDENTES],
@@ -250,7 +303,14 @@ function sheetDefinitions() {
     [HOJA.CAMBIOS, COLUMNAS_CAMBIOS],
     [HOJA.USUARIOS, COLUMNAS_USUARIOS],
     [HOJA.LOG, COLUMNAS_LOG],
-    [HOJA.IDEMPOTENCIA, COLUMNAS_IDEMPOTENCIA]
+    [HOJA.IDEMPOTENCIA, COLUMNAS_IDEMPOTENCIA],
+    [HOJA.PARAMETROS_RUBRICA, RUBRIC_PARAM_COLUMNS],
+    [HOJA.BOLSA, COLUMNAS_BOLSA],
+    [HOJA.SEGURO, COLUMNAS_SEGURO],
+    [HOJA.OFERTAS, COLUMNAS_OFERTAS],
+    [HOJA.SLOTS_HISTORIAL, COLUMNAS_SLOTS_HISTORIAL],
+    [HOJA.EMAIL_LOG, COLUMNAS_EMAIL_LOG],
+    [HOJA.DESCALIFICACIONES, COLUMNAS_DESCALIFICACIONES]
   ];
 }
 
@@ -271,9 +331,11 @@ var ROL = {
  */
 var PERMISOS = {
   admin:     ['*'],
-  direccion: ['dashboard', 'resultados', 'registro_enmascarado', 'exportar', 'incidentes', 'deliberar'],
+  direccion: ['dashboard', 'resultados', 'registro_enmascarado', 'exportar', 'incidentes', 'deliberar',
+              'validar_dq', 'reabrir_evaluacion', 'cerrar_resultados', 'seguro'],
   logistica: ['dashboard', 'registro_lectura', 'registro_escritura', 'codigos', 'agenda',
-              'cambios', 'incidentes', 'exportar', 'comunicacion', 'agrupaciones', 'pistas', 'pistas_lectura', 'videos'],
+              'cambios', 'incidentes', 'exportar', 'comunicacion', 'agrupaciones', 'pistas', 'pistas_lectura', 'videos',
+              'reemplazos', 'consolidar', 'seguro'],
   checkin:   ['checkin', 'registro_lectura_minimo', 'incidentes', 'pistas_lectura'],
   jurado:    ['evaluar', 'lista_audicion_minima']
 };
@@ -291,7 +353,7 @@ function configuracionPorDefecto() {
     ['evento_fecha', '2026-10-23', 'Fecha de audiciones (AAAA-MM-DD). Base del calculo de edad.'],
     ['evento_hora_inicio', '15:00', 'Inicio de la jornada (HH:MM, 24 h). El primer bloque empieza a esta hora.'],
     ['evento_hora_fin', '21:00', 'Fin de la jornada (HH:MM, 24 h).'],
-    ['evento_sede', 'Centro Comercial Mayorca', 'Lugar de las audiciones.'],
+    ['evento_sede', 'Centro Comercial Mayorca · Etapa 1', 'Lugar de las audiciones.'],
     ['evento_municipio_sede', 'Sabaneta, Antioquia', 'Municipio del lugar.'],
     ['evento_direccion', '', 'Punto exacto dentro del lugar (plazoleta, piso, entrada). Vacio = no se muestra.'],
     ['cupo_total', '100', 'Numero de codigos definitivos B-001..B-100. Una agrupacion = un cupo.'],
@@ -306,9 +368,23 @@ function configuracionPorDefecto() {
     ['contingencia_inicio', '20:30', 'Inicio de la ventana de contingencia (HH:MM).'],
     ['cierre_audiciones', '21:00', 'Cierre definitivo de audiciones (HH:MM).'],
     ['cierre_cambios', '2026-10-22T18:00:00-05:00', 'Fecha y hora limite del Formulario 2 (cambio de horario).'],
-    ['top_seleccionados', '7', 'Numero de artistas/proyectos seleccionados (confirmado por la organizacion: 7).'],
+    ['top_seleccionados', '10', 'Seleccionados PUBLICOS (Top 10). Release QA 2026-09-29.'],
+    ['top_privado', '20', 'Ranking PRIVADO (Top 20): nunca se publica.'],
     ['jurados', '3', 'Numero de jurados.'],
-    ['minimo_jurados', '2', 'Tarjetas validas minimas para entrar al ranking.'],
+    ['minimo_jurados', '3', 'Evaluaciones ENVIADAS necesarias para entrar al ranking (promedio de los 3 jurados).'],
+    ['bolsa_aptos', '200', 'Tamano de la bolsa interna de aptos: 1-100 principales, 101-200 suplentes.'],
+    ['reemplazos_desde', '2026-10-16T00:00:00-05:00', 'Desde aqui el participante ve "NO PUEDO ASISTIR - SOLICITAR REEMPLAZO".'],
+    ['reemplazo_limite', '2026-10-22T12:00:00-05:00', 'Despues de esta hora un cupo liberado queda VACANTE_SIN_REEMPLAZO (no se ofrece).'],
+    ['suplente_horas_respuesta', '24', 'Horas que tiene un suplente para aceptar un cupo ofrecido.'],
+    ['confirmacion_final_desde', '2026-10-22T00:00:00-05:00', 'Inicio de la CONFIRMACION FINAL DE ASISTENCIA.'],
+    ['confirmacion_final_hasta', '2026-10-22T20:00:00-05:00', 'Fin de la confirmacion final.'],
+    ['lista_oficial_bloqueada', 'NO', 'SI = lista oficial consolidada: no hay cambios ordinarios. Lo pone el boton CONSOLIDAR.'],
+    ['lista_oficial_version', '', 'Version de la lista oficial consolidada (la escribe el sistema).'],
+    ['lista_oficial_at', '', 'Fecha y hora de la consolidacion (la escribe el sistema).'],
+    ['lista_oficial_by', '', 'Quien consolido la lista (lo escribe el sistema).'],
+    ['lista_oficial_nombre', 'ROSTER_FINAL_2026-10-22', 'Nombre de la hoja que guarda la foto de la lista oficial consolidada.'],
+    ['resultados_cerrados', 'NO', 'SI = resultados cerrados: evaluaciones bloqueadas y Top 10 definitivo.'],
+    ['enlaces_equipo_vencen', '2026-10-24', 'Ultimo dia en que abren los enlaces de equipo y firmas de cada proyecto.'],
     ['inscripciones_abiertas', 'SI', 'SI / NO. Cierra el Formulario 1 sin tocar codigo.'],
     ['cambios_abiertos', 'SI', 'SI / NO. Cierra el Formulario 2 sin tocar codigo.'],
     ['integrantes_abierto', 'SI', 'SI / NO. Cierra el formulario de integrantes.'],
@@ -318,6 +394,7 @@ function configuracionPorDefecto() {
     ['integrantes_max', '15', 'Maximo de integrantes en escena de una agrupacion.'],
     ['integrantes_edad_minima', '18', 'Edad minima de cada integrante (el documento legal exige mayoria de edad).'],
     ['firma_integrantes', 'SI', 'SI pide firma dibujada a cada integrante (evidencia, no firma electronica calificada).'],
+    ['firma_inscripcion', 'SI', 'SI pide la firma dibujada de quien inscribe el proyecto al final del Formulario 1 (solista, lider de duo o agrupacion).'],
     ['pista_max_mb', '15', 'Tamano maximo de una pista en MB.'],
     ['pista_formatos', 'mp3,wav,m4a,aac,ogg,flac', 'Extensiones de audio aceptadas.'],
     ['correo_confirmacion_automatico', 'SI', 'SI envia un correo al recibir cada inscripcion (cuota Gmail ~100/dia).'],
@@ -333,8 +410,8 @@ function configuracionPorDefecto() {
     ['institutional_phone', '3042328502', 'Telefono informado.'],
     ['canal_fisico_reclamos', 'Corredor Juvenil, Casa de la Cultura La Barquereña, Calle 68 Sur #42-40, Sabaneta, Antioquia', 'Canal fisico para derechos y reclamos (la direccion del responsable).'],
     ['datos_legales_verificados', 'SI', 'Datos legales confirmados por la organizacion (2026-09-24).'],
-    ['terms_version', 'v1-2026-09-24', 'Version de los Terminos y Condiciones publicados (legal/TERMINOS_Y_CONDICIONES_v1.md).'],
-    ['policy_version', 'v2-2026-09-24', 'Version de la politica de tratamiento de datos.'],
+    ['terms_version', 'v2-2026-09-29', 'Version de los Terminos y Condiciones publicados (legal/TERMINOS_Y_CONDICIONES_v2.md).'],
+    ['policy_version', 'v3-2026-09-29', 'Version de la politica de tratamiento de datos (v3: equipo de trabajo y lista para la poliza del C.C. Mayorca).'],
     ['consent_version', 'v2', 'Version del formulario de autorizaciones.'],
     ['domain', '', 'Dominio propio del sitio, cuando exista. Vacio = se usa sitio_url.'],
     ['sitio_url', 'https://elbunkerarte.github.io/', 'Direccion publica del sitio informativo.'],
@@ -347,7 +424,8 @@ function configuracionPorDefecto() {
     ['whatsapp_oficial', '3239836182', 'Numero oficial desde el que se envian codigos y horarios.'],
     ['whatsapp_oficial_nombre', 'EL BÚNKER — Arte es la Solución', 'Nombre con el que el participante debe guardar el numero.'],
     ['contacto_whatsapp', '3239836182', 'WhatsApp de dudas operativas.'],
-    ['instagram', 'aesproducciones_', 'Instagram de la convocatoria.']
+    ['instagram', 'elarteeslasolucion_', 'Instagram principal de la convocatoria.'],
+    ['instagram_aes', 'aesproducciones_', 'Instagram de AES (secundario).']
   ];
 }
 
@@ -367,7 +445,14 @@ var CONFIG_ITERATION1_VALUES = {
   cierre_audiciones: ['21:30', '1899-12-30T21:30:00'],
   contingencia_inicio: ['21:00', '1899-12-30T21:00:00'],
   consent_version: ['v1-PENDIENTE'],
-  datos_legales_verificados: ['NO']
+  datos_legales_verificados: ['NO'],
+  // Iteration-2 defaults superseded by the release QA (2026-09-29): replaced only if still untouched.
+  top_seleccionados: ['7'],
+  minimo_jurados: ['2'],
+  evento_sede: ['Centro Comercial Mayorca'],
+  terms_version: ['v1-2026-09-24'],
+  policy_version: ['v2-2026-09-24'],
+  instagram: ['aesproducciones_']
 };
 
 /** Reads CONFIG into a plain object, cached per execution. */
@@ -434,6 +519,21 @@ function agendaConfigurada() {
       Math.floor(((contingencia === null ? 20 * 60 + 30 : contingencia) - (margen === null ? 20 * 60 : margen)) /
         Math.max(1, cfgNumero('duracion_audicion_min', 3)))))
   };
+}
+
+/** Calendar of the replacement and confirmation stages, read from CONFIG. */
+function operationCalendar() {
+  return {
+    reemplazos_desde: cfg('reemplazos_desde', ''),
+    reemplazo_limite: cfg('reemplazo_limite', ''),
+    confirmacion_final_desde: cfg('confirmacion_final_desde', ''),
+    confirmacion_final_hasta: cfg('confirmacion_final_hasta', ''),
+    lista_bloqueada: cfgBool('lista_oficial_bloqueada', false)
+  };
+}
+
+function poolOptions() {
+  return { cupo: cfgNumero('cupo_total', 100), bolsa: cfgNumero('bolsa_aptos', 200) };
 }
 
 function opcionesValidacion() {

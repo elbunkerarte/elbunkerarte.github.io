@@ -101,6 +101,9 @@ function tablaAcciones() {
     'mi_inscripcion':     { capacidad: null, fn: accionMiInscripcion },
     'subir_pista':        { capacidad: null, fn: accionSubirPista },
     'verificar_video':    { capacidad: null, fn: accionVerificarVideo },
+    'retirarme':          { capacidad: null, fn: accionRetirarme },
+    'confirmacion_final': { capacidad: null, fn: accionConfirmacionFinal },
+    'responder_oferta':   { capacidad: null, fn: accionResponderOferta },
 
     // ---- logistics / admin ------------------------------------------------
     'listar_registro':    { capacidad: 'registro_lectura',   fn: accionListarRegistro },
@@ -129,6 +132,22 @@ function tablaAcciones() {
     'mensajes':           { capacidad: 'comunicacion',       fn: accionMensajes },
     'enviar_correos':     { capacidad: 'comunicacion',       fn: accionEnviarCorreos },
     'crear_usuario':      { capacidad: '*',                  fn: accionCrearUsuario },
+    'aplicar_verificacion': { capacidad: 'registro_escritura', fn: accionAplicarVerificacion },
+    'notificar_aptitud':  { capacidad: 'comunicacion',       fn: accionNotificarAptitud },
+    'registro_correos':   { capacidad: 'comunicacion',       fn: accionRegistroCorreos },
+    'reintentar_correos': { capacidad: 'comunicacion',       fn: accionReintentarCorreos },
+    'exportar_excel':     { capacidad: 'exportar',           fn: function (d, s) { return accionExportarExcel(d, s); } },
+    'exportar_seguro':    { capacidad: 'seguro',             fn: function (d, s) { return accionExportarSeguro(d, s); } },
+
+    // ---- pool, substitutes and the official list -------------------------
+    'bolsa':              { capacidad: 'reemplazos', fn: accionBolsa },
+    'refrescar_bolsa':    { capacidad: 'reemplazos', fn: accionRefrescarBolsa },
+    'retirar_participante': { capacidad: 'reemplazos', fn: accionRetirarParticipante },
+    'ofrecer_cupo':       { capacidad: 'reemplazos', fn: accionOfrecerCupo },
+    'cerrar_vacante':     { capacidad: 'reemplazos', fn: accionCerrarVacante },
+    'vista_previa_lista': { capacidad: 'consolidar', fn: accionVistaPreviaLista },
+    'consolidar_lista':   { capacidad: 'consolidar', fn: accionConsolidarLista },
+    'desbloquear_lista':  { capacidad: '*',          fn: accionDesbloquearLista },
 
     // ---- check-in desk ----------------------------------------------------
     'buscar_participante':{ capacidad: 'checkin',   fn: accionBuscarParticipante },
@@ -147,7 +166,12 @@ function tablaAcciones() {
     // ---- results / dashboard ---------------------------------------------
     'dashboard':          { capacidad: 'dashboard', fn: accionDashboard },
     'resultados':         { capacidad: 'resultados', fn: accionResultados },
-    'registrar_deliberacion': { capacidad: 'deliberar', fn: accionRegistrarDeliberacion }
+    'registrar_deliberacion': { capacidad: 'deliberar', fn: accionRegistrarDeliberacion },
+    'reabrir_evaluacion': { capacidad: 'reabrir_evaluacion', fn: accionReabrirEvaluacion },
+    'listar_descalificaciones': { capacidad: 'validar_dq', fn: accionListarDescalificaciones },
+    'resolver_descalificacion': { capacidad: 'validar_dq', fn: accionResolverDescalificacion },
+    'cerrar_resultados':  { capacidad: 'cerrar_resultados', fn: accionCerrarResultados },
+    'reabrir_resultados': { capacidad: '*',           fn: accionReabrirResultados }
   };
 }
 
