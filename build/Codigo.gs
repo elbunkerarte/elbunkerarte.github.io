@@ -4,7 +4,7 @@
  * Fuente: apps-script/ en el repositorio. Regenerar con:
  *     node tools/empaquetar.js
  *
- * Generado: 2026-09-29T18:36:18.223Z
+ * Generado: 2026-09-29T18:49:52.741Z
  * Modulos: 23 .gs + 14 .html
  */
 
@@ -10954,9 +10954,12 @@ function rehearsalScheduleChanges(admin) {
     reason_short: 'Ensayo: trabajo', contact: 'whatsapp', acceptance: true, client_submission_id: 'SEED-CB-2' });
   var again = accionSolicitarCambio({ participant_code: a.code, full_name: a.full_name, can_attend_original: false,
     reason_short: 'Ensayo: segunda vez', contact: 'whatsapp', acceptance: true, client_submission_id: 'SEED-CB-3' });
-  // Free a seat in block 10 so the approval has somewhere to go.
-  accionRegistrarEstado({ code: coded[coded.length - 1].code, estado: ESTADO.NO_SHOW }, admin);
-  var ap = accionResolverCambio({ solicitud_id: r1.solicitud_id, aprobar: true, nuevo_bloque: 10 }, admin);
+  // A no-show never frees schedule capacity (the day uses contingency), so approve into a block that has room.
+  var destino = bloquesConCupo(rowsWithOpenOffers(leerHoja(HOJA.REGISTRO)), agendaConfigurada())
+    .filter(function (blk) { return blk.disponibles > 0; })[0];
+  var ap = destino
+    ? accionResolverCambio({ solicitud_id: r1.solicitud_id, aprobar: true, nuevo_bloque: destino.block_id }, admin)
+    : accionResolverCambio({ solicitud_id: r1.solicitud_id, aprobar: false, observacion: 'Ensayo: agenda llena' }, admin);
   var rj = accionResolverCambio({ solicitud_id: r2.solicitud_id, aprobar: false, observacion: 'Ensayo: sin cupo' }, admin);
   return { aprobado: ap.estado || ap.error, rechazado: rj.estado || rj.error, segunda_solicitud: again.motivo || again.error };
 }
