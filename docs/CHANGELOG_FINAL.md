@@ -50,7 +50,7 @@ Mi inscripción, equipo y firmas, jurado, administración y dirección.
 
 ## 4. Qué se verificó
 
-Resumen (detalle en `QA_FINAL.md`): 412 pruebas automáticas verdes sobre el emulador de Apps Script (incluye QA-01…QA-13 y la
-vía rápida de inscripción); en el proyecto real de PRUEBAS: migración v3, ensayo integral de 17 fases, formulario de 7 pasos en
+Resumen (detalle en `QA_FINAL.md`): 425 pruebas automáticas verdes sobre el emulador de Apps Script (incluye QA-01…QA-13 y la
+vía rápida de inscripción); en el proyecto real de PRUEBAS: migración v3, ensayo integral de 17 fases, reemplazo por pantalla, consolidación de la lista, los dos Excel, formulario de 7 pasos en
 móvil y escritorio (solista, dúo, agrupación), equipo y firmas, Mi inscripción, correo real recibido en bandeja de entrada y
 paneles privados. Producción: ver `RESET_PRODUCCION.md` (respaldo, limpieza de pruebas, migración, verificación y humo).
