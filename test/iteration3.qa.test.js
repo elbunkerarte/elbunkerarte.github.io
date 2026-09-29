@@ -678,4 +678,37 @@ describe('Registration fast path (measured live 2026-09-29: 12 s per submission,
   });
 });
 
+// ===========================================================================
+describe('Production reset: removing the pre-launch test rows leaves nothing of them behind', () => {
+  it('removes their rows, their replay answers and their signature files; a real registration keeps all of its own', () => {
+    const account = F.newAccount();
+    const p = F.installTest(account, 'pruebas').project;
+    const test1 = p.run('accionInscribir', F.uniqueSubmission(1, HUMAN));
+    account.advance(1000);
+    const band = p.run('accionInscribir', F.uniqueSubmission(2, Object.assign({ participation_mode: 'AGRUPACION', artistic_name: 'Banda Test', members_declared: '3' }, HUMAN)));
+    p.run('accionRegistrarIntegrante', Object.assign({
+      group_code: band.team_code, group_key: band.team_key, client_submission_id: 'reset-member', full_name: 'Member Test',
+      id_number: '71000001', birth_date: '1995-03-10', document_type: 'CC', artistic_role: 'Bajo',
+      adult_confirmation: true, accept_terms: true, accept_data_processing: true, accept_image_voice: true,
+      signature_png: F.SIGNATURE_PNG, source: 'web'
+    }, HUMAN));
+    account.advance(1000);
+    const real = p.run('accionInscribir', F.uniqueSubmission(3, HUMAN));
+    const liveFiles = () => account.drive.list((i) => i.kind === 'file' && /\.png$/.test(i.name) && !i.trashed).map((f) => f.id);
+    expect(liveFiles().length).toBe(4);
+
+    const r = p.run('quitarInscripciones', [test1.submission_id, band.submission_id], 'SI-QUITAR');
+    expect([r.filas.registro, r.filas.integrantes, r.filas.firmas]).toEqual([2, 3, 3]);
+    expect(r.filas.idempotencia).toBe(3);
+    const ledger = p.records('_IDEMPOTENCIA').map((x) => String(x.resultado)).join('\n');
+    expect([ledger.indexOf(test1.submission_id), ledger.indexOf(band.team_code)]).toEqual([-1, -1]);
+    expect(ledger.indexOf(real.submission_id) !== -1).toBe(true);
+    const realRow = p.records('REGISTRO').find((x) => x.submission_id === real.submission_id);
+    expect(liveFiles()).toEqual([realRow.signature_file_id]);
+    // Sequences restart by construction: the next group is GRP-001 again.
+    const next = p.run('accionInscribir', F.uniqueSubmission(4, Object.assign({ participation_mode: 'AGRUPACION', artistic_name: 'Banda Nueva', members_declared: '3' }, HUMAN)));
+    expect(next.team_code).toBe('GRP-001');
+  });
+});
+
 process.exit(ejecutar());

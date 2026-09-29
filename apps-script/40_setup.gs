@@ -417,6 +417,13 @@ function trashTestFiles() {
   return count;
 }
 
+/** Distinct signature file ids of some registrations and team members. */
+function signatureFilesOf(rows, members) {
+  var ids = {};
+  rows.concat(members).forEach(function (r) { if (normalizarTexto(r.signature_file_id)) ids[normalizarTexto(r.signature_file_id)] = true; });
+  return Object.keys(ids);
+}
+
 /**
  * Deletes specific registrations by submission_id (with their group members and
  * change requests). Meant for test rows that reached a live base; a raw backup
@@ -437,6 +444,11 @@ function quitarInscripciones(ids, confirmacion) {
       if (r.code) codes[normalizarComparable(r.code)] = true;
       String(r.previous_code || '').split(',').forEach(function (c) { if (normalizarTexto(c)) codes[normalizarComparable(c)] = true; });
     });
+    var doomedMembers = leerHoja(HOJA.INTEGRANTES).filter(function (m) {
+      return groups[normalizarComparable(m.group_code)] || wanted[normalizarComparable(m.project_submission_id)];
+    });
+    var doomedMemberIds = {};
+    doomedMembers.forEach(function (m) { doomedMemberIds[m.member_id] = true; });
     var removeWhere = function (sheetName, test) {
       var sheet = libro().getSheetByName(sheetName);
       if (!sheet) return 0;
@@ -455,8 +467,19 @@ function quitarInscripciones(ids, confirmacion) {
       descalificaciones: removeWhere(HOJA.DESCALIFICACIONES, function (d) { return wanted[normalizarComparable(d.submission_id)]; }),
       tarjetas: [HOJA.JURADO_1, HOJA.JURADO_2, HOJA.JURADO_3].reduce(function (n, sheetName) {
         return n + removeWhere(sheetName, function (c) { return codes[normalizarComparable(c.code)]; });
-      }, 0)
+      }, 0),
+      // The replay ledger stores each answer (receipt, team key): answers about removed projects go too.
+      idempotencia: removeWhere(HOJA.IDEMPOTENCIA, function (x) {
+        var text = String(x.resultado || '');
+        var sub = /"submission_id":"([^"]+)"/.exec(text);
+        var team = /"(?:team_code|group_code)":"([^"]+)"/.exec(text) || /"group":\{"code":"([^"]+)"/.exec(text);
+        var member = /"member_id":"([^"]+)"/.exec(text);
+        return (sub && wanted[normalizarComparable(sub[1])]) || (team && groups[normalizarComparable(team[1])]) ||
+               (member && doomedMemberIds[member[1]]);
+      })
     };
+    // Signature images of the removed people: to the Drive trash (recoverable for 30 days), never kept orphaned.
+    removed.firmas = signatureFilesOf(rows, doomedMembers).reduce(function (n, id) { trashFileQuietly(id); return n + 1; }, 0);
     registrar('sistema', 'admin', 'QUITAR_INSCRIPCIONES', rows.map(function (r) { return r.submission_id; }).join(','),
               JSON.stringify(removed) + ' respaldo=' + backup.json);
     refrescarVistas();
