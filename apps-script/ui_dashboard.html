@@ -104,8 +104,8 @@
     </div>
 
     <div class="tarjeta grafico">
-      <h3>Top <span id="nTop">7</span></h3>
-      <p class="sub">Promedio de los jurados válidos, sobre 100.</p>
+      <h3>Top <span id="nTop">10</span> · seleccionados</h3>
+      <p class="sub">Promedio de los 3 jurados, sobre 100. Vista interna: el Top 20 nunca se publica.</p>
       <div id="gTop"></div>
       <button class="enlace-tabla" data-tabla="tTop">Ver como tabla</button>
       <div class="tabla-alterna" id="tTop"></div>
@@ -119,23 +119,61 @@
 
   <? if (puede(rol, 'resultados')) { ?>
   <div class="tarjeta">
-    <h2>Resultado consolidado</h2>
-    <p class="pista">El ranking completo no se publica. Esta vista es interna.</p>
+    <h2>Resultado consolidado (privado)</h2>
+    <p class="pista">Top 10 = seleccionados públicos. Top 20 = ranking privado: no se publica ni se comunica a participantes.
+      Puntaje final = promedio de los 3 jurados con precisión completa (se muestra con 2 decimales). Desempate: Presencia escénica
+      + Factor arena; si persiste en el corte 10 o 20, se decide con acta.</p>
     <button class="boton fantasma chico" id="btnResultados" style="margin-bottom:12px">Calcular resultados</button>
     <div id="salidaResultados"></div>
     <? if (puede(rol, 'deliberar')) { ?>
     <div id="formComite" class="oculto" style="margin-top:16px">
-      <h3 style="margin:0 0 8px">Acta del comité (empate en el corte)</h3>
-      <p class="pista">Solo cuando el desempate automático no resolvió. Escribe el orden decidido de los empatados, de mejor a peor,
-        y el acta: quiénes deliberaron y por qué. Si el empate cambia después, el acta deja de aplicarse sola.</p>
+      <h3 style="margin:0 0 8px">Acta de desempate</h3>
+      <p class="pista">Solo cuando el desempate automático no resolvió. Ordena exactamente a los empatados de mejor a peor y documenta
+        método, participantes y resultado. Si el empate cambia después, el acta deja de aplicarse sola.</p>
+      <div class="rejilla dos">
+        <div class="campo"><label for="corteComite">Corte</label><select id="corteComite"></select></div>
+        <div class="campo"><label for="metodoComite">Método</label><select id="metodoComite">
+          <option value="REPETIR_CANCION">Se repite una canción corta a criterio del jurado</option>
+          <option value="VOTO_CALIDAD">Voto de calidad del jurado musical</option></select></div>
+      </div>
       <div class="campo"><label for="ordenComite">Orden decidido (códigos separados por coma)</label>
         <input type="text" id="ordenComite" placeholder="B-014, B-052"></div>
-      <div class="campo"><label for="actaComite">Acta</label><textarea id="actaComite" rows="4" maxlength="2000"></textarea></div>
-      <button class="boton" id="btnComite">Registrar decisión del comité</button>
+      <div class="campo"><label for="participantesComite">Participantes</label><input type="text" id="participantesComite" maxlength="500" placeholder="Jurados 1, 2 y 3; dirección"></div>
+      <div class="campo"><label for="resultadoComite">Resultado y motivo</label><textarea id="resultadoComite" rows="3" maxlength="1000"></textarea></div>
+      <button class="boton" id="btnComite">Registrar acta</button>
       <div id="salidaComite" style="margin-top:12px"></div>
     </div>
     <? } ?>
   </div>
+  <? if (puede(rol, 'validar_dq') || puede(rol, 'reabrir_evaluacion') || puede(rol, 'cerrar_resultados')) { ?>
+  <div class="tarjeta">
+    <h2>Descalificaciones, correcciones y cierre</h2>
+    <? if (puede(rol, 'validar_dq')) { ?>
+    <h3 style="margin:0 0 8px">Reportes de descalificación</h3>
+    <p class="pista">Un jurado reporta la causal; aquí se valida (el proyecto sale del Top 20 y del Top 10) o se descarta, siempre con motivo.</p>
+    <button class="boton fantasma chico" id="btnDq" style="margin-bottom:12px">Ver reportes</button>
+    <div id="salidaDq"></div>
+    <? } ?>
+    <? if (puede(rol, 'reabrir_evaluacion')) { ?>
+    <h3 style="margin:18px 0 8px">Reabrir una evaluación enviada</h3>
+    <p class="pista">Solo para corregir un error del jurado. Queda registrado quién, cuándo y por qué; el jurado vuelve a enviarla.</p>
+    <div class="rejilla dos">
+      <div class="campo"><label for="reabrirCodigo">Código</label><input type="text" id="reabrirCodigo" placeholder="B-012"></div>
+      <div class="campo"><label for="reabrirJurado">Jurado</label><select id="reabrirJurado"><option value="1">Jurado 1</option><option value="2">Jurado 2</option><option value="3">Jurado 3</option></select></div>
+    </div>
+    <div class="campo"><label for="reabrirMotivo">Motivo</label><input type="text" id="reabrirMotivo" maxlength="400"></div>
+    <button class="boton fantasma" id="btnReabrir">Reabrir evaluación</button>
+    <div id="salidaReabrir" style="margin-top:12px"></div>
+    <? } ?>
+    <? if (puede(rol, 'cerrar_resultados')) { ?>
+    <h3 style="margin:18px 0 8px">Cerrar resultados</h3>
+    <p class="pista">Exige las 3 evaluaciones enviadas de cada audición, ningún empate sin acta y ninguna descalificación pendiente.
+      Después se bloquean las evaluaciones y el Top 10 queda definitivo; entonces se envía el correo RESULTADO_FINAL desde Comunicación.</p>
+    <button class="boton" id="btnCerrarResultados">Cerrar resultados</button>
+    <div id="salidaCierre" style="margin-top:12px"></div>
+    <? } ?>
+  </div>
+  <? } ?>
   <? } ?>
 
   <? if (puede(rol, 'registro_enmascarado')) { ?>
@@ -144,8 +182,9 @@
     <p class="pista">Cédula, correo y teléfono enmascarados. Para operar con datos completos se usa el panel de logística.</p>
     <div class="rejilla dos" style="margin-bottom:12px">
       <input type="text" id="buscarEnm" placeholder="Nombre, código o GRP">
-      <select id="filtroEnm"><option value="TODOS">Todos</option><option value="APTO">APTO</option><option value="REVISION">REVISIÓN</option>
-        <option value="CON_CODIGO">Con código</option><option value="AGRUPACIONES">Dúos y agrupaciones</option></select>
+      <select id="filtroEnm"><option value="TODOS">Todos</option><option value="POR_REVISAR">Por revisar</option><option value="APTO">APTO</option>
+        <option value="EN_REVISION">EN REVISIÓN</option><option value="NO_APTO">NO APTO</option><option value="CON_CODIGO">Con código</option>
+        <option value="SUPLENTES">Suplentes</option><option value="RETIRADOS">Retirados</option><option value="AGRUPACIONES">Dúos y agrupaciones</option></select>
     </div>
     <button class="boton fantasma chico" id="btnEnm" style="margin-bottom:12px">Consultar</button>
     <div id="salidaEnm"></div>
@@ -167,6 +206,9 @@ document.addEventListener('DOMContentLoaded', function () {
   if ($('#btnResultados')) $('#btnResultados').addEventListener('click', calcularResultados);
   if ($('#btnComite')) $('#btnComite').addEventListener('click', recordCommitteeDecision);
   if ($('#btnEnm')) $('#btnEnm').addEventListener('click', loadMaskedRegistry);
+  if ($('#btnDq')) $('#btnDq').addEventListener('click', loadDisqualifications);
+  if ($('#btnReabrir')) $('#btnReabrir').addEventListener('click', reopenEvaluation);
+  if ($('#btnCerrarResultados')) $('#btnCerrarResultados').addEventListener('click', closeResults);
   $('#btnSimular').addEventListener('click', function () { SIMULATED_TIME = $('#horaSimulada').value; cargar(); });
   $('#btnAhora').addEventListener('click', function () { SIMULATED_TIME = ''; $('#horaSimulada').value = ''; cargar(); });
   $$('.enlace-tabla').forEach(function (b) {
@@ -190,7 +232,9 @@ function pintar(m) {
     '<span class="chip">Inscritos <b>' + m.inscritos + '</b></span>' +
     '<span class="chip">Con código <b>' + m.con_codigo + '</b></span>' +
     '<span class="chip">Realizadas <b>' + m.realizadas + '</b></span>' +
-    (m.requiere_comite ? '<span class="chip" style="border-color:var(--alerta)">Requiere comité</span>' : '');
+    '<span class="chip">Lista <b>' + escaparHtml(m.lista_oficial) + '</b></span>' +
+    (m.requiere_comite ? '<span class="chip" style="border-color:var(--alerta)">Empate: requiere acta</span>' : '') +
+    (m.resultados_cerrados ? '<span class="chip" style="border-color:var(--ok)">Resultados cerrados</span>' : '');
 
   var op = m.operativo;
   $('#opHora').textContent = op.hora + (SIMULATED_TIME ? ' (simulada)' : '');
@@ -201,22 +245,31 @@ function pintar(m) {
     : [['Fase', op.etiqueta, ''], ['Contingencia (total)', op.contingencia, '']]).map(metricTile).join('');
 
   $('#metricas').innerHTML = [
-    ['Inscritos', m.inscritos, ''], ['Válidos', m.validos, ''], ['Únicos', m.unicos, ''], ['Duplicados', m.duplicados, ''],
-    ['Aptos', m.aptos, ''], ['En revisión', m.revision, m.revision ? 'destacada' : ''], ['Con código', m.con_codigo, 'destacada'],
-    ['Cupos libres', m.cupos_libres, ''], ['Incompletos', m.incompletos, ''], ['No cumplen', m.no_cumplen, ''],
+    ['Inscritos', m.inscritos, ''], ['Por revisar', m.recibidos + m.revision, (m.recibidos + m.revision) ? 'destacada' : ''],
+    ['Únicos', m.unicos, ''], ['Duplicados', m.duplicados, ''],
+    ['Aptos', m.aptos, ''], ['Con código', m.con_codigo, 'destacada'], ['Suplentes', m.bolsa.suplentes, ''],
+    ['Fuera de bolsa', m.bolsa.fuera, ''], ['Retirados', m.bolsa.retirados, ''], ['Reemplazos', m.bolsa.reemplazos, ''],
+    ['Cupos ofrecidos', m.cupos.OFRECIDO, ''], ['Vacantes', m.cupos.VACANTE_SIN_REEMPLAZO, ''],
+    ['Confirmaron (22-oct)', m.confirmacion.si, ''], ['Sin respuesta', m.confirmacion.sin_respuesta, ''],
+    ['Incompletos', m.incompletos, ''], ['No aptos', m.no_cumplen, ''],
     ['Solistas', m.solistas, ''], ['Dúos', m.duos, ''], ['Agrupaciones', m.agrupaciones, ''],
     ['Horarios asignados', m.horarios, ''], ['Reasignados', m.reasignados, ''],
     ['Cambios pendientes', m.cambios_pendientes, m.cambios_pendientes ? 'destacada' : ''],
     ['Check-ins', m.check_ins, ''], ['Precola', m.precola, ''], ['En audición', m.en_audicion, ''],
     ['Realizadas', m.realizadas, 'destacada'], ['No show', m.no_show, ''], ['Contingencia', m.contingencia, ''],
     ['No audicionados', m.no_audicionados, ''],
-    ['Promedio global', m.promedio_global === null ? '—' : m.promedio_global, '']
+    ['Promedio global', m.promedio_global === null ? '—' : m.promedio_global, ''],
+    ['Evaluaciones completas', m.evaluaciones.COMPLETA + m.evaluaciones.BLOQUEADA, ''], ['Evaluaciones parciales', m.evaluaciones.PARCIAL, ''],
+    ['DQ pendientes', m.evaluaciones.DQ_PENDIENTE, m.evaluaciones.DQ_PENDIENTE ? 'destacada' : ''],
+    ['Correos enviados', m.correos.ENVIADO, ''], ['Correos en cola', m.correos.PENDIENTE, ''],
+    ['Correos fallidos', m.correos.FALLIDO, m.correos.FALLIDO ? 'destacada' : '']
   ].map(metricTile).join('');
 
   var g = m.integrantes;
   $('#resGrupos').innerHTML = '<div class="rejilla metricas">' + [
-    ['Grupos con código', g.grupos_con_codigo, ''], ['Integrantes declarados', g.declarados, ''],
-    ['Autorizados', g.autorizados, 'destacada'], ['Grupos completos', g.grupos_completos, '']].map(metricTile).join('') + '</div>';
+    ['Proyectos con código', g.grupos_con_codigo, ''], ['Intérpretes declarados', g.declarados, ''],
+    ['Con firma', g.autorizados, 'destacada'], ['Proyectos completos', g.grupos_completos, ''],
+    ['Equipo de trabajo', g.equipo, '']].map(metricTile).join('') + '</div>';
   var chips = function (obj) {
     var k = Object.keys(obj || {});
     return k.length ? k.map(function (x) { return '<span class="chip">' + escaparHtml(x) + ' <b>' + obj[x] + '</b></span>'; }).join(' ') : '<span class="pista">Sin datos.</span>';
@@ -337,47 +390,106 @@ function unrankedNote(r) {
   return '<div class="aviso info" style="margin-top:12px"><b>Todavía fuera del ranking</b>' + lines.join('<br>') + '</div>';
 }
 
+var RESULTS = null;
+
 function calcularResultados() {
   var b = $('#btnResultados'); ocupado(b, true, 'Calculando...');
   llamar('resultados').then(function (r) {
     ocupado(b, false);
+    RESULTS = r;
+    var cuts = r.cortes || [];
     $('#salidaResultados').innerHTML =
-      (r.requiere_comite
-        ? '<div class="aviso alerta"><b>Empate en el corte</b>El desempate automático ' +
-          '(Performance → Talento → Identidad) no resolvió entre: ' +
-          r.empatados.map(function (x) { return escaparHtml(x.code + ' ' + (x.artistic_name || '') + ' (' + x.artist_final + ')'); }).join(', ') +
-          '. Requiere deliberación documentada del comité.</div>'
-        : '') +
-      (r.deliberacion ? '<div class="aviso info"><b>Acta vigente ' + escaparHtml(r.deliberacion.deliberation_id) + '</b>Orden: ' +
-        escaparHtml(r.deliberacion.codes_in_order.join(', ')) + '</div>' : '') +
-      '<div class="tabla-envoltura"><table><thead><tr><th>#</th><th>Código</th><th>Artista</th>' +
-      '<th>Disciplina</th><th>J1</th><th>J2</th><th>J3</th><th>Final</th><th>Sel.</th></tr></thead><tbody>' +
+      (r.resultados_cerrados ? '<div class="aviso ok"><b>Resultados cerrados</b>El Top ' + r.top_publico + ' es definitivo.</div>' : '') +
+      cuts.map(function (c) {
+        return '<div class="aviso alerta"><b>Empate en el corte ' + c.cut + ' (TIE_REVIEW_REQUIRED)</b>Presencia escénica + Factor arena no resolvió entre: ' +
+          c.empatados.map(function (x) { return escaparHtml(x.code + ' ' + (x.artistic_name || '') + ' (' + scoreFmt(x.artist_final) + ')'); }).join(', ') +
+          '. Requiere acta con método, participantes y resultado. El sistema no decide solo.</div>';
+      }).join('') +
+      (r.deliberaciones || []).map(function (d) {
+        return '<div class="aviso info"><b>Acta vigente ' + escaparHtml(d.deliberation_id) + ' · corte ' + d.cut_position + '</b>' +
+          escaparHtml(d.method) + ' · orden ' + escaparHtml(d.codes_in_order.join(', ')) + ' · ' + escaparHtml(d.participants) + '</div>';
+      }).join('') +
+      '<div class="tabla-envoltura"><table><thead><tr><th>#</th><th>Código</th><th>Artista</th><th>J1</th><th>J2</th><th>J3</th>' +
+      '<th>Final</th><th>Desempate</th><th>Estado</th></tr></thead><tbody>' +
       r.ranking.map(function (x) {
-        return '<tr' + (String(x.seleccionado).toUpperCase() === 'SI' ? ' style="background:rgba(255,212,0,.07)"' : '') +
+        return '<tr' + (x.ranking_status === 'TOP10_SELECCIONADO' ? ' style="background:rgba(255,212,0,.07)"' : '') +
           '><td>' + escaparHtml(x.posicion) + '</td><td><b>' + escaparHtml(x.code) + '</b></td>' +
-          '<td>' + escaparHtml(x.artistic_name) + '</td><td>' + escaparHtml(x.discipline) + '</td>' +
-          '<td>' + escaparHtml(x.jurado_1) + '</td><td>' + escaparHtml(x.jurado_2) + '</td>' +
-          '<td>' + escaparHtml(x.jurado_3) + '</td><td><b>' + escaparHtml(x.artist_final) + '</b></td>' +
-          '<td>' + (String(x.seleccionado).toUpperCase() === 'SI' ? '★' : '') + '</td></tr>';
+          '<td>' + escaparHtml(x.artistic_name) + '</td>' +
+          '<td>' + escaparHtml(x.jurado_1) + '</td><td>' + escaparHtml(x.jurado_2) + '</td><td>' + escaparHtml(x.jurado_3) + '</td>' +
+          '<td><b>' + scoreFmt(x.artist_final) + '</b></td><td>' + scoreFmt(x.tie_break) + '</td><td>' + etiquetaEstado(x.ranking_status) +
+          (x.dq ? ' ' + etiquetaEstado('DQ_PENDIENTE') : '') + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
-      // who is not ranked yet, and why (e.g. fewer juror cards than the minimum)
       unrankedNote(r);
     if ($('#formComite')) {
-      $('#formComite').classList.toggle('oculto', !r.requiere_comite);
-      if (r.requiere_comite && !$('#ordenComite').value) $('#ordenComite').value = r.empatados.map(function (x) { return x.code; }).join(', ');
+      $('#formComite').classList.toggle('oculto', !cuts.length || r.resultados_cerrados);
+      $('#corteComite').innerHTML = cuts.map(function (c) { return '<option value="' + c.cut + '">Corte ' + c.cut + '</option>'; }).join('');
+      var fill = function () {
+        var c = cuts.filter(function (x) { return String(x.cut) === $('#corteComite').value; })[0];
+        if (c) $('#ordenComite').value = c.empatados.map(function (x) { return x.code; }).join(', ');
+      };
+      $('#corteComite').onchange = fill;
+      fill();
     }
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaResultados', 'error', 'Error', e.message); });
 }
 
+function scoreFmt(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  return (Math.round(Number(v) * 100) / 100).toFixed(2);
+}
+
 function recordCommitteeDecision() {
-  if (!confirm('Se registrará el acta y el orden decidido. Reemplaza cualquier acta anterior. ¿Continuar?')) return;
+  if (!confirm('Se registrará el acta del corte ' + $('#corteComite').value + '. Reemplaza el acta anterior de ese corte. ¿Continuar?')) return;
   var b = $('#btnComite'); ocupado(b, true, 'Registrando…');
-  llamar('registrar_deliberacion', { codes_in_order: $('#ordenComite').value, acta: $('#actaComite').value })
+  llamar('registrar_deliberacion', { cut_position: $('#corteComite').value, method: $('#metodoComite').value,
+    codes_in_order: $('#ordenComite').value, participants: $('#participantesComite').value, result: $('#resultadoComite').value,
+    acta: $('#resultadoComite').value })
     .then(function (r) {
       ocupado(b, false);
-      mostrarAviso('#salidaComite', 'ok', 'Acta ' + r.deliberation_id + ' registrada', 'Orden: ' + r.codes_in_order.join(', '));
+      mostrarAviso('#salidaComite', 'ok', 'Acta ' + r.deliberation_id + ' registrada', 'Corte ' + r.cut_position + ' · orden: ' + r.codes_in_order.join(', '));
       calcularResultados();
     }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaComite', 'error', 'No se pudo registrar', e.message); });
+}
+
+function loadDisqualifications() {
+  var b = $('#btnDq'); ocupado(b, true, 'Cargando…');
+  llamar('listar_descalificaciones').then(function (r) {
+    ocupado(b, false);
+    $('#salidaDq').innerHTML = r.reportes.length ? '<div class="tabla-envoltura"><table><thead><tr><th>Código</th><th>Causal</th><th>Nota</th><th>Reportó</th><th>Estado</th><th></th></tr></thead><tbody>' +
+      r.reportes.map(function (d) {
+        return '<tr><td><b>' + escaparHtml(d.code) + '</b></td><td>' + escaparHtml(d.causa_texto) + '</td><td>' + escaparHtml(d.nota) + '</td><td>' +
+          escaparHtml(d.reportado_por + ' · ' + d.reportado_at) + '</td><td>' + etiquetaEstado(d.estado) + (d.motivo ? '<br><span class="pista">' + escaparHtml(d.motivo) + '</span>' : '') + '</td><td>' +
+          (d.estado === 'PENDIENTE' ? '<button class="boton chico" data-dq="' + d.dq_id + '" data-decision="VALIDADA">Validar</button> ' +
+            '<button class="boton chico fantasma" data-dq="' + d.dq_id + '" data-decision="DESCARTADA">Descartar</button>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : '<p class="pista">Sin reportes.</p>';
+    $$('[data-dq]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var motivo = prompt((btn.dataset.decision === 'VALIDADA' ? 'Validar descalificación' : 'Descartar reporte') + ': escribe el motivo (queda registrado):');
+        if (!motivo) return;
+        llamar('resolver_descalificacion', { dq_id: btn.dataset.dq, decision: btn.dataset.decision, motivo: motivo })
+          .then(function () { loadDisqualifications(); calcularResultados(); })
+          .catch(function (e) { mostrarAviso('#salidaDq', 'error', 'Error', e.message); });
+      });
+    });
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaDq', 'error', 'Error', e.message); });
+}
+
+function reopenEvaluation() {
+  var b = $('#btnReabrir'); ocupado(b, true, 'Reabriendo…');
+  llamar('reabrir_evaluacion', { code: $('#reabrirCodigo').value.trim().toUpperCase(), jurado: $('#reabrirJurado').value, motivo: $('#reabrirMotivo').value })
+    .then(function (r) { ocupado(b, false); mostrarAviso('#salidaReabrir', 'ok', 'Evaluación reabierta', r.mensaje); })
+    .catch(function (e) { ocupado(b, false); mostrarAviso('#salidaReabrir', 'error', 'No se pudo reabrir', e.message); });
+}
+
+function closeResults() {
+  var word = prompt('Cerrar resultados bloquea las evaluaciones y deja el Top 10 definitivo. Escribe CERRAR para confirmar:');
+  if (!word) return;
+  var b = $('#btnCerrarResultados'); ocupado(b, true, 'Cerrando…');
+  llamar('cerrar_resultados', { confirmacion: word }).then(function (r) {
+    ocupado(b, false);
+    mostrarAviso('#salidaCierre', 'ok', 'Resultados cerrados', r.mensaje + ' Top: ' + r.top10.map(function (x) { return x.code; }).join(', '));
+    calcularResultados();
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaCierre', 'error', 'Todavía no se puede cerrar', e.message); });
 }
 
 function loadMaskedRegistry() {

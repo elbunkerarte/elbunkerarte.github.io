@@ -576,10 +576,12 @@ function accionResolverCoincidenciaGrupo(datos, sesion) {
       changes.duplicate_flag = true;
       changes.duplicate_reason = 'GRUPO_REPETIDO';
       changes.registro_principal = row.group_match_ref;
-      changes.eligibility_status = normalizarTexto(row.code) ? ESTADO_ELEGIBILIDAD.REVISION : ESTADO_ELEGIBILIDAD.DUPLICADO;
+      changes.eligibility_status = normalizarTexto(row.code) ? ESTADO_ELEGIBILIDAD.EN_REVISION : ESTADO_ELEGIBILIDAD.DUPLICADO;
     } else {
       changes.group_match_status = 'CONFIRMADA_DISTINTA';
-      var others = rows.filter(function (r) { return r.submission_id !== row.submission_id; });
+      var others = rows.filter(function (r) {
+        return r.submission_id !== row.submission_id && normalizeEligibility(r.eligibility_status) !== ESTADO_ELEGIBILIDAD.INCOMPLETO;
+      });
       var verdict = validarInscripcion(rowAsSubmission(row), opcionesValidacion());
       var dup = detectarDuplicado({
         submission_id: row.submission_id, normalized_id_number: normalizarCedula(row.id_number),
@@ -587,11 +589,17 @@ function accionResolverCoincidenciaGrupo(datos, sesion) {
       }, others);
       var status = verdict.eligibility_status;
       if (dup.duplicate_flag) status = ESTADO_ELEGIBILIDAD.DUPLICADO;
-      else if (dup.alerta && status === ESTADO_ELEGIBILIDAD.APTO) status = ESTADO_ELEGIBILIDAD.REVISION;
+      else if (dup.alerta && status === ESTADO_ELEGIBILIDAD.APTO) status = ESTADO_ELEGIBILIDAD.EN_REVISION;
       changes.eligibility_status = status;
     }
+    changes.eligibility_auto = changes.eligibility_status;
+    changes.eligibility_decided_at = isoWithOffset();
+    changes.eligibility_decided_by = sesion.alias;
     actualizarFila(HOJA.REGISTRO, row._fila, changes);
     registrar(sesion.alias, sesion.rol, 'GRUPO_COINCIDENCIA_' + decision, row.submission_id, row.group_match_ref);
+    var fresh = leerHoja(HOJA.REGISTRO).filter(function (r) { return r.submission_id === row.submission_id; })[0];
+    queueAptitudeEmailLocked(fresh, normalizeEligibility(changes.eligibility_status));
+    refreshPoolLocked();
     return { submission_id: row.submission_id, decision: decision, eligibility_status: changes.eligibility_status };
   });
 }

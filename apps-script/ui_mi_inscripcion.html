@@ -11,16 +11,17 @@
 <div class="envoltura">
   <?!= incluir('ui_cabecera') ?>
   <h2 class="titulo-pagina">Mi inscripción</h2>
-  <p style="color:var(--tenue);margin-top:0">Consulta tu estado, tu código y horario, el enlace de tu agrupación y envía tu pista.</p>
+  <p style="color:var(--tenue);margin-top:0">Consulta tu estado, tu código y horario, el enlace de equipo y firmas, envía tu pista,
+    confirma tu asistencia o libera tu cupo si ya no puedes asistir. Este es el estado oficial de tu inscripción.</p>
 
   <div id="avisoGlobal" role="alert" aria-live="polite"></div>
 
   <form class="tarjeta" id="formConsulta" novalidate>
     <div class="rejilla dos">
       <div class="campo">
-        <label for="id_number">Tu número de cédula <span class="req">*</span></label>
+        <label for="id_number">Tu número de documento <span class="req">*</span></label>
         <input type="text" id="id_number" inputmode="numeric" maxlength="15" autocomplete="off">
-        <p class="ayuda">Si eres agrupación, la cédula del líder que hizo la inscripción.</p>
+        <p class="ayuda">Si eres dúo o agrupación, el documento de quien hizo la inscripción.</p>
         <div class="error"></div>
       </div>
       <div class="campo">
@@ -83,33 +84,92 @@ function factHtml(k, v) {
   return '<div class="hecho"><div class="k">' + k + '</div><div class="v" style="font-size:22px">' + value + '</div></div>';
 }
 
+function stateTag(value, label) {
+  return '<span class="etiqueta ' + claseEstado(value) + '">' + escaparHtml(label || value) + '</span>';
+}
+
 function render(r) {
   $('#avisoGlobal').innerHTML = '';
+  var a = r.acciones || {};
   var html = '<section class="tarjeta" style="border-color:var(--amarillo)">' +
     '<div style="color:var(--tenue);font-size:13px;letter-spacing:.1em">' + escaparHtml(({ SOLISTA: 'Solista', DUO: 'Dúo', AGRUPACION: 'Agrupación' })[r.participation_mode] || r.participation_mode) + ' · ' + escaparHtml(r.submission_id) + '</div>' +
     '<div class="codigo-grande" style="font-size:34px;color:var(--texto)">' + escaparHtml(r.artistic_name || '') + '</div>' +
-    '<p style="margin:8px 0 0">' + etiquetaEstado(r.eligibility_status) + ' ' + escaparHtml(r.estado_texto) + '</p></section>';
+    '<p style="margin:8px 0 0">' + stateTag(r.eligibility_status, r.estado_label) +
+    (r.pool_status === 'SUPLENTE' ? ' ' + stateTag('SUPLENTE', 'Suplente') : '') + ' ' + escaparHtml(r.estado_texto) + '</p>' +
+    (r.pool_status === 'SUPLENTE' ? '<p class="pista" style="margin:8px 0 0">Ser suplente no es ser seleccionado: significa que puedes recibir un turno si alguien libera el suyo. Si pasa, te escribimos y tendrás un plazo para aceptarlo aquí.</p>' : '') +
+    '</section>';
+
+  if (r.oferta) {
+    var o = r.oferta;
+    html += '<section class="tarjeta" style="border-color:var(--ok)"><h2>Se liberó un cupo para ti</h2>' +
+      '<div class="codigo-grande">' + escaparHtml(o.slot_code) + '</div>' +
+      '<div class="hechos" style="margin-top:14px">' + factHtml('Fecha', r.fecha_texto) + factHtml('Llegada', o.hora_llegada) +
+      factHtml('Audición', o.hora_audicion) + factHtml('Lugar', r.lugar) + '</div>' +
+      '<p style="margin:0 0 12px">Responde antes de <b>' + escaparHtml(o.vence_texto) + '</b>. Si no respondes, el cupo pasa a la siguiente persona.</p>' +
+      '<div class="rejilla dos"><button type="button" class="boton" id="btnAceptarOferta">ACEPTAR EL CUPO</button>' +
+      '<button type="button" class="boton fantasma" id="btnRechazarOferta">No puedo</button></div>' +
+      '<div id="salidaOferta" style="margin-top:12px"></div></section>';
+  }
+
+  if (r.withdrawal_status) {
+    html += '<section class="tarjeta"><h2>Cupo liberado</h2><p style="margin:0">' + stateTag(r.withdrawal_status, r.withdrawal_status === 'RETIRO_FINAL' ? 'Retiro final' : 'Retirado') +
+      ' Liberaste el cupo ' + escaparHtml(r.previous_code) + '. Lo recibe la siguiente persona de la bolsa de suplentes. Gracias por avisar.</p></section>';
+  }
 
   if (r.code) {
     html += '<section class="tarjeta"><h2>Tu código y horario</h2><div class="codigo-grande">' + escaparHtml(r.code) + '</div>' +
       '<div class="hechos" style="margin-top:14px">' + factHtml('Fecha', r.fecha_texto) + factHtml('Llegada', r.hora_llegada) +
       factHtml('Audición', r.hora_audicion) + factHtml('Lugar', r.lugar) + '</div>' +
-      '<p class="pista" style="margin:0">Tu código no cambia nunca. Si tienes un impedimento real: ' +
-      '<a href="' + BASE_URL + '?p=cambio-horario&code=' + encodeURIComponent(r.code) + '">solicitar cambio de horario</a> (una sola vez).' +
-      (r.change_status && r.change_status !== 'SIN_SOLICITUD' ? ' Estado de tu solicitud: ' + etiquetaEstado(r.change_status) : '') + '</p></section>';
+      (a.lista_bloqueada
+        ? '<p class="pista" style="margin:0">La lista oficial del evento ya está cerrada. Para cualquier novedad escríbenos por WhatsApp.</p>'
+        : '<p class="pista" style="margin:0">Tu código no cambia nunca. Si tienes un impedimento real con tu horario: ' +
+          '<a href="' + BASE_URL + '?p=cambio-horario&code=' + encodeURIComponent(r.code) + '">solicitar cambio de horario</a> (una sola vez; tu horario no cambia hasta que producción lo apruebe).' +
+          (r.change_status && r.change_status !== 'SIN_SOLICITUD' ? ' Estado de tu solicitud: ' + etiquetaEstado(r.change_status) : '') + '</p>') +
+      '</section>';
+
+    if (r.final_confirmation === 'SI') {
+      html += '<section class="tarjeta" style="border-color:var(--ok)"><h2>Asistencia confirmada</h2><p style="margin:0">' +
+        stateTag('CONFIRMADO', 'Confirmado') + ' Te esperamos. Tu código y horario no cambian.</p></section>';
+    } else if (a.confirmacion_final) {
+      html += '<section class="tarjeta" style="border-color:var(--amarillo)"><h2>Confirmación final de asistencia</h2>' +
+        '<p style="margin:0 0 12px">Confírmanos antes de ' + escaparHtml(a.confirmacion_hasta_texto) + ' si vendrás. Confirmar no cambia tu horario.</p>' +
+        '<div class="rejilla dos"><button type="button" class="boton" id="btnConfirmarSi">SÍ CONFIRMO</button>' +
+        '<button type="button" class="boton fantasma" id="btnConfirmarNo">NO PODRÉ ASISTIR</button></div>' +
+        '<div id="salidaConfirmacion" style="margin-top:12px"></div></section>';
+    }
+
+    if (a.retiro && !a.confirmacion_final) {
+      html += '<section class="tarjeta"><h2>¿Ya no puedes asistir?</h2>' +
+        '<p class="pista">Si ya sabes que no podrás venir, libera tu cupo para que lo reciba un suplente. Solo se libera tu cupo: nadie más cambia de horario.</p>' +
+        '<button type="button" class="boton fantasma" id="btnNoPuedo">NO PUEDO ASISTIR — SOLICITAR REEMPLAZO</button>' +
+        '<div id="salidaRetiro" style="margin-top:12px"></div></section>';
+    } else if (!a.retiro && !a.lista_bloqueada && a.retiro_desde_texto) {
+      html += '<p class="pista">Si más adelante no puedes asistir, desde el ' + escaparHtml(a.retiro_desde_texto) +
+        ' podrás liberar tu cupo aquí para que lo reciba un suplente.</p>';
+    }
   }
 
   if (r.group) {
     var g = r.group;
-    html += '<section class="tarjeta"><h2>Tu agrupación ' + escaparHtml(g.code) + '</h2>' +
-      '<p style="margin:0 0 10px"><b>' + g.authorized + '</b> de <b>' + (g.declared || g.registered) + '</b> integrantes autorizados · Clave <b style="letter-spacing:.12em">' + escaparHtml(g.key) + '</b></p>' +
-      '<div class="tabla-envoltura" style="margin-bottom:12px"><table><thead><tr><th>Integrante</th><th>Rol</th><th>Estado</th></tr></thead><tbody>' +
-      g.members.map(function (m) { return '<tr><td>' + escaparHtml(m.name) + (m.leader ? ' (líder)' : '') + '</td><td>' + escaparHtml(m.role) + '</td><td>' + etiquetaEstado(m.status) + '</td></tr>'; }).join('') +
+    var group = r.participation_mode === 'DUO' || r.participation_mode === 'AGRUPACION';
+    html += '<section class="tarjeta"><h2>Equipo y firmas ' + escaparHtml(g.code) + '</h2>' +
+      '<p style="margin:0 0 10px"><b>' + g.authorized + '</b> de <b>' + g.declared + '</b> ' + (group ? 'integrantes' : 'intérpretes') +
+      ' con firma · Equipo de trabajo registrado: <b>' + (g.crew_registered || 0) + '</b> · Clave <b style="letter-spacing:.12em">' + escaparHtml(g.key) + '</b></p>' +
+      '<div class="tabla-envoltura" style="margin-bottom:12px"><table><thead><tr><th>Persona</th><th>Rol</th><th>Firma</th><th>Estado</th></tr></thead><tbody>' +
+      g.members.map(function (m) {
+        return '<tr><td>' + escaparHtml(m.name) + (m.leader ? ' (inscribe)' : '') + '</td><td>' + escaparHtml(m.role || '') +
+          (m.crew ? ' · equipo' : '') + '</td><td>' + (m.signed ? 'Sí' : 'No') + '</td><td>' + etiquetaEstado(m.status) + '</td></tr>';
+      }).join('') +
       '</tbody></table></div>' +
-      '<div class="copiable">' + escaparHtml(g.link) + '</div>' +
-      '<div class="rejilla dos" style="margin-top:12px"><button type="button" class="boton fantasma" id="btnCopiarGrupo">Copiar enlace</button>' +
-      '<a class="boton" target="_blank" rel="noopener" href="https://wa.me/?text=' +
-      encodeURIComponent('Cada integrante debe dar su propia autorización para EL BÚNKER aquí: ' + g.link) + '">Enviar por WhatsApp</a></div></section>';
+      (g.open
+        ? '<p class="pista">' + (group ? 'Cada integrante firma su propia autorización en este enlace. ' : '') +
+          'Si vienes con equipo de trabajo (manager, técnico, fotógrafo…), cada persona se registra aquí para la póliza del lugar. No ocupa cupo.</p>' +
+          '<div class="copiable">' + escaparHtml(g.link) + '</div>' +
+          '<div class="rejilla dos" style="margin-top:12px"><button type="button" class="boton fantasma" id="btnCopiarGrupo">Copiar enlace</button>' +
+          '<a class="boton" target="_blank" rel="noopener" href="https://wa.me/?text=' +
+          encodeURIComponent('Cada persona de nuestro proyecto firma su propia autorización para EL BÚNKER aquí: ' + g.link) + '">Enviar por WhatsApp</a></div>'
+        : '<p class="pista" style="margin:0">El registro de equipo y firmas ya está cerrado.</p>') +
+      '</section>';
   }
 
   var t = r.track;
@@ -135,13 +195,62 @@ function render(r) {
 
   if (r.whatsapp_oficial) {
     html += '<section class="tarjeta"><h2>Guarda nuestro número</h2><p style="margin:0 0 12px">Guarda el <b>' +
-      escaparHtml(String(r.whatsapp_oficial).replace(/^(\d{3})(\d{3})(\d{4})$/, '$1 $2 $3')) + '</b> como <b>' + escaparHtml(r.whatsapp_nombre) + '</b>: desde ahí enviamos códigos, horarios y novedades.</p>' +
+      escaparHtml(String(r.whatsapp_oficial).replace(/^(\d{3})(\d{3})(\d{4})$/, '$1 $2 $3')) + '</b> como <b>' + escaparHtml(r.whatsapp_nombre) + '</b>: desde ahí te escribimos novedades. Revisa también tu correo (y Spam o Promociones).</p>' +
       '<button type="button" class="boton fantasma" id="btnGuardarContacto">Guardar contacto</button></section>';
   }
   $('#estado').innerHTML = html;
   if ($('#btnCopiarGrupo')) $('#btnCopiarGrupo').addEventListener('click', function () { copyText(r.group.link, $('#btnCopiarGrupo')); });
   if ($('#btnGuardarContacto')) $('#btnGuardarContacto').addEventListener('click', function () { downloadContact(r.whatsapp_oficial, r.whatsapp_nombre); });
   if ($('#btnSubir')) $('#btnSubir').addEventListener('click', uploadTrack);
+  if ($('#btnAceptarOferta')) $('#btnAceptarOferta').addEventListener('click', function () { answerOffer('ACEPTAR'); });
+  if ($('#btnRechazarOferta')) $('#btnRechazarOferta').addEventListener('click', function () {
+    if (window.confirm('¿Seguro? Si respondes que no puedes, el cupo pasa a la siguiente persona y ya no recibirás nuevas ofertas.')) answerOffer('RECHAZAR');
+  });
+  if ($('#btnConfirmarSi')) $('#btnConfirmarSi').addEventListener('click', function () { finalConfirmation('SI'); });
+  if ($('#btnConfirmarNo')) $('#btnConfirmarNo').addEventListener('click', function () { askSecondConfirmation('#salidaConfirmacion', function (w) { finalConfirmation('NO', w); }); });
+  if ($('#btnNoPuedo')) $('#btnNoPuedo').addEventListener('click', function () { askSecondConfirmation('#salidaRetiro', withdraw); });
+}
+
+/** Second, explicit confirmation before freeing a slot: the person types the phrase. */
+function askSecondConfirmation(box, onConfirm) {
+  var word = CURRENT.datos.acciones.palabra_confirmacion;
+  $(box).innerHTML = '<div class="aviso alerta"><b>Confirma que liberas tu cupo</b>Tu cupo ' + escaparHtml(CURRENT.datos.code) +
+    ' pasará a un suplente y <b>no se puede deshacer</b>. Para confirmar escribe <b>' + escaparHtml(word) + '</b>.</div>' +
+    '<div class="campo"><input type="text" id="palabraConfirmacion" autocomplete="off" placeholder="' + escaparHtml(word) + '"><div class="error"></div></div>' +
+    '<button type="button" class="boton" id="btnConfirmarLiberar">Sí, liberar mi cupo</button>';
+  $('#btnConfirmarLiberar').addEventListener('click', function () {
+    var typed = $('#palabraConfirmacion').value.trim().toUpperCase();
+    if (typed !== word) { markError('palabraConfirmacion', 'Escribe exactamente: ' + word); return; }
+    onConfirm(typed);
+  });
+}
+
+function identityPayload(extra) {
+  return Object.assign({}, CURRENT.consulta, { form_elapsed_ms: formElapsedMs(), source: 'web' }, extra || {});
+}
+
+function withdraw(word) {
+  var b = $('#btnConfirmarLiberar');
+  ocupado(b, true, 'Liberando…');
+  llamar('retirarme', identityPayload({ confirmacion: word, motivo: 'No puede asistir' })).then(function (res) {
+    mostrarAviso('#avisoGlobal', 'ok', 'Cupo liberado', res.mensaje);
+    lookUp();
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaRetiro', 'error', 'No pudimos liberar el cupo', e.message); });
+}
+
+function finalConfirmation(answer, word) {
+  llamar('confirmacion_final', identityPayload({ respuesta: answer, confirmacion: word || '' })).then(function (res) {
+    mostrarAviso('#avisoGlobal', 'ok', answer === 'SI' ? 'Asistencia confirmada' : 'Registramos tu respuesta', res.mensaje);
+    lookUp();
+  }).catch(function (e) { mostrarAviso('#salidaConfirmacion', 'error', 'No pudimos registrar tu respuesta', e.message); });
+}
+
+function answerOffer(answer) {
+  var o = CURRENT.datos.oferta;
+  llamar('responder_oferta', identityPayload({ oferta_id: o.oferta_id, respuesta: answer })).then(function (res) {
+    mostrarAviso('#avisoGlobal', 'ok', answer === 'ACEPTAR' ? '¡Cupo asignado!' : 'Respuesta registrada', res.mensaje);
+    lookUp();
+  }).catch(function (e) { mostrarAviso('#salidaOferta', 'error', 'No pudimos registrar tu respuesta', e.message); });
 }
 
 function uploadTrack() {

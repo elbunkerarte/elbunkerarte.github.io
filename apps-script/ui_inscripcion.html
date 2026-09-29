@@ -25,68 +25,14 @@
   <form id="formulario" novalidate>
     <p class="pista" style="color:var(--tenue)">Los campos con <span class="req">*</span> son obligatorios. Inscríbete
       <b>una sola vez por proyecto</b>: si hay dos inscripciones con el mismo documento, vale la primera.</p>
+    <div class="pasos" aria-live="polite">
+      <div class="linea-pasos"><b id="tituloPaso">Tus datos</b><span id="contadorPaso">Paso 1 de 7</span></div>
+      <div class="barra"><i id="barraPaso" style="width:14%"></i></div>
+    </div>
 
-    <!-- ===== 1. PROYECTO ===== -->
-    <section class="tarjeta">
-      <h2><span class="n">1</span>Tu proyecto artístico</h2>
-      <p class="pista">Una agrupación cuenta como <b>una sola inscripción</b>, aunque tenga varios integrantes.</p>
-
-      <div class="campo" id="campoModalidad">
-        <span class="etiqueta-campo" id="lblModalidad">Modalidad de participación <span class="req">*</span></span>
-        <div class="opciones tres" role="radiogroup" aria-labelledby="lblModalidad">
-          <label class="opcion"><input type="radio" name="participation_mode" value="SOLISTA"> Solista</label>
-          <label class="opcion"><input type="radio" name="participation_mode" value="DUO"> Dúo</label>
-          <label class="opcion"><input type="radio" name="participation_mode" value="AGRUPACION"> Agrupación</label>
-        </div>
-        <input type="hidden" id="participation_mode">
-        <div class="error"></div>
-      </div>
-
-      <div class="campo">
-        <label for="artistic_name" id="lblNombreArtistico">Nombre artístico</label>
-        <input type="text" id="artistic_name" maxlength="80" autocomplete="off" placeholder="Como quieres que te presenten">
-        <p class="ayuda" id="ayudaNombreArtistico">Si no tienes, déjalo vacío.</p>
-        <div class="error"></div>
-      </div>
-
-      <div class="campo oculto" id="campoIntegrantes">
-        <label for="members_declared">Número de integrantes en escena <span class="req">*</span></label>
-        <input type="number" id="members_declared" min="2" max="<?= E.integrantes_max ?>" inputmode="numeric">
-        <p class="ayuda">Tú cuentas como integrante. Después de inscribirte recibirás un enlace para que <b>cada integrante</b>
-          dé su propia autorización: tú no puedes autorizar por otra persona.</p>
-        <div class="error"></div>
-      </div>
-
-      <div class="rejilla dos">
-        <div class="campo">
-          <label for="genre_primary">Género / propuesta principal <span class="req">*</span></label>
-          <input type="text" id="genre_primary" list="generos" maxlength="60" placeholder="Ej.: urbano, rock, salsa, rap">
-          <div class="error"></div>
-        </div>
-        <div class="campo">
-          <label for="genre_secondary">Género secundario <span style="color:var(--tenue);font-weight:400">(opcional)</span></label>
-          <input type="text" id="genre_secondary" list="generos" maxlength="60">
-        </div>
-      </div>
-      <datalist id="generos">
-        <option>Pop</option><option>Urbano</option><option>Reguetón</option><option>Rap / Hip hop</option>
-        <option>Trap</option><option>R&amp;B / Soul</option><option>Rock</option><option>Metal</option>
-        <option>Salsa</option><option>Tropical</option><option>Música popular</option><option>Regional mexicana</option>
-        <option>Vallenato</option><option>Balada</option><option>Folclor / Andina</option><option>Electrónica / DJ</option>
-        <option>Jazz / Blues</option><option>Fusión</option><option>Freestyle</option><option>Instrumental</option>
-        <option>Danza</option><option>Performance</option>
-      </datalist>
-
-      <div class="campo">
-        <label for="audition_description">Breve descripción de tu propuesta <span class="req">*</span></label>
-        <textarea id="audition_description" maxlength="600" placeholder="Qué vas a presentar y qué te hace diferente (máximo 600 caracteres)."></textarea>
-        <div class="error"></div>
-      </div>
-    </section>
-
-    <!-- ===== 2. DATOS ===== -->
-    <section class="tarjeta">
-      <h2><span class="n">2</span><span id="tituloDatos">Tus datos</span></h2>
+    <!-- ===== STEP 1: IDENTITY ===== -->
+    <section class="tarjeta paso" data-paso="1" data-titulo="Tus datos">
+      <h2><span class="n">1</span><span id="tituloDatos">Tus datos</span></h2>
       <p class="pista" id="pistaDatos">Los verificamos con tu documento original el día de la audición.</p>
 
       <div class="campo">
@@ -96,16 +42,23 @@
       </div>
       <div class="rejilla dos">
         <div class="campo">
-          <label for="id_number">Número de cédula <span class="req">*</span></label>
-          <input type="text" id="id_number" inputmode="numeric" autocomplete="off" maxlength="15" placeholder="Sin puntos ni comas">
+          <label for="document_type">Tipo de documento <span class="req">*</span></label>
+          <select id="document_type">
+            <? C.formularios.document_types.forEach(function (d) { ?><option value="<?= d.id ?>"><?= d.etiqueta ?></option><? }); ?>
+          </select>
           <div class="error"></div>
         </div>
         <div class="campo">
-          <label for="birth_date">Fecha de nacimiento <span class="req">*</span></label>
-          <input type="date" id="birth_date" max="<?= E.fecha ?>">
-          <p class="ayuda" id="ayudaEdad">Debes tener entre <?= E.edad_minima ?> y <?= E.edad_maxima ?> años cumplidos el <?= E.fecha_texto ?>.</p>
+          <label for="id_number">Número de documento <span class="req">*</span></label>
+          <input type="text" id="id_number" inputmode="numeric" autocomplete="off" maxlength="15" placeholder="Solo números, sin puntos">
           <div class="error"></div>
         </div>
+      </div>
+      <div class="campo">
+        <label for="birth_date">Fecha de nacimiento <span class="req">*</span></label>
+        <input type="date" id="birth_date" max="<?= E.fecha ?>">
+        <p class="ayuda" id="ayudaEdad">Debes tener entre <?= E.edad_minima ?> y <?= E.edad_maxima ?> años cumplidos el <?= E.fecha_texto ?>.</p>
+        <div class="error"></div>
       </div>
       <label class="check" id="campoMayoria">
         <input type="checkbox" id="adult_confirmation">
@@ -139,14 +92,73 @@
         <div class="campo">
           <label for="whatsapp">WhatsApp <span class="req">*</span></label>
           <input type="tel" id="whatsapp" inputmode="numeric" autocomplete="tel" maxlength="16" placeholder="3001234567">
-          <p class="ayuda">10 dígitos, empieza por 3. Por aquí te enviaremos tu código y tu horario.</p>
+          <p class="ayuda">10 dígitos, empieza por 3. Por aquí y por correo te escribiremos.</p>
           <div class="error"></div>
         </div>
       </div>
     </section>
 
-    <!-- ===== 3. PRESENTACIÓN ===== -->
-    <section class="tarjeta">
+    <!-- ===== STEP 2: PROJECT ===== -->
+    <section class="tarjeta paso" data-paso="2" data-titulo="Tu proyecto">
+      <h2><span class="n">2</span>Tu proyecto artístico</h2>
+      <p class="pista">Una agrupación cuenta como <b>una sola inscripción</b>, aunque tenga varios integrantes.</p>
+
+      <div class="campo" id="campoModalidad">
+        <span class="etiqueta-campo" id="lblModalidad">Modalidad de participación <span class="req">*</span></span>
+        <div class="opciones tres" role="radiogroup" aria-labelledby="lblModalidad">
+          <label class="opcion"><input type="radio" name="participation_mode" value="SOLISTA"> Solista</label>
+          <label class="opcion"><input type="radio" name="participation_mode" value="DUO"> Dúo</label>
+          <label class="opcion"><input type="radio" name="participation_mode" value="AGRUPACION"> Agrupación</label>
+        </div>
+        <input type="hidden" id="participation_mode">
+        <div class="error"></div>
+      </div>
+
+      <div class="campo">
+        <label for="artistic_name" id="lblNombreArtistico">Nombre artístico</label>
+        <input type="text" id="artistic_name" maxlength="80" autocomplete="off" placeholder="Como quieres que te presenten">
+        <p class="ayuda" id="ayudaNombreArtistico">Si no tienes, déjalo vacío.</p>
+        <div class="error"></div>
+      </div>
+
+      <div class="campo oculto" id="campoIntegrantes">
+        <label for="members_declared">Número de integrantes en escena <span class="req">*</span></label>
+        <input type="number" id="members_declared" min="2" max="<?= E.integrantes_max ?>" inputmode="numeric">
+        <p class="ayuda">Tú cuentas como integrante. Después de inscribirte recibirás el enlace de <b>equipo y firmas</b> para que
+          cada integrante firme su propia autorización: tú no puedes firmar por otra persona. El equipo de trabajo (manager,
+          técnico, fotógrafo…) se registra en el mismo enlace y <b>no</b> cuenta como integrante.</p>
+        <div class="error"></div>
+      </div>
+
+      <div class="rejilla dos">
+        <div class="campo">
+          <label for="genre_primary">Género / propuesta principal <span class="req">*</span></label>
+          <input type="text" id="genre_primary" list="generos" maxlength="60" placeholder="Ej.: urbano, rock, salsa, rap">
+          <div class="error"></div>
+        </div>
+        <div class="campo">
+          <label for="genre_secondary">Género secundario <span style="color:var(--tenue);font-weight:400">(opcional)</span></label>
+          <input type="text" id="genre_secondary" list="generos" maxlength="60">
+        </div>
+      </div>
+      <datalist id="generos">
+        <option>Pop</option><option>Urbano</option><option>Reguetón</option><option>Rap / Hip hop</option>
+        <option>Trap</option><option>R&amp;B / Soul</option><option>Rock</option><option>Metal</option>
+        <option>Salsa</option><option>Tropical</option><option>Música popular</option><option>Regional mexicana</option>
+        <option>Vallenato</option><option>Balada</option><option>Folclor / Andina</option><option>Electrónica / DJ</option>
+        <option>Jazz / Blues</option><option>Fusión</option><option>Freestyle</option><option>Instrumental</option>
+        <option>Danza</option><option>Performance</option>
+      </datalist>
+
+      <div class="campo">
+        <label for="audition_description">Breve descripción de tu propuesta <span class="req">*</span></label>
+        <textarea id="audition_description" maxlength="600" placeholder="Qué vas a presentar y qué te hace diferente (máximo 600 caracteres)."></textarea>
+        <div class="error"></div>
+      </div>
+    </section>
+
+    <!-- ===== STEP 3: PRESENTATION ===== -->
+    <section class="tarjeta paso" data-paso="3" data-titulo="Tu presentación">
       <h2><span class="n">3</span>Tu presentación</h2>
       <p class="pista">Para que el equipo técnico sepa qué verá y qué necesitarás.</p>
 
@@ -208,8 +220,8 @@
       </div>
     </section>
 
-    <!-- ===== 4. PISTA ===== -->
-    <section class="tarjeta">
+    <!-- ===== STEP 4: TRACK AND SAMPLE ===== -->
+    <section class="tarjeta paso" data-paso="4" data-titulo="Pista y muestra">
       <h2><span class="n">4</span>Pista / backing track</h2>
       <div class="campo" id="campoPista">
         <span class="etiqueta-campo" id="lblPista">¿Utilizarás pista / backing track? <span class="req">*</span></span>
@@ -238,11 +250,7 @@
         <p class="ayuda">No tienes que enviarla ahora: la pista se entrega <b>después de recibir tu código B-XXX</b>, desde
           "Mi inscripción". El día del evento lleva también una copia en USB. Bluetooth no es el método principal.</p>
       </div>
-    </section>
-
-    <!-- ===== 5. VIDEO ===== -->
-    <section class="tarjeta">
-      <h2><span class="n">5</span>Video o muestra artística</h2>
+      <h2 style="margin-top:22px">Video o muestra artística</h2>
       <div class="campo">
         <label for="video_url">Enlace a video o muestra artística<?!= C.formularios.exigir_video ? ' <span class="req">*</span>' : ' <span style="color:var(--tenue);font-weight:400">(recomendado)</span>' ?></label>
         <input type="url" id="video_url" maxlength="400" placeholder="https://...">
@@ -253,9 +261,9 @@
       </div>
     </section>
 
-    <!-- ===== 6. DISPONIBILIDAD Y AUTORIZACIONES ===== -->
-    <section class="tarjeta">
-      <h2><span class="n">6</span>Disponibilidad y autorizaciones</h2>
+    <!-- ===== STEP 5: AVAILABILITY AND CONSENTS ===== -->
+    <section class="tarjeta paso" data-paso="5" data-titulo="Autorizaciones">
+      <h2><span class="n">5</span>Disponibilidad y autorizaciones</h2>
       <label class="check" id="campoDisponibilidad">
         <input type="checkbox" id="availability_statement">
         <span>Declaro que tengo disponibilidad para participar durante la jornada general de EL BÚNKER y acepto el horario
@@ -291,12 +299,43 @@
       <div class="trampa" aria-hidden="true">
         <label for="hp_field">No completar</label><input type="text" id="hp_field" tabindex="-1" autocomplete="off">
       </div>
+    </section>
 
+    <!-- ===== STEP 6: SIGNATURE ===== -->
+    <section class="tarjeta paso" data-paso="6" data-titulo="Tu firma">
+      <h2><span class="n">6</span>Tu firma</h2>
+      <p class="pista">Firma con el dedo o el mouse. Es tu firma individual: vale solo para ti<span id="notaFirmaGrupo" class="oculto">;
+        cada integrante firmará la suya con el enlace de equipo y firmas</span>.</p>
+      <div class="campo" id="campoFirma">
+        <span class="etiqueta-campo">Firma de <span id="nombreFirma">quien inscribe</span> <span class="req">*</span></span>
+        <div class="firma"><canvas id="lienzoFirma" aria-label="Espacio para firmar con el dedo o el mouse"></canvas>
+          <div class="guia"></div><div class="texto-guia">Firma aquí con el dedo o el mouse</div></div>
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-top:8px;align-items:center">
+          <p class="ayuda" style="margin:0">Se guarda como evidencia de tu aceptación (firma manuscrita digitalizada). No es una
+            firma electrónica certificada.</p>
+          <button type="button" class="boton chico fantasma" id="btnLimpiarFirma">Borrar</button>
+        </div>
+        <div class="error"></div>
+      </div>
+    </section>
+
+    <!-- ===== STEP 7: REVIEW ===== -->
+    <section class="tarjeta paso" data-paso="7" data-titulo="Revisa y envía">
+      <h2><span class="n">7</span>Revisa y envía</h2>
+      <p class="pista">Revisa que todo esté bien. Si algo no está correcto, vuelve al paso para corregirlo.</p>
+      <div id="resumenRevision"></div>
       <div class="aviso alerta" style="font-size:14px;margin-top:14px">
-        Inscribirte no garantiza selección, contratación ni presentación.
+        Al enviar recibirás un <b>comprobante</b> y el estado <b>RECIBIDA</b>. Recibirla no significa que ya seas apto: la
+        organización revisa cada inscripción y te enviará el resultado por correo. Inscribirte no garantiza selección,
+        contratación ni presentación.
       </div>
       <button type="submit" class="boton" id="btnEnviar">Enviar mi inscripción</button>
     </section>
+
+    <div class="navegacion-pasos" id="navegacionPasos">
+      <button type="button" class="boton fantasma" id="btnAtras">Atrás</button>
+      <button type="button" class="boton" id="btnSiguiente">Continuar</button>
+    </div>
   </form>
 
   <div id="resultado" class="oculto" aria-live="polite"></div>
@@ -315,6 +354,10 @@ window.ENTORNO = '<?= ENTORNO ?>';
 var CONFIG = <?!= jsonForScript(C) ?>;
 var BASE_URL = '<?= BASE_URL ?>';
 
+var STEP = 1;
+var TOTAL_STEPS = 7;
+var SIGNATURE_PAD = null;
+
 document.addEventListener('DOMContentLoaded', function () {
   if (!CONFIG.abierto) {
     $('#formulario').classList.add('oculto');
@@ -332,9 +375,46 @@ document.addEventListener('DOMContentLoaded', function () {
   $('#birth_date').addEventListener('change', showAgeHint);
   $('#email').addEventListener('blur', suggestEmailFix);
   $('#video_url').addEventListener('blur', checkVideoLink);
+  $('#btnSiguiente').addEventListener('click', function () { goTo(STEP + 1); });
+  $('#btnAtras').addEventListener('click', function () { goTo(STEP - 1, true); });
+  $('#btnLimpiarFirma').addEventListener('click', function () { if (SIGNATURE_PAD) SIGNATURE_PAD.clear(); });
   $('#formulario').addEventListener('submit', function (e) { e.preventDefault(); enviar(); });
   updateConditionalFields();
+  showStep(1);
 });
+
+/** Shows one step; moving forward validates the current one first. */
+function goTo(target, back) {
+  if (target < 1 || target > TOTAL_STEPS) return;
+  if (!back) {
+    limpiarErrores();
+    var errores = stepErrors(STEP, recolectar());
+    if (errores.length) {
+      errores.forEach(function (p) { markError(p[0], p[1]); });
+      mostrarAviso('#avisoGlobal', 'error', 'Revisa este paso', 'Hay ' + errores.length + ' campo(s) por completar o corregir, marcados en rojo.');
+      return;
+    }
+  }
+  $('#avisoGlobal').innerHTML = '';
+  showStep(target);
+}
+
+function showStep(n) {
+  STEP = n;
+  $$('.paso').forEach(function (sec) { sec.classList.toggle('paso-oculto', Number(sec.getAttribute('data-paso')) !== n); });
+  var current = $('.paso[data-paso="' + n + '"]');
+  $('#tituloPaso').textContent = current.getAttribute('data-titulo');
+  $('#contadorPaso').textContent = 'Paso ' + n + ' de ' + TOTAL_STEPS;
+  $('#barraPaso').style.width = Math.round((n / TOTAL_STEPS) * 100) + '%';
+  $('#btnAtras').classList.toggle('oculto', n === 1);
+  $('#btnSiguiente').classList.toggle('oculto', n === TOTAL_STEPS);
+  if (n === 6) {
+    $('#nombreFirma').textContent = $('#full_name').value.trim() || 'quien inscribe';
+    if (!SIGNATURE_PAD) SIGNATURE_PAD = createSignaturePad($('#lienzoFirma'));
+  }
+  if (n === TOTAL_STEPS) renderReview();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 function updateConditionalFields() {
   var mode = radioValue('participation_mode');
@@ -343,12 +423,12 @@ function updateConditionalFields() {
   if (mode === 'DUO') { $('#members_declared').value = 2; $('#members_declared').readOnly = true; }
   else { $('#members_declared').readOnly = false; if (mode === 'AGRUPACION' && Number($('#members_declared').value) < 3) $('#members_declared').value = ''; }
   $('#lblNombreArtistico').innerHTML = group ? 'Nombre artístico de la ' + (mode === 'DUO' ? 'dupla' : 'agrupación') + ' <span class="req">*</span>' : 'Nombre artístico';
-  $('#ayudaNombreArtistico').textContent = group ? 'Escríbelo como quieren que aparezca. No lo corregimos.' : 'Si no tienes, déjalo vacío.';
-  $('#tituloDatos').textContent = group ? 'Tus datos (líder o vocero)' : 'Tus datos';
-  $('#pistaDatos').textContent = group
-    ? 'Eres la persona de contacto del proyecto. Los datos de los demás integrantes se registran aparte, con su propia autorización.'
-    : 'Los verificamos con tu documento original el día de la audición.';
+  $('#ayudaNombreArtistico').textContent = group ? 'Escríbelo exactamente como quieren que aparezca. No lo corregimos.' : 'Si no tienes, déjalo vacío.';
+  $('#tituloDatos').textContent = 'Tus datos';
+  $('#pistaDatos').textContent = 'Los verificamos con tu documento original el día de la audición.' +
+    (group ? ' Si inscribes un dúo o agrupación, eres la persona de contacto: los demás integrantes firman aparte.' : '');
   $('#notaGrupoAutorizaciones').classList.toggle('oculto', !group);
+  $('#notaFirmaGrupo').classList.toggle('oculto', !group);
 
   $('#avisoResidencia').classList.toggle('oculto', radioValue('resides_in_sabaneta') !== 'NO');
   $('#campoFormatoOtro').classList.toggle('oculto', radioValue('presentation_format') !== 'OTRA');
@@ -401,68 +481,127 @@ function checkVideoLink() {
   }).catch(function () { state.textContent = ''; });
 }
 
-var REQUIRED_FIELDS = [
-  ['participation_mode', 'Elige la modalidad.'], ['genre_primary', 'Escribe tu género o propuesta principal.'],
-  ['audition_description', 'Cuéntanos brevemente tu propuesta.'], ['full_name', 'Escribe tu nombre completo.'],
-  ['id_number', 'Escribe tu número de cédula.'], ['birth_date', 'Indica tu fecha de nacimiento.'],
-  ['neighborhood_sector', 'Escribe tu barrio, sector o vereda.'], ['resides_in_sabaneta', 'Responde si resides en el municipio.'],
-  ['email', 'Escribe tu correo.'], ['whatsapp', 'Escribe tu WhatsApp.'],
-  ['presentation_format', 'Elige cómo será tu presentación.'], ['own_equipment', 'Responde si llevarás equipo propio.'],
-  ['track_uses', 'Responde si usarás pista.']
-];
-var REQUIRED_CHECKBOXES = [
-  ['adult_confirmation', 'Debes confirmar que eres mayor de edad.'],
-  ['availability_statement', 'Debes aceptar la declaración de disponibilidad.'],
-  ['accept_terms', 'Debes aceptar los términos y condiciones.'],
-  ['accept_data_processing', 'Debes autorizar el tratamiento de datos.']
-];
-
 function recolectar() {
   var d = {};
   ['participation_mode', 'artistic_name', 'members_declared', 'genre_primary', 'genre_secondary', 'audition_description',
-   'full_name', 'id_number', 'birth_date', 'neighborhood_sector', 'resides_in_sabaneta', 'email', 'whatsapp',
+   'full_name', 'document_type', 'id_number', 'birth_date', 'neighborhood_sector', 'resides_in_sabaneta', 'email', 'whatsapp',
    'presentation_format', 'presentation_other', 'needs_other', 'own_equipment', 'own_equipment_detail', 'song_name',
    'track_uses', 'track_method', 'track_method_other', 'video_url', 'hp_field']
     .forEach(function (id) { d[id] = ($('#' + id).value || '').trim(); });
   d.needs = checkedValues('needs');
   ['adult_confirmation', 'availability_statement', 'accept_terms', 'accept_data_processing',
    'accept_whatsapp_operational', 'accept_image_voice'].forEach(function (id) { d[id] = $('#' + id).checked; });
+  d.signature_png = SIGNATURE_PAD && !SIGNATURE_PAD.isEmpty() ? SIGNATURE_PAD.png() : '';
   d.client_submission_id = idEnvio('inscripcion');
   d.form_elapsed_ms = formElapsedMs();
   d.source = 'web';
   return d;
 }
 
-/** Client-side check only to fail fast; the server always validates again. */
-function validacionRapida(d) {
+/** Client-side check of one step, only to fail fast; the server always validates again. */
+function stepErrors(step, d) {
   var errores = [];
-  REQUIRED_FIELDS.forEach(function (p) { if (!d[p[0]]) errores.push(p); });
-  REQUIRED_CHECKBOXES.forEach(function (p) { if (!d[p[0]]) errores.push(p); });
+  var need = function (id, msg) { if (!d[id]) errores.push([id, msg]); };
   var group = d.participation_mode === 'DUO' || d.participation_mode === 'AGRUPACION';
-  if (group && !d.artistic_name) errores.push(['artistic_name', 'Escribe el nombre artístico de la agrupación.']);
-  if (group && !d.members_declared) errores.push(['members_declared', 'Indica cuántos integrantes estarán en escena.']);
-  if (d.presentation_format === 'OTRA' && !d.presentation_other) errores.push(['presentation_other', 'Describe tu presentación.']);
-  if (d.own_equipment === 'SI' && !d.own_equipment_detail) errores.push(['own_equipment_detail', 'Cuéntanos qué equipo llevarás.']);
-  if (d.track_uses === 'SI' && !d.track_method) errores.push(['track_method', 'Indica cómo entregarás la pista.']);
-  if (d.track_method === 'OTRO' && !d.track_method_other) errores.push(['track_method_other', 'Describe el método.']);
-  if (CONFIG.formularios.exigir_video && !d.video_url) errores.push(['video_url', 'El enlace de video es obligatorio.']);
-  if (d.whatsapp && !/^3\d{9}$/.test(d.whatsapp.replace(/\D/g, '').slice(-10))) errores.push(['whatsapp', 'Debe ser un celular de 10 dígitos que empiece por 3.']);
-  if (d.id_number && !/^\d{6,10}$/.test(d.id_number.replace(/\D/g, '').replace(/^0+/, ''))) errores.push(['id_number', 'La cédula debe tener entre 6 y 10 dígitos.']);
-  errores.forEach(function (p) { markError(p[0], p[1]); });
+  if (step === 1) {
+    need('full_name', 'Escribe tu nombre completo.');
+    need('id_number', 'Escribe tu número de documento.');
+    need('birth_date', 'Indica tu fecha de nacimiento.');
+    need('adult_confirmation', 'Debes confirmar que eres mayor de edad.');
+    need('neighborhood_sector', 'Escribe tu barrio, sector o vereda.');
+    need('resides_in_sabaneta', 'Responde si resides en el municipio.');
+    need('email', 'Escribe tu correo.');
+    need('whatsapp', 'Escribe tu WhatsApp.');
+    if (d.id_number && !/^\d{6,10}$/.test(d.id_number.replace(/\D/g, '').replace(/^0+/, ''))) errores.push(['id_number', 'El documento debe tener entre 6 y 10 dígitos.']);
+    if (d.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) errores.push(['email', 'Revisa el correo.']);
+    if (d.whatsapp && !/^3\d{9}$/.test(d.whatsapp.replace(/\D/g, '').slice(-10))) errores.push(['whatsapp', 'Debe ser un celular de 10 dígitos que empiece por 3.']);
+  } else if (step === 2) {
+    need('participation_mode', 'Elige la modalidad.');
+    need('genre_primary', 'Escribe tu género o propuesta principal.');
+    need('audition_description', 'Cuéntanos brevemente tu propuesta.');
+    if (group && !d.artistic_name) errores.push(['artistic_name', 'Escribe el nombre artístico de la agrupación.']);
+    if (group && !d.members_declared) errores.push(['members_declared', 'Indica cuántos integrantes estarán en escena.']);
+  } else if (step === 3) {
+    need('presentation_format', 'Elige cómo será tu presentación.');
+    need('own_equipment', 'Responde si llevarás equipo propio.');
+    if (d.presentation_format === 'OTRA' && !d.presentation_other) errores.push(['presentation_other', 'Describe tu presentación.']);
+    if (d.own_equipment === 'SI' && !d.own_equipment_detail) errores.push(['own_equipment_detail', 'Cuéntanos qué equipo llevarás.']);
+  } else if (step === 4) {
+    need('track_uses', 'Responde si usarás pista.');
+    if (d.track_uses === 'SI' && !d.track_method) errores.push(['track_method', 'Indica cómo entregarás la pista.']);
+    if (d.track_method === 'OTRO' && !d.track_method_other) errores.push(['track_method_other', 'Describe el método.']);
+    if (CONFIG.formularios.exigir_video && !d.video_url) errores.push(['video_url', 'El enlace de video es obligatorio.']);
+  } else if (step === 5) {
+    need('availability_statement', 'Debes aceptar la declaración de disponibilidad.');
+    need('accept_terms', 'Debes aceptar los términos y condiciones.');
+    need('accept_data_processing', 'Debes autorizar el tratamiento de datos.');
+  } else if (step === 6) {
+    if (CONFIG.formularios.firma_inscripcion && !d.signature_png) errores.push(['lienzoFirma', 'Falta tu firma.']);
+  }
   return errores;
+}
+
+/** The step where a server-side field error must be fixed. */
+function stepOfField(campo) {
+  var el = document.getElementById(campo === 'signature_png' ? 'lienzoFirma' : campo);
+  var sec = el && el.closest ? el.closest('.paso') : null;
+  return sec ? Number(sec.getAttribute('data-paso')) : 1;
 }
 
 function limpiarErrores() {
   $$('.campo, .check').forEach(function (c) { c.classList.remove('malo'); });
 }
 
+var REVIEW_LABELS = {
+  full_name: 'Nombre', id_number: 'Documento', birth_date: 'Fecha de nacimiento', neighborhood_sector: 'Barrio / sector',
+  resides_in_sabaneta: 'Reside en ' + CONFIG.evento.municipio, email: 'Correo', whatsapp: 'WhatsApp',
+  participation_mode: 'Modalidad', artistic_name: 'Nombre artístico', members_declared: 'Integrantes en escena',
+  genre_primary: 'Género', audition_description: 'Propuesta', presentation_format: 'Presentación', song_name: 'Canción',
+  own_equipment: 'Equipo propio', track_uses: 'Pista', video_url: 'Video'
+};
+var REVIEW_STEP = { full_name: 1, id_number: 1, birth_date: 1, neighborhood_sector: 1, resides_in_sabaneta: 1, email: 1, whatsapp: 1,
+  participation_mode: 2, artistic_name: 2, members_declared: 2, genre_primary: 2, audition_description: 2,
+  presentation_format: 3, song_name: 3, own_equipment: 3, track_uses: 4, video_url: 4 };
+
+function renderReview() {
+  var d = recolectar();
+  var docType = $('#document_type').options[$('#document_type').selectedIndex].text;
+  var shown = function (k) {
+    if (k === 'id_number') return docType + ' ' + d.id_number;
+    if (k === 'presentation_format') { var r = $('input[name="presentation_format"]:checked'); return r ? r.parentNode.textContent.trim() : ''; }
+    if (k === 'participation_mode') return { SOLISTA: 'Solista', DUO: 'Dúo', AGRUPACION: 'Agrupación' }[d.participation_mode] || '';
+    if (k === 'resides_in_sabaneta' || k === 'own_equipment' || k === 'track_uses') return d[k] === 'SI' ? 'Sí' : (d[k] === 'NO' ? 'No' : '');
+    return d[k];
+  };
+  var rows = Object.keys(REVIEW_LABELS).filter(function (k) {
+    return shown(k) && !(k === 'members_declared' && d.participation_mode === 'SOLISTA');
+  }).map(function (k) {
+    return '<tr><td>' + escaparHtml(REVIEW_LABELS[k]) + '</td><td>' + escaparHtml(shown(k)) +
+      ' <button type="button" class="boton chico fantasma" data-ir="' + REVIEW_STEP[k] + '">Editar</button></td></tr>';
+  }).join('');
+  var consents = [['accept_terms', 'Términos y condiciones'], ['accept_data_processing', 'Tratamiento de datos'],
+                  ['accept_whatsapp_operational', 'WhatsApp operativo'], ['accept_image_voice', 'Imagen y voz']]
+    .map(function (c) { return c[1] + ': ' + (d[c[0]] ? 'Sí' : 'No'); }).join(' · ');
+  $('#resumenRevision').innerHTML = '<table class="revision-tabla"><tbody>' + rows +
+    '<tr><td>Autorizaciones</td><td>' + escaparHtml(consents) + ' <button type="button" class="boton chico fantasma" data-ir="5">Editar</button></td></tr>' +
+    '<tr><td>Firma</td><td>' + (d.signature_png ? '<img class="firma-vista" alt="Tu firma" src="' + d.signature_png + '">' : '<span class="pendiente-dato">Falta</span>') +
+    ' <button type="button" class="boton chico fantasma" data-ir="6">Editar</button></td></tr></tbody></table>';
+  $$('#resumenRevision [data-ir]').forEach(function (b) {
+    b.addEventListener('click', function () { showStep(Number(b.getAttribute('data-ir'))); });
+  });
+}
+
 function enviar() {
   limpiarErrores();
   var datos = recolectar();
-  var errores = validacionRapida(datos);
-  if (errores.length) {
-    mostrarAviso('#avisoGlobal', 'error', 'Revisa el formulario', 'Hay ' + errores.length + ' campo(s) por completar o corregir, marcados en rojo.');
-    return;
+  for (var step = 1; step < TOTAL_STEPS; step++) {
+    var errores = stepErrors(step, datos);
+    if (errores.length) {
+      showStep(step);
+      errores.forEach(function (p) { markError(p[0], p[1]); });
+      mostrarAviso('#avisoGlobal', 'error', 'Revisa este paso', 'Hay ' + errores.length + ' campo(s) por completar o corregir.');
+      return;
+    }
   }
   var boton = $('#btnEnviar');
   ocupado(boton, true, 'Enviando…');
@@ -483,21 +622,25 @@ function officialNumberBlockHtml(r) {
     '<h2>Guarda nuestro número</h2>' +
     '<p style="margin:0 0 12px">Para recibir información de tu audición por WhatsApp, guarda este número como: <b>' + escaparHtml(nombre) + '</b>.</p>' +
     '<div class="codigo-grande" style="font-size:40px">' + escaparHtml(n.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3')) + '</div>' +
-    '<p class="pista" style="margin:10px 0 14px">Desde este número recibirás tu código, horario, recordatorios y novedades de la convocatoria. ' +
-    'Si no lo guardas, puede que no te lleguen los mensajes de difusión.</p>' +
+    '<p class="pista" style="margin:10px 0 14px">Desde este número te escribiremos novedades de la convocatoria. ' +
+    'Si no lo guardas, puede que no te lleguen los mensajes de difusión. El estado oficial siempre está en "Mi inscripción".</p>' +
     '<div class="rejilla dos"><button type="button" class="boton" id="btnGuardarContacto">Guardar contacto</button>' +
     '<a class="boton fantasma" href="https://wa.me/57' + encodeURIComponent(n) + '" target="_blank" rel="noopener">Abrir WhatsApp</a></div></section>';
 }
 
-function groupBlockHtml(r) {
-  if (!r.group_code) return '';
-  var texto = 'Hola, soy parte de ' + ($('#artistic_name').value || 'la agrupación') + ' en EL BÚNKER. ' +
-    'Cada integrante debe dar su propia autorización aquí: ' + r.members_link;
+function teamBlockHtml(r) {
+  if (!r.members_link) return '';
+  var group = r.participation_mode === 'DUO' || r.participation_mode === 'AGRUPACION';
+  var texto = 'Hola, soy parte de ' + ($('#artistic_name').value || 'nuestro proyecto') + ' en EL BÚNKER. ' +
+    'Cada persona del proyecto firma su propia autorización aquí: ' + r.members_link;
   return '<section class="tarjeta" style="border-color:var(--amarillo)">' +
-    '<h2>Tu agrupación: ' + escaparHtml(r.group_code) + '</h2>' +
-    '<p style="margin:0 0 10px">Clave de la agrupación: <b style="letter-spacing:.12em">' + escaparHtml(r.group_key) + '</b></p>' +
-    '<p class="pista">Comparte este enlace con cada integrante. <b>Cada uno</b> debe completar su autorización individual y firmar: ' +
-    'tú no puedes autorizar por otra persona.</p>' +
+    '<h2>Equipo y firmas: ' + escaparHtml(r.team_code) + '</h2>' +
+    '<p style="margin:0 0 10px">Clave: <b style="letter-spacing:.12em">' + escaparHtml(r.team_key) + '</b></p>' +
+    '<p class="pista">' + (group
+      ? 'Comparte este enlace con cada integrante: <b>cada uno</b> firma su autorización individual (tú no puedes firmar por otra persona). '
+      : 'Tu firma ya quedó registrada. ') +
+    'Si vienes con <b>equipo de trabajo</b> (manager, productor, técnico, asistente, fotógrafo), cada persona se registra aquí para la póliza del lugar. ' +
+    'El equipo de trabajo no ocupa cupo ni participa en la calificación.</p>' +
     '<div class="copiable" id="enlaceGrupo">' + escaparHtml(r.members_link) + '</div>' +
     '<div class="rejilla dos" style="margin-top:12px">' +
     '<button type="button" class="boton fantasma" id="btnCopiarGrupo">Copiar enlace</button>' +
@@ -505,39 +648,37 @@ function groupBlockHtml(r) {
 }
 
 function mostrarResultado(r) {
-  var tipo = { APTO: 'ok', DUPLICADO: 'alerta', REVISION: 'alerta', INCOMPLETO: 'error', NO_CUMPLE: 'error' }[r.eligibility_status] || 'info';
-
   if (r.eligibility_status === 'INCOMPLETO') {
     ocupado($('#btnEnviar'), false);
     nuevoIdEnvio('inscripcion');
     var lista = (r.errores || []).map(function (e) { return '• ' + escaparHtml(e.mensaje); }).join('<br>');
+    var first = (r.errores || [])[0];
+    if (first) showStep(stepOfField(first.campo));
     $('#avisoGlobal').innerHTML = '<div class="aviso error"><b>Faltan datos</b>' + lista + '</div>';
-    (r.errores || []).forEach(function (e) { markError(e.campo, e.mensaje); });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    (r.errores || []).forEach(function (e) { markError(e.campo === 'signature_png' ? 'lienzoFirma' : e.campo, e.mensaje); });
     return;
   }
 
   $('#formulario').classList.add('oculto');
   var caja = $('#resultado');
   caja.classList.remove('oculto');
-  var titles = { APTO: 'Inscripción recibida', REVISION: 'Inscripción recibida (en revisión)', DUPLICADO: 'Ya estabas inscrito',
-                  NO_CUMPLE: 'No cumples los requisitos' };
-  var html = '<div class="aviso ' + tipo + '"><b>' + escaparHtml(titles[r.eligibility_status] || r.eligibility_status) + '</b>' +
-    escaparHtml(r.mensaje) + '</div>';
-
-  if (r.eligibility_status === 'APTO' || r.eligibility_status === 'REVISION') {
-    html += officialNumberBlockHtml(r) + groupBlockHtml(r) +
-      '<section class="tarjeta"><h2>Tu comprobante</h2>' +
-      '<div class="codigo-grande" style="font-size:34px">' + escaparHtml(r.submission_id) + '</div>' +
-      '<p class="pista" style="margin:10px 0 0">Guárdalo. Con tu cédula y este comprobante puedes consultar tu inscripción en ' +
-      '<a href="' + escaparHtml(r.mi_inscripcion_link) + '">Mi inscripción</a>.</p></section>' +
-      '<section class="tarjeta"><h2>¿Y ahora qué?</h2><p class="pista" style="margin:0">' +
-      '1. La organización revisa las inscripciones y asigna los ' + CONFIG.evento.cupo + ' cupos en orden de inscripción entre quienes cumplen.<br>' +
-      '2. Si quedas dentro recibes tu <b>código B-XXX</b> y tu <b>horario</b> por WhatsApp.<br>' +
-      '3. Los recordatorios y las indicaciones del día te llegan por WhatsApp desde el número oficial de la convocatoria.<br>' +
-      '4. Si usas pista, la envías desde "Mi inscripción" cuando tengas tu código.<br>' +
-      '5. El día del evento llega 15 minutos antes de tu bloque con tu <b>documento original</b>.</p></section>';
-  }
+  var ev = r.evento || {};
+  var html = '<div class="aviso info"><b>Inscripción RECIBIDA</b>' + escaparHtml(r.mensaje) + '</div>' +
+    '<section class="tarjeta"><h2>Tu comprobante</h2>' +
+    '<div class="codigo-grande" style="font-size:34px">' + escaparHtml(r.submission_id) + '</div>' +
+    '<p class="pista" style="margin:10px 0 0">Estado: <b>RECIBIDA</b> (todavía no es un resultado de aptitud). Guarda el comprobante: ' +
+    'con tu documento y este número consultas tu inscripción en <a href="' + escaparHtml(r.mi_inscripcion_link) + '">Mi inscripción</a>. ' +
+    'Te enviamos una copia por correo: revisa también Spam y Promociones.</p></section>' +
+    officialNumberBlockHtml(r) + teamBlockHtml(r) +
+    '<section class="tarjeta"><h2>¿Qué pasa después de inscribirme?</h2><ol class="cronologia">' +
+    '<li>La organización revisa tu inscripción y te envía por correo el resultado: <b>apto</b> o <b>no apto</b>.</li>' +
+    '<li>Entre los aptos, los ' + CONFIG.evento.cupo + ' turnos se asignan en orden de inscripción; después queda una bolsa de suplentes. Ser suplente no es ser seleccionado.</li>' +
+    '<li>Si tienes turno recibes tu <b>código B-XXX</b> y tu <b>horario</b>. Si usas pista, la envías desde "Mi inscripción".</li>' +
+    '<li>Si ya no puedes asistir, desde el ' + escaparHtml(CONFIG.evento.reemplazos_desde_texto || '') + ' liberas tu cupo en "Mi inscripción" para un suplente.</li>' +
+    '<li>El ' + escaparHtml(CONFIG.evento.confirmacion_final_texto || '') + ' confirmas tu asistencia en "Mi inscripción".</li>' +
+    '<li>El ' + escaparHtml(ev.fecha_texto || CONFIG.evento.fecha_texto) + ' (' + escaparHtml(ev.horario || '') + ', ' + escaparHtml(ev.sede || CONFIG.evento.sede) +
+    ') llegas a tu hora de llegada con tu <b>documento original</b>. Tu audición dura máximo ' + CONFIG.evento.duracion_audicion + ' minutos.</li>' +
+    '</ol></section>';
   caja.innerHTML = html;
   if ($('#btnGuardarContacto')) $('#btnGuardarContacto').addEventListener('click', function () { downloadContact(r.whatsapp_oficial, r.whatsapp_nombre); });
   if ($('#btnCopiarGrupo')) $('#btnCopiarGrupo').addEventListener('click', function () { copyText(r.members_link, $('#btnCopiarGrupo')); });

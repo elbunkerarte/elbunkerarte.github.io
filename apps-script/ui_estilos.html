@@ -150,6 +150,25 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .e-NO_CUMPLE,.e-NOCUMPLE,.e-DUPLICADO,.e-RECHAZADO,.e-NOSHOW,.e-NOAUDICIONADO,.e-PISTACONPROBLEMA,.e-NOACCESIBLE{background:rgba(255,122,107,.14);color:#FF9D91}
 .e-CONFIRMADO,.e-SIN_SOLICITUD,.e-NOAPLICA,.e-SINVIDEO{background:rgba(201,201,194,.12);color:var(--tenue)}
 .e-CHECKIN,.e-ENAUDICION{background:rgba(156,200,255,.14);color:#B7D6FF}
+/* Iteration 3 states (eligibility, pool, participation, evaluation, ranking, offers, e-mail). */
+.e-TOP10_SELECCIONADO,.e-ENVIADA,.e-ENVIADO,.e-PRINCIPAL,.e-ACEPTADA,.e-COMPLETA,.e-BLOQUEADA,.e-AUDICIONADO,.e-ASIGNADO,.e-VALIDADA_OK{background:rgba(111,211,154,.14);color:#8FE3B2}
+.e-RECIBIDO,.e-EN_REVISION,.e-SUPLENTE,.e-OFRECIDO,.e-BORRADOR,.e-PARCIAL,.e-TIE_REVIEW_REQUIRED,.e-DQ_PENDIENTE,.e-CAMBIO_PENDIENTE,.e-TOP20,.e-LIBERADO,.e-INVITADO,.e-ENVIANDO,.e-ERROR,.e-RANKED{background:rgba(247,167,5,.16);color:#FFC34D}
+.e-NO_APTO,.e-NOAPTO,.e-RETIRADO,.e-RETIRO_FINAL,.e-DESCALIFICADO,.e-VALIDADA,.e-VACANTE_SIN_REEMPLAZO,.e-FALLIDO,.e-VENCIDA,.e-RECHAZADA,.e-DECLINO,.e-NO_CONFIRMADO,.e-NO_SHOW,.e-NO_AUDICIONADO{background:rgba(255,122,107,.14);color:#FF9D91}
+.e-FUERA_DE_BOLSA,.e-SIN_TURNO,.e-SIN_CALIFICAR,.e-SIN_RANKING,.e-NO_SELECCIONADO,.e-SIN_EMITIR,.e-OMITIDO,.e-CANCELADA,.e-DESCARTADA{background:rgba(201,201,194,.12);color:var(--tenue)}
+.e-CAMBIO_APROBADO{background:rgba(156,200,255,.14);color:#B7D6FF}
+
+/* Progressive form: one step at a time. */
+.pasos{margin:0 0 16px}
+.pasos .linea-pasos{display:flex;justify-content:space-between;gap:10px;align-items:baseline;font-size:14px;color:var(--tenue)}
+.pasos .linea-pasos b{color:var(--texto);font-size:16px}
+.paso-oculto{display:none !important}
+.navegacion-pasos{display:flex;gap:10px;justify-content:space-between;margin-top:6px}
+.navegacion-pasos .boton{flex:1}
+.revision-tabla td:first-child{color:var(--tenue);width:42%}
+.revision-tabla td{vertical-align:top;word-break:break-word}
+.firma-vista{background:#fff;border-radius:6px;max-width:320px;width:100%;height:auto;display:block}
+.cronologia{margin:0;padding-left:20px;line-height:1.7}
+.cronologia li{margin-bottom:4px}
 
 .rejilla{display:grid;gap:12px}
 .rejilla.dos{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}

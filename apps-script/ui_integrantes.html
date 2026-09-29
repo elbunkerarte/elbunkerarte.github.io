@@ -11,25 +11,27 @@
 <div class="envoltura">
   <?!= incluir('ui_cabecera') ?>
 
-  <h2 class="titulo-pagina">Integrantes de agrupación</h2>
-  <p style="color:var(--tenue);margin-top:0">Cada integrante da <b>su propia autorización</b>. El líder de la agrupación no
-    puede autorizar por otras personas. Tus datos se usan para verificar tu identidad y registrar tu aceptación.</p>
+  <h2 class="titulo-pagina">Equipo y firmas</h2>
+  <p style="color:var(--tenue);margin-top:0">Cada persona del proyecto da <b>su propia autorización</b> y firma por sí misma: quien
+    inscribió el proyecto no puede firmar por otras personas. Aquí se registran los <b>intérpretes</b> (quienes suben a tarima como
+    parte del proyecto) y el <b>equipo de trabajo</b> (manager, productor, técnico, asistente, fotógrafo…), que no ocupa cupo ni participa
+    en la calificación. Tus datos se usan para verificar tu identidad, registrar tu aceptación y la póliza del lugar del evento.</p>
 
   <div id="avisoGlobal" role="alert" aria-live="polite"></div>
 
   <!-- Step 1: which group -->
   <section class="tarjeta" id="pasoGrupo">
-    <h2><span class="n">1</span>Tu agrupación</h2>
+    <h2><span class="n">1</span>Tu proyecto</h2>
     <div class="rejilla dos">
       <div class="campo">
-        <label for="group_code">Código de agrupación <span class="req">*</span></label>
-        <input type="text" id="group_code" autocomplete="off" placeholder="GRP-001" value="<?= grupo ?>">
+        <label for="group_code">Código del proyecto <span class="req">*</span></label>
+        <input type="text" id="group_code" autocomplete="off" placeholder="GRP-001 o EQ-001" value="<?= grupo ?>">
         <div class="error"></div>
       </div>
       <div class="campo">
-        <label for="group_key">Clave de la agrupación <span class="req">*</span></label>
-        <input type="text" id="group_key" autocomplete="off" placeholder="6 caracteres" value="<?= clave ?>">
-        <p class="ayuda">Viene en el enlace que te compartió tu líder.</p>
+        <label for="group_key">Clave del proyecto <span class="req">*</span></label>
+        <input type="text" id="group_key" autocomplete="off" placeholder="10 caracteres" maxlength="10" value="<?= clave ?>">
+        <p class="ayuda">Viene en el enlace que te compartió quien inscribió el proyecto.</p>
         <div class="error"></div>
       </div>
     </div>
@@ -42,12 +44,27 @@
   <form id="formulario" class="oculto" novalidate>
     <section class="tarjeta">
       <h2><span class="n">2</span>Tus datos</h2>
+      <div class="campo" id="campoRol">
+        <span class="etiqueta-campo" id="lblRol">¿Cómo participas en el proyecto? <span class="req">*</span></span>
+        <div class="opciones dos" role="radiogroup" aria-labelledby="lblRol">
+          <label class="opcion"><input type="radio" name="person_role" value="INTERPRETE"> Intérprete (subo a tarima)</label>
+          <label class="opcion"><input type="radio" name="person_role" value="EQUIPO_TRABAJO"> Equipo de trabajo</label>
+        </div>
+        <input type="hidden" id="person_role">
+        <div class="error"></div>
+      </div>
       <div class="campo">
         <label for="full_name">Nombre completo <span class="req">*</span></label>
         <input type="text" id="full_name" autocomplete="name" maxlength="120" placeholder="Como aparece en tu documento">
         <div class="error"></div>
       </div>
       <div class="rejilla dos">
+        <div class="campo">
+          <label for="document_type">Tipo de documento <span class="req">*</span></label>
+          <select id="document_type">
+            <? C.formularios.document_types.forEach(function (d) { ?><option value="<?= d.id ?>"><?= d.etiqueta ?></option><? }); ?>
+          </select>
+        </div>
         <div class="campo">
           <label for="id_number">Número de documento <span class="req">*</span></label>
           <input type="text" id="id_number" inputmode="numeric" maxlength="15" autocomplete="off">
@@ -59,13 +76,24 @@
           <div class="error"></div>
         </div>
       </div>
-      <div class="campo">
+      <div class="campo" id="campoRolArtistico">
         <label for="artistic_role">Rol artístico <span class="req">*</span></label>
         <input type="text" id="artistic_role" list="roles" maxlength="60" placeholder="Ej.: voz, guitarra, baile, DJ">
         <datalist id="roles"><option>Voz</option><option>Coros</option><option>Guitarra</option><option>Bajo</option>
           <option>Batería</option><option>Teclado</option><option>Percusión</option><option>DJ</option><option>Baile</option></datalist>
         <div class="error"></div>
       </div>
+      <div class="campo oculto" id="campoRolEquipo">
+        <label for="crew_role">Rol en el equipo de trabajo <span class="req">*</span></label>
+        <select id="crew_role"><option value="">Elige…</option>
+          <option value="MANAGER">Manager</option><option value="PRODUCTOR">Productor(a)</option><option value="TECNICO">Técnico(a)</option>
+          <option value="ASISTENTE">Asistente</option><option value="FOTOGRAFO">Fotógrafo(a) / video</option><option value="OTRO">Otro</option></select>
+        <div class="error"></div>
+      </div>
+      <label class="check oculto" id="campoTarima">
+        <input type="checkbox" id="on_stage">
+        <span>Estaré en la tarima o junto a ella durante la audición (por ejemplo, para montar equipo).</span>
+      </label>
       <label class="check" id="campoMayoria">
         <input type="checkbox" id="adult_confirmation">
         <span>Confirmo que soy <b>mayor de edad</b> y que mis datos son verdaderos. <span class="req">*</span><span class="error"></span></span>
@@ -132,10 +160,20 @@ document.addEventListener('DOMContentLoaded', function () {
     return;
   }
   $('#btnBuscarGrupo').addEventListener('click', findGroup);
+  $$('input[name="person_role"]').forEach(function (r) {
+    r.addEventListener('change', function () { $('#person_role').value = radioValue('person_role'); updateRoleFields(); });
+  });
   $('#formulario').addEventListener('submit', function (e) { e.preventDefault(); submitMember(); });
   $('#btnLimpiarFirma').addEventListener('click', function () { if (SIGNATURE_PAD) SIGNATURE_PAD.clear(); });
   if ($('#group_code').value && $('#group_key').value) findGroup();
 });
+
+function updateRoleFields() {
+  var crew = radioValue('person_role') === 'EQUIPO_TRABAJO';
+  $('#campoRolArtistico').classList.toggle('oculto', crew);
+  $('#campoRolEquipo').classList.toggle('oculto', !crew);
+  $('#campoTarima').classList.toggle('oculto', !crew);
+}
 
 function findGroup() {
   $$('.campo').forEach(function (c) { c.classList.remove('malo'); });
@@ -143,6 +181,7 @@ function findGroup() {
   var key = $('#group_key').value.trim().toUpperCase();
   if (!code) { markError('group_code', 'Escribe el código de agrupación.'); return; }
   if (!key) { markError('group_key', 'Escribe la clave.'); return; }
+  if (!/^[A-Z0-9]{10}$/.test(key)) { markError('group_key', 'La clave tiene 10 caracteres. Usa el enlace completo.'); return; }
   var b = $('#btnBuscarGrupo');
   ocupado(b, true, 'Buscando…');
   llamar('consultar_agrupacion', { group_code: code, group_key: key }).then(function (g) {
@@ -150,10 +189,11 @@ function findGroup() {
     GROUP = { code: code, key: key };
     $('#pasoGrupo').classList.add('oculto');
     $('#resumenGrupo').innerHTML = '<section class="tarjeta" style="border-color:var(--amarillo)">' +
-      '<div style="color:var(--tenue);font-size:13px;letter-spacing:.1em">AGRUPACIÓN ' + escaparHtml(g.group_code) + '</div>' +
-      '<div class="codigo-grande" style="font-size:36px;color:var(--texto)">' + escaparHtml(g.group_display_name) + '</div>' +
+      '<div style="color:var(--tenue);font-size:13px;letter-spacing:.1em">PROYECTO ' + escaparHtml(g.group_code) +
+      (g.project_code ? ' · ' + escaparHtml(g.project_code) : '') + '</div>' +
+      '<div class="codigo-grande" style="font-size:36px;color:var(--texto)">' + escaparHtml(g.group_display_name || 'Proyecto solista') + '</div>' +
       '<p class="pista" style="margin:8px 0 0">' + g.members_authorized + ' de ' + (g.members_declared || g.members_registered) +
-      ' integrantes ya dieron su autorización.</p></section>';
+      ' intérpretes con firma · equipo de trabajo registrado: ' + (g.crew_registered || 0) + '.</p></section>';
     $('#formulario').classList.remove('oculto');
     if (!SIGNATURE_PAD && CONFIG.formularios.firma_integrantes) SIGNATURE_PAD = createSignaturePad($('#lienzoFirma'));
   }).catch(function (e) {
@@ -165,11 +205,16 @@ function findGroup() {
 function submitMember() {
   $$('.campo, .check').forEach(function (c) { c.classList.remove('malo'); });
   var d = {};
-  ['full_name', 'id_number', 'birth_date', 'artistic_role', 'hp_field'].forEach(function (id) { d[id] = ($('#' + id).value || '').trim(); });
-  ['adult_confirmation', 'accept_terms', 'accept_data_processing', 'accept_image_voice'].forEach(function (id) { d[id] = $('#' + id).checked; });
+  ['full_name', 'id_number', 'birth_date', 'artistic_role', 'crew_role', 'document_type', 'person_role', 'hp_field']
+    .forEach(function (id) { d[id] = ($('#' + id).value || '').trim(); });
+  ['adult_confirmation', 'accept_terms', 'accept_data_processing', 'accept_image_voice', 'on_stage'].forEach(function (id) { d[id] = $('#' + id).checked; });
+  var crew = d.person_role === 'EQUIPO_TRABAJO';
   var errorCount = 0;
-  [['full_name', 'Escribe tu nombre completo.'], ['id_number', 'Escribe tu documento.'], ['birth_date', 'Indica tu fecha de nacimiento.'],
-   ['artistic_role', 'Indica tu rol en la agrupación.']].forEach(function (p) { if (!d[p[0]]) { markError(p[0], p[1]); errorCount++; } });
+  [['person_role', 'Elige si eres intérprete o equipo de trabajo.'], ['full_name', 'Escribe tu nombre completo.'],
+   ['id_number', 'Escribe tu documento.'], ['birth_date', 'Indica tu fecha de nacimiento.'],
+   crew ? ['crew_role', 'Elige tu rol en el equipo.'] : ['artistic_role', 'Indica tu rol en el proyecto.']]
+    .forEach(function (p) { if (!d[p[0]]) { markError(p[0], p[1]); errorCount++; } });
+  if (crew) d.artistic_role = '';
   [['adult_confirmation', 'Debes confirmar que eres mayor de edad.'], ['accept_terms', 'Debes aceptar los términos.'],
    ['accept_data_processing', 'Debes autorizar el tratamiento de datos.']].forEach(function (p) { if (!d[p[0]]) { markError(p[0], p[1]); errorCount++; } });
   if (CONFIG.formularios.firma_integrantes) {
@@ -201,7 +246,7 @@ function submitMember() {
     $('#resultado').innerHTML = '<div class="aviso ok"><b>' + (r.actualizado ? 'Autorización actualizada' : 'Autorización registrada') +
       '</b>' + escaparHtml(r.mensaje) + '</div>' +
       '<section class="tarjeta"><h2>Listo</h2><p class="pista" style="margin:0">Presenta tu documento original el día de la audición: ' +
-      'en el check-in verificamos a cada integrante.</p></section>';
+      'en el check-in verificamos a cada persona del proyecto.</p></section>';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }).catch(function (e) {
     ocupado(b, false);

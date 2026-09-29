@@ -16,7 +16,8 @@
   <div class="pestanas" role="tablist">
     <button class="pestana activa" data-panel="registro">Inscritos</button>
     <button class="pestana" data-panel="grupos">Agrupaciones</button>
-    <button class="pestana" data-panel="codigos">Cerrar los 100</button>
+    <button class="pestana" data-panel="codigos">Aptitud y códigos</button>
+    <button class="pestana" data-panel="bolsa">Bolsa y reemplazos</button>
     <button class="pestana" data-panel="cambios">Cambios de horario</button>
     <button class="pestana" data-panel="pistas">Pistas</button>
     <button class="pestana" data-panel="mensajes">Comunicación</button>
@@ -31,16 +32,17 @@
         <div class="campo" style="margin:0"><input type="text" id="buscar" placeholder="Buscar por nombre, código, GRP o documento"></div>
         <div class="campo" style="margin:0">
           <select id="filtro">
-            <option value="TODOS">Todos</option><option value="APTO">APTO</option><option value="REVISION">REVISIÓN</option>
-            <option value="INCOMPLETO">INCOMPLETO</option><option value="NO_CUMPLE">NO CUMPLE</option>
-            <option value="DUPLICADO">DUPLICADO</option><option value="AGRUPACIONES">Solo dúos y agrupaciones</option>
-            <option value="CON_CODIGO">Con código</option>
+            <option value="TODOS">Todos</option><option value="POR_REVISAR">Por revisar (recibidas + en revisión)</option>
+            <option value="RECIBIDO">RECIBIDA</option><option value="EN_REVISION">EN REVISIÓN</option><option value="APTO">APTO</option>
+            <option value="NO_APTO">NO APTO</option><option value="INCOMPLETO">INCOMPLETO</option><option value="DUPLICADO">DUPLICADO</option>
+            <option value="CON_CODIGO">Con código (principales)</option><option value="SUPLENTES">Suplentes</option>
+            <option value="RETIRADOS">Retirados</option><option value="AGRUPACIONES">Solo dúos y agrupaciones</option>
           </select>
         </div>
       </div>
       <div class="tabla-envoltura" style="max-height:560px;overflow-y:auto"><table>
         <thead><tr><th>Código</th><th>Nombre</th><th>Modalidad</th><th>Doc.</th><th>Edad</th><th>Género</th>
-          <th>Estado</th><th>Video</th><th>Pista</th><th>Motivo</th><th>Bloque</th><th>Decisión</th></tr></thead>
+          <th>Aptitud</th><th>Bolsa</th><th>Video</th><th>Pista</th><th>Motivo</th><th>Bloque</th><th>Decisión</th></tr></thead>
         <tbody id="cuerpoRegistro"></tbody>
       </table></div>
       <p class="pista" id="conteoTabla" style="margin:12px 0 0"></p>
@@ -61,16 +63,29 @@
   <!-- ============================= CÓDIGOS ============================= -->
   <div class="panel" id="panel-codigos">
     <div class="tarjeta">
-      <h2>Paso 1 · Revalidar todo</h2>
+      <h2>Paso 1 · Aplicar la verificación de aptitud</h2>
+      <p class="pista">Cada inscripción llega como <b>RECIBIDA</b>. Este botón aplica la verificación automática (edad, residencia,
+        datos, duplicados) a todas las RECIBIDAS: quedan <b>APTO / NO APTO / INCOMPLETO / DUPLICADO</b> y cada persona recibe su
+        resultado por correo. Las que tienen alertas (correo o teléfono repetido, video dudoso, agrupación parecida) quedan
+        <b>EN REVISIÓN</b>: decide tú en la pestaña Inscritos (filtro «Por revisar»).</p>
+      <div class="rejilla dos">
+        <button class="boton" id="btnVerificar">Aplicar verificación y enviar resultados</button>
+        <button class="boton fantasma" id="btnNotificarAptitud">Reenviar resultados pendientes de aviso</button>
+      </div>
+      <div id="salidaVerificar" style="margin-top:12px"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Paso 2 · Revalidar todo (solo si cambiaste CONFIG)</h2>
       <p class="pista">Vuelve a aplicar edad, residencia, formato, duplicados y agrupaciones repetidas. Respeta tus decisiones
         manuales y nunca quita códigos ya emitidos.</p>
       <button class="boton fantasma" id="btnRevalidar">Revalidar inscripciones</button>
       <div id="salidaRevalidar" style="margin-top:12px"></div>
     </div>
     <div class="tarjeta">
-      <h2>Paso 2 · Emitir B-001 … B-100</h2>
-      <p class="pista">Asigna código, bloque y horario a los APTO, en orden de inscripción. Una agrupación recibe un solo código.
-        Es <b>idempotente</b>: nunca reasigna ni reutiliza un código. Los REVISIÓN no reciben código hasta que decidas.</p>
+      <h2>Paso 3 · Emitir B-001 … B-100</h2>
+      <p class="pista">Asigna código, bloque y horario a los APTO, en orden de inscripción (fecha y hora de envío). Una agrupación
+        recibe un solo código. Es <b>idempotente</b>: nunca reasigna ni reutiliza un código. Los aptos que quedan sin turno pasan a
+        la <b>bolsa de suplentes</b> (hasta 200 en total) y todos reciben su correo.</p>
       <div class="aviso alerta" style="font-size:14px"><b>Revisa antes de emitir</b>
         Resuelve primero las agrupaciones repetidas y las inscripciones en revisión.</div>
       <button class="boton" id="btnCodigos">Emitir códigos y asignar bloques</button>
@@ -80,6 +95,56 @@
       <h2>Ocupación por bloque</h2>
       <button class="boton fantasma chico" id="btnBloques" style="margin-bottom:12px">Ver ocupación</button>
       <div id="salidaBloques"></div>
+    </div>
+  </div>
+
+  <!-- ========================= BOLSA Y REEMPLAZOS ====================== -->
+  <div class="panel" id="panel-bolsa">
+    <div class="rejilla metricas" id="metricasBolsa" style="margin-bottom:16px"></div>
+    <div class="tarjeta">
+      <h2>Retirar a un participante (libera solo su cupo)</h2>
+      <p class="pista">Úsalo cuando alguien avisa por teléfono o WhatsApp que no vendrá. Su cupo se ofrece automáticamente al
+        siguiente suplente (24 horas para aceptar desde «Mi inscripción»). Nadie más cambia de horario. Nada se borra.</p>
+      <div class="rejilla dos">
+        <div class="campo"><label for="retiroCodigo">Código</label><input type="text" id="retiroCodigo" placeholder="B-037"></div>
+        <div class="campo"><label for="retiroMotivo">Motivo</label><input type="text" id="retiroMotivo" placeholder="Llamó el 17-oct: viaje de trabajo"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="retiroFinal"><span>Es un retiro de la confirmación final (22 de octubre)</span></label>
+      <button class="boton peligro" id="btnRetirar">Retirar y ofrecer el cupo</button>
+      <div id="salidaRetiro" style="margin-top:12px"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Cupos B-001 … B-100</h2>
+      <p class="pista">ASIGNADO = tiene titular · OFRECIDO = esperando respuesta de un suplente · LIBERADO = sin oferta abierta
+        (puedes volver a ofrecerlo) · VACANTE SIN REEMPLAZO = cerrado sin reemplazo. Las ofertas vencidas pasan solas al siguiente cada hora.</p>
+      <div class="rejilla dos" style="margin-bottom:12px">
+        <button class="boton fantasma" id="btnCargarBolsa">Actualizar</button>
+        <button class="boton fantasma" id="btnRefrescarBolsa">Recalcular bolsa y vencer ofertas</button>
+      </div>
+      <div id="salidaCupos"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Bolsa de aptos (orden de prioridad)</h2>
+      <p class="pista">Orden objetivo por fecha y hora de inscripción. 1–100 principales, 101–200 suplentes. Ser suplente no es ser finalista.</p>
+      <div id="salidaBolsa"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Historial de ofertas</h2>
+      <div id="salidaOfertas"></div>
+    </div>
+    <div class="tarjeta" style="border-color:var(--amarillo)">
+      <h2>Consolidar la lista oficial del evento</h2>
+      <p class="pista">Hazlo el <b>22 de octubre</b> después de la confirmación final. Reconcilia principales, suplentes, retiros,
+        reemplazos, confirmaciones, cupos, horarios y códigos; guarda la foto <b>ROSTER_FINAL_2026-10-22</b> (hoja + JSON en Drive)
+        y <b>bloquea los cambios ordinarios</b>. No borra nada.</p>
+      <div class="rejilla dos">
+        <button class="boton fantasma" id="btnVistaPrevia">Vista previa y conteos</button>
+        <button class="boton" id="btnConsolidar">CONSOLIDAR LISTA OFICIAL DEL EVENTO</button>
+      </div>
+      <div id="salidaLista" style="margin-top:12px"></div>
+      <div id="tarjetaDesbloqueo" class="oculto" style="margin-top:12px">
+        <button class="boton chico fantasma" id="btnDesbloquear">Desbloquear (solo admin, emergencia)</button>
+      </div>
     </div>
   </div>
 
@@ -139,8 +204,22 @@
         <button class="boton" id="btnCorreos">Enviar por correo</button>
       </div>
       <div class="aviso alerta" style="font-size:14px;margin-top:12px"><b>Cuota de correo</b>
-        Una cuenta Gmail envía ~100 correos al día. WhatsApp es el canal principal.</div>
+        La cuenta de Gmail envía ~100 correos al día. Lo que no alcanza hoy queda en cola y sale solo (el sistema revisa la cola
+        cada 15 minutos). Nadie recibe dos veces el mismo correo. Los correos automáticos (recepción, resultado, código, suplente,
+        cambios) salen solos.</div>
       <div id="salidaMensajes" style="margin-top:12px"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Registro de correos</h2>
+      <p class="pista">Cada correo con su plantilla, versión, destinatario, estado, reintentos y error. FALLIDO = se intentó 3 veces:
+        corrige el correo de la persona en REGISTRO y pulsa Reintentar.</p>
+      <div class="rejilla dos" style="margin-bottom:12px">
+        <select id="filtroCorreos"><option value="TODOS">Todos</option><option value="PENDIENTE">En cola</option>
+          <option value="ENVIADO">Enviados</option><option value="FALLIDO">Fallidos</option><option value="OMITIDO">Omitidos</option></select>
+        <button class="boton fantasma" id="btnRegistroCorreos">Ver registro</button>
+      </div>
+      <button class="boton chico fantasma" id="btnReintentarCorreos">Reintentar fallidos</button>
+      <div id="salidaCorreos" style="margin-top:12px"></div>
     </div>
     <div class="tarjeta">
       <h2>Contactos para la lista de difusión</h2>
@@ -179,6 +258,17 @@
         <button class="boton fantasma" id="btnRespaldoAudios">Respaldar audios</button>
       </div>
       <div id="salidaRespaldo" style="margin-top:12px"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Excel corporativo y póliza</h2>
+      <p class="pista">El Excel corporativo trae 15 hojas (proyectos, personas, intérpretes, equipo, agenda, cambios, jurados,
+        calificaciones, resultados, dashboard, correos, seguro, rúbrica y listas). El Excel de la póliza trae solo SEGURO_MAYORCA
+        para el C.C. Mayorca. Son una foto de la base: lo que edites en el archivo no vuelve al sistema.</p>
+      <div class="rejilla dos">
+        <button class="boton" id="btnExcel">Generar Excel corporativo</button>
+        <button class="boton fantasma" id="btnSeguro">Generar Excel de la póliza</button>
+      </div>
+      <div id="salidaExcel" style="margin-top:12px"></div>
     </div>
     <div class="tarjeta">
       <h2>Vistas y cierre</h2>
@@ -230,12 +320,26 @@ document.addEventListener('DOMContentLoaded', function () {
       if (p.dataset.panel === 'cambios') cargarCambios();
       if (p.dataset.panel === 'grupos') loadGroups();
       if (p.dataset.panel === 'pistas') loadTracks();
+      if (p.dataset.panel === 'bolsa') loadPool();
     });
   });
   cargarRegistro();
   $('#buscar').addEventListener('input', debounce(cargarRegistro, 350));
   $('#filtro').addEventListener('change', cargarRegistro);
   $('#btnRevalidar').addEventListener('click', revalidar);
+  $('#btnVerificar').addEventListener('click', applyVerification);
+  $('#btnNotificarAptitud').addEventListener('click', notifyAptitude);
+  $('#btnCargarBolsa').addEventListener('click', loadPool);
+  $('#btnRefrescarBolsa').addEventListener('click', refreshPool);
+  $('#btnRetirar').addEventListener('click', withdrawParticipant);
+  $('#btnVistaPrevia').addEventListener('click', previewRoster);
+  $('#btnConsolidar').addEventListener('click', consolidateRoster);
+  $('#btnDesbloquear').addEventListener('click', unlockRoster);
+  $('#btnRegistroCorreos').addEventListener('click', loadEmailLog);
+  $('#btnReintentarCorreos').addEventListener('click', retryEmails);
+  $('#btnExcel').addEventListener('click', function () { exportWorkbook('exportar_excel', $('#btnExcel')); });
+  $('#btnSeguro').addEventListener('click', function () { exportWorkbook('exportar_seguro', $('#btnSeguro')); });
+  if (ROL === 'admin') $('#tarjetaDesbloqueo').classList.remove('oculto');
   $('#btnCodigos').addEventListener('click', emitirCodigos);
   $('#btnBloques').addEventListener('click', verBloques);
   $('#btnCargarCambios').addEventListener('click', cargarCambios);
@@ -275,7 +379,10 @@ function cargarRegistro() {
             (f.group_code ? '<br>' + muted(f.group_code + ' · ' + f.members_declared + ' int.') : '') + '</td>' +
           '<td>' + escaparHtml(f.id_number) + '</td><td>' + escaparHtml(f.age) + '</td>' +
           '<td>' + escaparHtml(f.genre_primary) + '</td>' +
-          '<td>' + etiquetaEstado(f.eligibility_status) + (f.eligibility_override ? '<br>' + muted('decisión manual') : '') + '</td>' +
+          '<td>' + etiquetaEstado(f.eligibility_status) + (f.eligibility_override ? '<br>' + muted('decisión manual') : '') +
+            (f.eligibility_status === 'RECIBIDO' && f.eligibility_auto ? '<br>' + muted('regla: ' + f.eligibility_auto) : '') + '</td>' +
+          '<td>' + (f.pool_status ? etiquetaEstado(f.pool_status) + (f.priority_rank ? '<br>' + muted('#' + f.priority_rank) : '') : '') +
+            (f.withdrawal_status ? '<br>' + muted('antes ' + (f.previous_code || '')) : '') + '</td>' +
           '<td>' + etiquetaEstado(f.video_check_status) + '</td>' +
           '<td>' + etiquetaEstado(f.track_status) + '</td>' +
           '<td style="white-space:normal;max-width:220px;font-size:12px;color:var(--tenue)">' +
@@ -283,19 +390,27 @@ function cargarRegistro() {
             (f.group_match_status === 'POSIBLE_REPETIDA' ? '<br><b style="color:var(--amarillo)">Posible agrupación repetida. Verifica en Agrupaciones.</b>' : '') + '</td>' +
           '<td>' + escaparHtml(f.final_block || f.original_block || '') + '</td>' +
           '<td><select class="cambiarEstado" data-id="' + escaparHtml(f.submission_id) + '" style="padding:5px;font-size:12px">' +
-            ['', 'APTO', 'REVISION', 'INCOMPLETO', 'NO_CUMPLE', 'DUPLICADO'].map(function (e) {
-              return '<option value="' + e + '">' + (e || 'Decidir…') + '</option>';
+            ['', 'APTO', 'EN_REVISION', 'INCOMPLETO', 'NO_APTO', 'DUPLICADO'].map(function (e) {
+              return '<option value="' + e + '">' + (e ? e.replace('_', ' ') : 'Decidir…') + '</option>';
             }).join('') + '</select></td></tr>';
-      }).join('') || '<tr><td colspan="12" style="color:var(--tenue)">Sin resultados.</td></tr>';
+      }).join('') || '<tr><td colspan="13" style="color:var(--tenue)">Sin resultados.</td></tr>';
 
       $$('.cambiarEstado').forEach(function (s) {
         s.addEventListener('change', function () {
           if (!s.value) return;
           var motivo = prompt('Motivo de la decisión ' + s.value + ' (queda registrado y la revalidación lo respeta):');
           if (!motivo) { s.value = ''; return; }
-          llamar('marcar_elegibilidad', { submission_id: s.dataset.id, eligibility_status: s.value, motivo: motivo })
+          var payload = { submission_id: s.dataset.id, eligibility_status: s.value, motivo: motivo };
+          llamar('marcar_elegibilidad', payload)
             .then(function () { cargarRegistro(); })
-            .catch(function (e) { mostrarAviso('#avisoGlobal', 'error', 'No se pudo cambiar', e.message); });
+            .catch(function (e) {
+              if (/liberar el cupo/.test(e.message) && confirm(e.message + '\n\n¿Liberar el cupo y ofrecerlo al siguiente suplente?')) {
+                payload.liberar_cupo = true;
+                return llamar('marcar_elegibilidad', payload).then(function () { cargarRegistro(); });
+              }
+              s.value = '';
+              mostrarAviso('#avisoGlobal', 'error', 'No se pudo cambiar', e.message);
+            });
         });
       });
     })
@@ -303,14 +418,16 @@ function cargarRegistro() {
 }
 
 function pintarMetricas(r) {
-  var m = [['Recibidas', r.total, ''], ['Válidas', r.validos, ''], ['Aptos', r.apto, 'destacada'], ['Con código', r.con_codigo, 'destacada'],
-           ['Revisión', r.revision, ''], ['Duplicados', r.duplicado, ''], ['Incompletos', r.incompleto, ''], ['No cumplen', r.no_cumple, ''],
+  var m = [['Inscripciones', r.total, ''], ['Por revisar', r.por_revisar, r.por_revisar ? 'destacada' : ''], ['Aptos', r.apto, 'destacada'],
+           ['Con código', r.con_codigo, 'destacada'], ['Suplentes', r.suplentes, ''], ['Retirados', r.retirados, ''],
+           ['No aptos', r.no_apto, ''], ['Incompletos', r.incompleto, ''], ['Duplicados', r.duplicado, ''],
            ['Solistas', r.solistas, ''], ['Dúos', r.duos, ''], ['Agrupaciones', r.agrupaciones, '']];
   $('#metricas').innerHTML = m.map(function (x) {
     return '<div class="metrica ' + x[2] + '"><div class="n">' + x[1] + '</div><div class="t">' + x[0] + '</div></div>';
   }).join('');
-  $('#resumenCabecera').innerHTML = '<span class="chip">Aptos <b>' + r.apto + '</b></span>' +
-    '<span class="chip">Con código <b>' + r.con_codigo + '</b></span><span class="chip">En revisión <b>' + r.revision + '</b></span>';
+  $('#resumenCabecera').innerHTML = '<span class="chip">Por revisar <b>' + r.por_revisar + '</b></span>' +
+    '<span class="chip">Aptos <b>' + r.apto + '</b></span><span class="chip">Con código <b>' + r.con_codigo + '</b></span>' +
+    '<span class="chip">Suplentes <b>' + r.suplentes + '</b></span>';
 }
 
 // ----------------------------- agrupaciones --------------------------------
@@ -383,8 +500,8 @@ function emitirCodigos() {
   llamar('asignar_codigos').then(function (r) {
     ocupado(b, false);
     mostrarAviso('#salidaCodigos', 'ok', r.asignados + ' códigos nuevos emitidos',
-      'Total con código: ' + r.total_con_codigo + ' de ' + r.cupo + '. ' +
-      (r.sin_cupo ? r.sin_cupo + ' quedaron fuera por cupo lleno.' : 'No quedó nadie fuera por cupo.'));
+      'Total con código: ' + r.total_con_codigo + ' de ' + r.cupo + '. Suplentes: ' + r.suplentes + '. Fuera de bolsa: ' + r.fuera_de_bolsa + '. ' +
+      'Correos en cola: ' + (r.correos_en_cola.asignacion + r.correos_en_cola.sin_cupo) + ' (enviados ya: ' + (r.envio ? r.envio.enviados : 0) + ').');
     cargarRegistro();
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaCodigos', 'error', 'Error', e.message); });
 }
@@ -513,8 +630,9 @@ function enviarCorreos() {
   llamar('enviar_correos', { plantilla: $('#plantilla').value, bloque: $('#filtroBloqueMsg').value })
     .then(function (r) {
       ocupado(b, false);
-      mostrarAviso('#salidaMensajes', r.omitidos.length ? 'alerta' : 'ok', r.enviados + ' correos enviados',
-        (r.omitidos.length ? r.omitidos.length + ' omitidos. ' : '') + 'Cuota restante hoy: ' + r.cuota_restante + '. ' + (r.nota || ''));
+      mostrarAviso('#salidaMensajes', r.errores ? 'alerta' : 'ok', r.encolados + ' correos en cola',
+        'Enviados ahora: ' + r.enviados_ahora + '. Ya los habían recibido antes: ' + r.ya_enviados_antes + '. Sin correo válido: ' + r.omitidos +
+        '. Cuota restante hoy: ' + r.cuota_restante + '. ' + (r.nota || ''));
     })
     .catch(function (e) { ocupado(b, false); mostrarAviso('#salidaMensajes', 'error', 'Error', e.message); });
 }
@@ -606,6 +724,162 @@ function crearUsuario() {
         '<input type="text" readonly value="' + escaparHtml(r.url) + '" style="margin-top:8px;font-size:12px"></div>';
     })
     .catch(function (e) { ocupado(b, false); mostrarAviso('#salidaUsuario', 'error', 'Error', e.message); });
+}
+
+// ------------------------------ aptitud ------------------------------------
+function applyVerification() {
+  if (!confirm('Se aplicará la verificación a todas las inscripciones RECIBIDAS y cada persona recibirá su resultado por correo. ¿Continuar?')) return;
+  var b = $('#btnVerificar'); ocupado(b, true, 'Aplicando…');
+  llamar('aplicar_verificacion').then(function (r) {
+    ocupado(b, false);
+    var parts = Object.keys(r.por_estado || {}).map(function (k) { return k.replace('_', ' ') + ': ' + r.por_estado[k]; }).join(' · ');
+    mostrarAviso('#salidaVerificar', 'ok', r.aplicadas + ' inscripciones revisadas', (parts || 'No había inscripciones RECIBIDAS.') +
+      '. Correos en cola: ' + r.correos_en_cola + (r.en_revision_manual ? '. Quedan ' + r.en_revision_manual + ' EN REVISIÓN para decidir a mano.' : ''));
+    cargarRegistro();
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaVerificar', 'error', 'Error', e.message); });
+}
+
+function notifyAptitude() {
+  var b = $('#btnNotificarAptitud'); ocupado(b, true, 'Revisando…');
+  llamar('notificar_aptitud').then(function (r) {
+    ocupado(b, false);
+    mostrarAviso('#salidaVerificar', 'ok', r.correos_en_cola + ' correos en cola', 'Solo se envía a quien aún no conoce su estado actual.');
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaVerificar', 'error', 'Error', e.message); });
+}
+
+// --------------------------- bolsa y reemplazos ----------------------------
+function loadPool() {
+  $('#salidaCupos').innerHTML = muted('Cargando…');
+  llamar('bolsa').then(function (r) {
+    var c = r.resumen.cupos;
+    var m = [['Principales', r.resumen.principales, 'destacada'], ['Suplentes', r.resumen.suplentes, ''], ['Fuera de bolsa', r.resumen.fuera_de_bolsa, ''],
+             ['Ofrecidos', c.OFRECIDO || 0, ''], ['Liberados', c.LIBERADO || 0, ''], ['Vacantes', c.VACANTE_SIN_REEMPLAZO || 0, ''], ['Sin emitir', c.SIN_EMITIR || 0, '']];
+    $('#metricasBolsa').innerHTML = m.map(function (x) {
+      return '<div class="metrica ' + x[2] + '"><div class="n">' + x[1] + '</div><div class="t">' + x[0] + '</div></div>';
+    }).join('');
+    var L = r.lista_oficial;
+    $('#salidaLista').innerHTML = L.bloqueada ? '<div class="aviso ok"><b>Lista oficial consolidada</b>' + escaparHtml(L.version) + ' · ' +
+      escaparHtml(L.at) + ' · ' + escaparHtml(L.by) + '. Los cambios ordinarios están bloqueados.</div>' : '';
+    var slots = r.cupos.filter(function (s) { return s.status !== 'SIN_EMITIR'; });
+    $('#salidaCupos').innerHTML = '<div class="tabla-envoltura" style="max-height:420px;overflow-y:auto"><table><thead><tr><th>Cupo</th><th>Estado</th><th>Titular / ofrecido a</th><th></th></tr></thead><tbody>' +
+      slots.map(function (s) {
+        var action = (s.status === 'LIBERADO' || s.status === 'VACANTE_SIN_REEMPLAZO') && !L.bloqueada
+          ? '<button class="boton chico fantasma" data-ofrecer="' + s.slot_code + '">Ofrecer al siguiente</button>' : '';
+        if ((s.status === 'LIBERADO' || s.status === 'OFRECIDO') && !L.bloqueada) action += ' <button class="boton chico fantasma" data-vacante="' + s.slot_code + '">Cerrar sin reemplazo</button>';
+        return '<tr><td><b>' + escaparHtml(s.slot_code) + '</b></td><td>' + etiquetaEstado(s.status) + '</td><td>' +
+          escaparHtml(s.holder || s.offered_name || '') + '</td><td>' + action + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    $('#salidaBolsa').innerHTML = '<div class="tabla-envoltura" style="max-height:420px;overflow-y:auto"><table><thead><tr><th>#</th><th>Estado</th><th>Código</th><th>Proyecto</th><th>Modalidad</th><th>Inscrito</th><th>Oferta</th></tr></thead><tbody>' +
+      r.bolsa.map(function (p) {
+        return '<tr><td>' + escaparHtml(p.priority_rank) + '</td><td>' + etiquetaEstado(p.pool_status) + '</td><td>' + escaparHtml(p.code) + '</td><td>' +
+          escaparHtml(p.artistic_name) + '</td><td>' + escaparHtml(MODE_LABELS[p.participation_mode] || '') + '</td><td>' + escaparHtml(p.created_at) + '</td><td>' + escaparHtml(p.oferta) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    $('#salidaOfertas').innerHTML = r.ofertas.length ? '<div class="tabla-envoltura" style="max-height:320px;overflow-y:auto"><table><thead><tr><th>Cupo</th><th>Estado</th><th>Suplente</th><th>#</th><th>Creada</th><th>Vence</th><th>Nota</th></tr></thead><tbody>' +
+      r.ofertas.map(function (o) {
+        return '<tr><td>' + escaparHtml(o.slot_code) + '</td><td>' + etiquetaEstado(o.estado) + '</td><td>' + escaparHtml(o.artistic_name) + '</td><td>' +
+          escaparHtml(o.priority_rank) + '</td><td>' + escaparHtml(o.creada) + '</td><td>' + escaparHtml(o.vence) + '</td><td>' + escaparHtml(o.notas) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : muted('Sin ofertas todavía.');
+    $$('[data-ofrecer]').forEach(function (b) { b.addEventListener('click', function () { offerSlot(b.dataset.ofrecer, b); }); });
+    $$('[data-vacante]').forEach(function (b) { b.addEventListener('click', function () { closeVacancy(b.dataset.vacante, b); }); });
+  }).catch(function (e) { mostrarAviso('#salidaCupos', 'error', 'No se pudo cargar la bolsa', e.message); });
+}
+
+function refreshPool() {
+  var b = $('#btnRefrescarBolsa'); ocupado(b, true, 'Recalculando…');
+  llamar('refrescar_bolsa').then(function (r) { ocupado(b, false); mostrarAviso('#salidaRetiro', 'ok', 'Bolsa recalculada', 'Ofertas vencidas procesadas: ' + r.ofertas_vencidas + '.'); loadPool(); })
+    .catch(function (e) { ocupado(b, false); mostrarAviso('#salidaRetiro', 'error', 'Error', e.message); });
+}
+
+function withdrawParticipant() {
+  var code = $('#retiroCodigo').value.trim().toUpperCase(), motivo = $('#retiroMotivo').value.trim();
+  if (!code || motivo.length < 5) { mostrarAviso('#salidaRetiro', 'error', 'Faltan datos', 'Escribe el código y el motivo.'); return; }
+  if (!confirm('Se retirará ' + code + ' y su cupo se ofrecerá al siguiente suplente. No se puede deshacer. ¿Continuar?')) return;
+  var b = $('#btnRetirar'); ocupado(b, true, 'Retirando…');
+  llamar('retirar_participante', { code: code, motivo: motivo, final: $('#retiroFinal').checked }).then(function (r) {
+    ocupado(b, false); mostrarAviso('#salidaRetiro', 'ok', 'Cupo ' + r.slot_code + ' liberado', r.mensaje); loadPool();
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaRetiro', 'error', 'No se pudo retirar', e.message); });
+}
+
+function offerSlot(code, b) {
+  ocupado(b, true, 'Ofreciendo…');
+  llamar('ofrecer_cupo', { slot_code: code }).then(function (r) {
+    var x = r.resultado || {};
+    mostrarAviso('#salidaRetiro', 'ok', 'Cupo ' + code, x.estado === 'OFRECIDO' ? 'Ofrecido al suplente #' + x.priority_rank + ' (vence ' + x.vence + ').' : (x.mensaje || x.estado));
+    loadPool();
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaRetiro', 'error', 'Error', e.message); });
+}
+
+function closeVacancy(code, b) {
+  var motivo = prompt('Motivo para cerrar ' + code + ' sin reemplazo (queda registrado):');
+  if (!motivo) return;
+  ocupado(b, true, 'Cerrando…');
+  llamar('cerrar_vacante', { slot_code: code, motivo: motivo }).then(function () { loadPool(); })
+    .catch(function (e) { ocupado(b, false); mostrarAviso('#salidaRetiro', 'error', 'Error', e.message); });
+}
+
+function rosterCountsHtml(c) {
+  return '<div class="tabla-envoltura"><table><tbody>' + [['Cupos', c.cupos], ['Con titular', c.con_titular], ['Confirmados (SÍ)', c.confirmados],
+    ['Sin respuesta a la confirmación', c.sin_respuesta], ['Reemplazos aceptados', c.reemplazos], ['Vacantes sin reemplazo', c.vacantes],
+    ['Liberados sin cerrar', c.liberados_sin_cerrar], ['Ofertas abiertas (se cancelan al consolidar)', c.ofertas_pendientes],
+    ['Retirados', c.retirados], ['Suplentes en bolsa', c.suplentes], ['Cambios de horario pendientes', c.cambios_pendientes]]
+    .map(function (x) { return '<tr><td>' + x[0] + '</td><td><b>' + x[1] + '</b></td></tr>'; }).join('') + '</tbody></table></div>';
+}
+
+function previewRoster() {
+  var b = $('#btnVistaPrevia'); ocupado(b, true, 'Calculando…');
+  llamar('vista_previa_lista').then(function (r) {
+    ocupado(b, false);
+    $('#salidaLista').innerHTML = (r.codigos_duplicados.length ? '<div class="aviso error"><b>Códigos con dos titulares</b>' + escaparHtml(r.codigos_duplicados.join(', ')) + '</div>' : '') +
+      rosterCountsHtml(r.conteos) + (r.conteos.cambios_pendientes ? '<div class="aviso alerta" style="margin-top:10px"><b>Hay cambios pendientes</b>Resuélvelos antes de consolidar.</div>' : '');
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaLista', 'error', 'Error', e.message); });
+}
+
+function consolidateRoster() {
+  var word = prompt('Consolidar bloquea los cambios ordinarios. Escribe CONSOLIDAR para confirmar:');
+  if (!word) return;
+  var b = $('#btnConsolidar'); ocupado(b, true, 'Consolidando…');
+  llamar('consolidar_lista', { confirmacion: word }).then(function (r) {
+    ocupado(b, false);
+    $('#salidaLista').innerHTML = '<div class="aviso ok"><b>' + escaparHtml(r.lista) + '</b>' + escaparHtml(r.mensaje) + ' Respaldo: ' + escaparHtml(r.respaldo_json) + '</div>' + rosterCountsHtml(r.conteos);
+    loadPool();
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaLista', 'error', 'No se pudo consolidar', e.message); });
+}
+
+function unlockRoster() {
+  var motivo = prompt('Desbloquear la lista es solo para emergencias. Escribe el motivo (queda registrado):');
+  if (!motivo) return;
+  llamar('desbloquear_lista', { motivo: motivo }).then(function (r) { mostrarAviso('#salidaLista', 'alerta', 'Lista desbloqueada', r.mensaje); loadPool(); })
+    .catch(function (e) { mostrarAviso('#salidaLista', 'error', 'Error', e.message); });
+}
+
+// -------------------------------- correos ----------------------------------
+function loadEmailLog() {
+  var b = $('#btnRegistroCorreos'); ocupado(b, true, 'Cargando…');
+  llamar('registro_correos', { estado: $('#filtroCorreos').value }).then(function (r) {
+    ocupado(b, false);
+    var counts = Object.keys(r.por_estado).map(function (k) { return k + ' ' + r.por_estado[k]; }).join(' · ');
+    $('#salidaCorreos').innerHTML = '<p class="pista">' + escaparHtml(counts || 'Sin correos.') + ' · cuota restante hoy: ' + r.cuota_restante + '</p>' +
+      '<div class="tabla-envoltura" style="max-height:420px;overflow-y:auto"><table><thead><tr><th>Fecha</th><th>Plantilla</th><th>Para</th><th>Código</th><th>Estado</th><th>Reintentos</th><th>Error</th></tr></thead><tbody>' +
+      r.correos.map(function (e) {
+        return '<tr><td>' + escaparHtml(e.at) + '</td><td>' + escaparHtml(e.plantilla) + '<br>' + muted(e.version + ' · ' + e.trigger) + '</td><td>' + escaparHtml(e.destinatario) +
+          '</td><td>' + escaparHtml(e.code || e.submission_id) + '</td><td>' + etiquetaEstado(e.estado) + '</td><td>' + escaparHtml(e.reintentos) + '</td><td>' + escaparHtml(e.error) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaCorreos', 'error', 'Error', e.message); });
+}
+
+function retryEmails() {
+  llamar('reintentar_correos').then(function (r) { mostrarAviso('#salidaCorreos', 'ok', r.reencolados + ' correos de nuevo en cola', 'Salen en la próxima revisión (máximo 15 minutos).'); })
+    .catch(function (e) { mostrarAviso('#salidaCorreos', 'error', 'Error', e.message); });
+}
+
+// --------------------------------- excel -----------------------------------
+function exportWorkbook(action, b) {
+  ocupado(b, true, 'Generando…');
+  llamar(action).then(function (r) {
+    ocupado(b, false);
+    $('#salidaExcel').innerHTML = '<div class="aviso ok"><b>Archivo generado</b><a href="' + escaparHtml(r.url) + '" target="_blank" rel="noopener">' +
+      escaparHtml(r.nombre) + '</a>' + (r.hojas ? '<br>' + muted(Object.keys(r.hojas).map(function (k) { return k + ': ' + r.hojas[k]; }).join(' · ')) : '') + '</div>';
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaExcel', 'error', 'No se pudo generar', e.message); });
 }
 </script>
 </body>

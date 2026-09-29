@@ -564,6 +564,24 @@ describe('QA-12: private access', () => {
 });
 
 // ===========================================================================
+describe('Regression: operator decisions always leave a valid eligibility state', () => {
+  it('a repeated group confirmed as the same project on a slot holder goes to EN_REVISION, never to an empty state', () => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    const p = test.project;
+    p.run('accionInscribir', F.uniqueSubmission(1, Object.assign({ participation_mode: 'AGRUPACION', artistic_name: 'Los Mismos', members_declared: '3' }, HUMAN)));
+    account.advance(1000);
+    const twin = p.run('accionInscribir', F.uniqueSubmission(2, Object.assign({ participation_mode: 'AGRUPACION', artistic_name: 'LOS MISMOS', members_declared: '3' }, HUMAN)));
+    p.run('accionAplicarVerificacion', {}, ADMIN);
+    const known = ['RECIBIDO', 'EN_REVISION', 'APTO', 'NO_APTO', 'INCOMPLETO', 'DUPLICADO'];
+    const same = p.run('accionResolverCoincidenciaGrupo', { submission_id: twin.submission_id, decision: 'MISMO', motivo: 'Mismo líder' }, ADMIN);
+    expect(same.eligibility_status).toBe('DUPLICADO');
+    expect(p.records('REGISTRO').every((r) => known.indexOf(r.eligibility_status) !== -1)).toBe(true);
+    expect(p.records('_EMAIL_LOG').some((e) => e.template_key === 'APTITUD' && e.submission_id === twin.submission_id)).toBe(true);
+  });
+});
+
+// ===========================================================================
 describe('QA-13: the insurance export matches the source of truth', () => {
   it('SEGURO_MAYORCA counts the people of coded projects; only authorized roles can export it', () => {
     const account = F.newAccount();
