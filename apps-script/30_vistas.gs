@@ -531,8 +531,13 @@ function calcularMetricas(filas, hora) {
   };
 }
 
-function accionDashboard(datos) {
-  return { metricas: calcularMetricas(null, datos && horaAMinutos(datos.hora) !== null ? datos.hora : null) };
+function accionDashboard(datos, sesion) {
+  var m = calcularMetricas(null, datos && horaAMinutos(datos.hora) !== null ? datos.hora : null);
+  // Scores and ranking are direction's ('resultados'); logistics shares this screen for operations only.
+  if (!sesion || !puede(sesion.rol, 'resultados')) {
+    m.top20 = []; m.top = []; m.distribucion = []; m.promedio_global = null; m.ranking_oculto = true;
+  }
+  return { metricas: m };
 }
 
 function accionResultados(datos, sesion) {

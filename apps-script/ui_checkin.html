@@ -277,12 +277,27 @@ function pintarFicha(p, via, matchedMember) {
                  '" data-estado="' + escaparHtml(b[0]) + '">' + b[1] + '</button>';
         }).join('') +
       '</div>' +
-      (allowedStates.length ? '' : '<p class="pista" style="margin:0">Estado final: no hay más cambios desde esta pantalla.</p>') +
+      (allowedStates.length ? '' : '<p class="pista" style="margin:0">Estado final: no hay más cambios desde esta pantalla. ' +
+        'Si algo salió mal (por ejemplo, se marcó REALIZADA por error), registra un incidente: coordinación lo corrige.</p>') +
+      '<button type="button" class="boton fantasma chico" id="btnIncidente" data-code="' + escaparHtml(p.code) + '" style="margin-top:10px">Registrar incidente</button>' +
+      '<div id="salidaIncidente" style="margin-top:8px"></div>' +
     '</div>';
 
   $$('#ficha [data-estado]').forEach(function (b) {
     b.addEventListener('click', function () { registrarEstado(b.dataset.code, b.dataset.estado); });
   });
+  if ($('#btnIncidente')) $('#btnIncidente').addEventListener('click', function () { reportIncident($('#btnIncidente').dataset.code); });
+}
+
+// Incidents need the connection (they are not queued offline): they go straight to the INCIDENTES sheet.
+function reportIncident(code) {
+  var text = prompt('Describe el incidente de ' + code + ' (qué pasó y qué se hizo):');
+  if (!text || text.trim().length < 5) return;
+  var b = $('#btnIncidente'); ocupado(b, true, 'Registrando…');
+  llamar('nuevo_incidente', { code: code, tipo: 'CHECKIN', descripcion: text.trim() }).then(function (r) {
+    ocupado(b, false);
+    mostrarAviso('#salidaIncidente', 'ok', 'Incidente registrado', r.incidente_id + ' · coordinación lo verá en el panel.');
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaIncidente', 'error', 'No se pudo registrar', e.message + ' (revisa la conexión)'); });
 }
 
 function minutos(hhmm) {

@@ -679,6 +679,78 @@ describe('Registration fast path (measured live 2026-09-29: 12 s per submission,
 });
 
 // ===========================================================================
+describe('Findings of the operator-documentation read-through (2026-09-29)', () => {
+  const env = once(() => {
+    const account = F.newAccount();
+    const test = F.installTest(account, 'pruebas');
+    registerMany(test.project, account, 103);
+    test.project.run('accionAsignarCodigos', {}, ADMIN);
+    return { account, test, before: test.project.records('REGISTRO') };
+  });
+
+  it('the legacy status lookup never answers to a document number alone', () => {
+    const { test, before } = env();
+    const who = before.find((r) => r.code === 'B-004');
+    const onlyDoc = test.project.run('accionConsultarEstado', { id_number: String(who.id_number) });
+    expect([onlyDoc.ok, onlyDoc.code]).toEqual([false, undefined]);
+    const wrong = test.project.run('accionConsultarEstado', { id_number: String(who.id_number), code: 'B-005' });
+    expect([wrong.ok, wrong.code]).toEqual([false, undefined]);
+    expect(test.project.run('accionConsultarEstado', { id_number: String(who.id_number), code: 'B-004' }).code).toBe('B-004');
+    expect(test.project.run('accionConsultarEstado', { id_number: String(who.id_number), code: who.submission_id }).code).toBe('B-004');
+  });
+
+  it('the shared dashboard shows scores and ranking to direction only, never to logistics', () => {
+    const { test } = env();
+    const dash = (alias) => test.project.clientCall('api', { accion: 'dashboard', t: test.tokens[alias] }).metricas;
+    const logistics = dash('coordinacion');
+    expect([logistics.ranking_oculto, logistics.top20.length, logistics.top.length, logistics.promedio_global]).toEqual([true, 0, 0, null]);
+    expect(dash('direccion').ranking_oculto).toBe(undefined);
+  });
+
+  it('consolidation is refused while a schedule change is pending, and the refusal changes nothing', () => {
+    const { account, test, before } = env();
+    account.setNow('2026-10-18T10:00:00-05:00');
+    const holder = before.find((r) => r.code === 'B-006');
+    test.project.run('accionRetirarme', Object.assign(identity(holder), { confirmacion: 'LIBERAR MI CUPO' }));
+    const offers = () => test.project.records('_OFERTAS').filter((o) => o.slot_code === 'B-006').map((o) => o.estado);
+    expect(offers()).toEqual(['PENDIENTE']);
+    const who = before.find((r) => r.code === 'B-020');
+    const req = test.project.run('accionSolicitarCambio', { participant_code: 'B-020', full_name: who.full_name, reason_short: 'Trabajo',
+      contact: '3001112233', acceptance: true, client_submission_id: 'finding-3', form_elapsed_ms: 60000 });
+    account.setNow('2026-10-22T21:00:00-05:00');
+    const refused = test.project.run('accionConsolidarLista', { confirmacion: 'CONSOLIDAR' }, ADMIN);
+    expect([refused.ok, /B-020/.test(refused.error)]).toEqual([false, true]);
+    expect(offers()).toEqual(['PENDIENTE']);
+    expect(test.project.run('cfg', 'lista_oficial_bloqueada', 'NO')).toBe('NO');
+    test.project.run('accionResolverCambio', { solicitud_id: req.solicitud_id, aprobar: false, observacion: 'Sin cupo' }, ADMIN);
+    const done = test.project.run('accionConsolidarLista', { confirmacion: 'CONSOLIDAR' }, ADMIN);
+    expect(done.ok === false ? done.error : 'ok').toBe('ok');
+  });
+
+  it('only a juror can use the juror screen; direction can reopen closed results with a reason', () => {
+    const { test } = env();
+    const call = (alias, body) => test.project.clientCall('api', Object.assign({ t: test.tokens[alias] }, body));
+    expect(call('admin', { accion: 'lista_evaluacion' }).error).toContain('pantalla es de los jurados');
+    expect(call('coordinacion', { accion: 'reabrir_resultados', motivo: 'Corrección de una tarjeta' }).codigo_http).toBe(403);
+    expect(call('direccion', { accion: 'reabrir_resultados', motivo: 'corto' }).ok).toBe(false);
+    expect(call('direccion', { accion: 'reabrir_resultados', motivo: 'Corrección de una tarjeta del jurado 2' }).mensaje).toContain('reabiertos');
+  });
+
+  it('check-in finds a project by the document of a soloist\'s work crew', () => {
+    const { test, before } = env();
+    const solo = before.find((r) => r.code === 'B-030');
+    test.project.run('accionRegistrarIntegrante', Object.assign({
+      group_code: solo.team_code, group_key: test.project.run('groupAccessKey', solo.team_code), client_submission_id: 'crew-b030',
+      full_name: 'Crew Person', id_number: '72000030', birth_date: '1990-01-01', document_type: 'CC', person_role: 'EQUIPO_TRABAJO',
+      crew_role: 'MANAGER', adult_confirmation: true, accept_terms: true, accept_data_processing: true, accept_image_voice: true,
+      signature_png: F.SIGNATURE_PNG, source: 'web'
+    }, HUMAN));
+    const found = test.project.clientCall('api', { accion: 'buscar_participante', t: test.tokens['checkin-1'], id_number: '72000030' });
+    expect(JSON.stringify(found).indexOf('B-030') !== -1).toBe(true);
+  });
+});
+
+// ===========================================================================
 describe('Production reset: removing the pre-launch test rows leaves nothing of them behind', () => {
   it('removes their rows, their replay answers and their signature files; a real registration keeps all of its own', () => {
     const account = F.newAccount();

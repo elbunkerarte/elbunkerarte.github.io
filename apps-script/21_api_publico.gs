@@ -832,15 +832,21 @@ function accionSolicitarCambio(datos) {
   });
 }
 
-/** Kept for compatibility with iteration-1 links: status by code or ID number. */
+/**
+ * Kept for compatibility with iteration-1 links. Like "Mi inscripción" it needs the document AND the
+ * code or receipt: a document number alone must never reveal whether, when or with which code someone
+ * registered.
+ */
 function accionConsultarEstado(datos) {
-  var registro = null;
-  if (datos.code) registro = buscarPorCodigo(datos.code);
-  else if (datos.id_number) registro = buscarPorCedula(datos.id_number);
-  if (!registro) return { ok: false, error: 'No encontramos un registro con esos datos.' };
-  if (normalizarCedula(datos.id_number) !== normalizarCedula(registro.id_number)) {
-    return { ok: false, error: 'Los datos no coinciden. Verifica tu documento y tu código.' };
+  var blocked = guardSubmission(datos, 'consulta');
+  if (blocked) return blocked;
+  var ref = normalizarComparable(datos.code || datos.submission_id);
+  if (!normalizarCedula(datos.id_number) || !ref) {
+    return { ok: false, error: 'Escribe tu documento y tu código (B-XXX) o tu comprobante (S-XXXXXXXX).' };
   }
+  var registro = findOwnProject(/^S-/.test(ref) ? { id_number: datos.id_number, submission_id: ref }
+                                                 : { id_number: datos.id_number, code: ref });
+  if (!registro) return { ok: false, error: 'No encontramos un registro con esos datos. Verifica tu documento y tu código.' };
   return {
     code: registro.code || '',
     eligibility_status: registro.eligibility_status,

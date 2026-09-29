@@ -90,8 +90,9 @@ function findForDesk(datos) {
   if (byLeader) return { row: byLeader, via: 'DOCUMENTO' };
   var member = leerHoja(HOJA.INTEGRANTES).filter(function (m) { return normalizarCedula(m.normalized_id_number) === doc; })[0];
   if (member) {
+    // group_code for groups, team_code for everyone (a soloist's work crew hangs from EQ-xxx).
     var project = rows.filter(function (r) {
-      return normalizarComparable(r.group_code) === normalizarComparable(member.group_code);
+      return normalizarTexto(r.code) && normalizarComparable(teamCodeOf(r)) === normalizarComparable(member.group_code);
     })[0];
     if (project) return { row: project, via: 'INTEGRANTE' };
   }

@@ -444,6 +444,10 @@ function quitarInscripciones(ids, confirmacion) {
       if (r.code) codes[normalizarComparable(r.code)] = true;
       String(r.previous_code || '').split(',').forEach(function (c) { if (normalizarTexto(c)) codes[normalizarComparable(c)] = true; });
     });
+    // A code a removed row once held may belong to someone else now: its requests and cards stay.
+    leerHoja(HOJA.REGISTRO).forEach(function (r) {
+      if (!wanted[normalizarComparable(r.submission_id)] && r.code) delete codes[normalizarComparable(r.code)];
+    });
     var doomedMembers = leerHoja(HOJA.INTEGRANTES).filter(function (m) {
       return groups[normalizarComparable(m.group_code)] || wanted[normalizarComparable(m.project_submission_id)];
     });

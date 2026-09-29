@@ -94,6 +94,7 @@
     </div>
   </div>
 
+  <? if (puede(rol, 'resultados')) { ?>
   <div class="rejilla dos" style="align-items:start">
     <div class="tarjeta grafico">
       <h3>Distribución de puntajes</h3>
@@ -111,6 +112,7 @@
       <div class="tabla-alterna" id="tTop"></div>
     </div>
   </div>
+  <? } ?>
 
   <div class="rejilla dos" style="align-items:start">
     <div class="tarjeta"><h2>Agrupaciones</h2><div id="resGrupos"></div></div>
@@ -171,7 +173,25 @@
       Después se bloquean las evaluaciones y el Top 10 queda definitivo; entonces se envía el correo RESULTADO_FINAL desde Comunicación.</p>
     <button class="boton" id="btnCerrarResultados">Cerrar resultados</button>
     <div id="salidaCierre" style="margin-top:12px"></div>
+    <h3 style="margin:18px 0 8px">Reabrir resultados</h3>
+    <p class="pista">Solo si hay que corregir algo después del cierre (por ejemplo, reabrir una evaluación). El Top 10 deja de ser
+      definitivo hasta que vuelvas a cerrar. Queda registrado quién, cuándo y por qué.</p>
+    <div class="campo"><label for="motivoReabrirResultados">Motivo</label><input type="text" id="motivoReabrirResultados" maxlength="400"></div>
+    <button class="boton fantasma" id="btnReabrirResultados">Reabrir resultados</button>
+    <div id="salidaReabrirResultados" style="margin-top:12px"></div>
     <? } ?>
+  </div>
+  <? } ?>
+  <? if (puede(rol, 'exportar') || puede(rol, 'seguro')) { ?>
+  <div class="tarjeta">
+    <h2>Excel corporativo y póliza</h2>
+    <p class="pista">Una foto de la base en el momento de generarla: lo que se edite en el archivo no vuelve al sistema.
+      Sin permiso de registro completo, los documentos, correos y teléfonos salen enmascarados.</p>
+    <div class="rejilla dos">
+      <? if (puede(rol, 'exportar')) { ?><button class="boton" id="btnExcelDir">Generar Excel corporativo</button><? } ?>
+      <? if (puede(rol, 'seguro')) { ?><button class="boton fantasma" id="btnSeguroDir">Generar Excel de la póliza</button><? } ?>
+    </div>
+    <div id="salidaExcelDir" style="margin-top:12px"></div>
   </div>
   <? } ?>
   <? } ?>
@@ -209,6 +229,9 @@ document.addEventListener('DOMContentLoaded', function () {
   if ($('#btnDq')) $('#btnDq').addEventListener('click', loadDisqualifications);
   if ($('#btnReabrir')) $('#btnReabrir').addEventListener('click', reopenEvaluation);
   if ($('#btnCerrarResultados')) $('#btnCerrarResultados').addEventListener('click', closeResults);
+  if ($('#btnReabrirResultados')) $('#btnReabrirResultados').addEventListener('click', reopenResults);
+  if ($('#btnExcelDir')) $('#btnExcelDir').addEventListener('click', function () { exportWorkbook('exportar_excel', $('#btnExcelDir')); });
+  if ($('#btnSeguroDir')) $('#btnSeguroDir').addEventListener('click', function () { exportWorkbook('exportar_seguro', $('#btnSeguroDir')); });
   $('#btnSimular').addEventListener('click', function () { SIMULATED_TIME = $('#horaSimulada').value; cargar(); });
   $('#btnAhora').addEventListener('click', function () { SIMULATED_TIME = ''; $('#horaSimulada').value = ''; cargar(); });
   $$('.enlace-tabla').forEach(function (b) {
@@ -258,7 +281,6 @@ function pintar(m) {
     ['Check-ins', m.check_ins, ''], ['Precola', m.precola, ''], ['En audición', m.en_audicion, ''],
     ['Realizadas', m.realizadas, 'destacada'], ['No show', m.no_show, ''], ['Contingencia', m.contingencia, ''],
     ['No audicionados', m.no_audicionados, ''],
-    ['Promedio global', m.promedio_global === null ? '—' : m.promedio_global, ''],
     ['Evaluaciones completas', m.evaluaciones.COMPLETA + m.evaluaciones.BLOQUEADA, ''], ['Evaluaciones parciales', m.evaluaciones.PARCIAL, ''],
     ['DQ pendientes', m.evaluaciones.DQ_PENDIENTE, m.evaluaciones.DQ_PENDIENTE ? 'destacada' : ''],
     ['Correos enviados', m.correos.ENVIADO, ''], ['Correos en cola', m.correos.PENDIENTE, ''],
@@ -304,6 +326,7 @@ function pintar(m) {
         m.por_bloque.map(function (b) { return [b.block_id, b.ventana, b.realizadas, b.asignados]; }));
 
   // --- Chart: score distribution (histogram) -------------------------------
+  if (!$('#gDistribucion')) return;             // scores and ranking are shown to direction only
   histograma('#gDistribucion', m.distribucion);
   tabla('#tDistribucion', ['Rango', 'Artistas'],
         m.distribucion.map(function (d) { return [d.etiqueta, d.conteo]; }));
@@ -490,6 +513,24 @@ function closeResults() {
     mostrarAviso('#salidaCierre', 'ok', 'Resultados cerrados', r.mensaje + ' Top: ' + r.top10.map(function (x) { return x.code; }).join(', '));
     calcularResultados();
   }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaCierre', 'error', 'Todavía no se puede cerrar', e.message); });
+}
+
+function reopenResults() {
+  var b = $('#btnReabrirResultados'); ocupado(b, true, 'Reabriendo…');
+  llamar('reabrir_resultados', { motivo: $('#motivoReabrirResultados').value }).then(function (r) {
+    ocupado(b, false);
+    mostrarAviso('#salidaReabrirResultados', 'ok', 'Resultados reabiertos', r.mensaje + ' Vuelve a cerrarlos cuando termines la corrección.');
+    calcularResultados();
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaReabrirResultados', 'error', 'No se pudo reabrir', e.message); });
+}
+
+function exportWorkbook(action, b) {
+  ocupado(b, true, 'Generando…');
+  llamar(action).then(function (r) {
+    ocupado(b, false);
+    $('#salidaExcelDir').innerHTML = '<div class="aviso ok"><b>Archivo generado</b><a href="' + escaparHtml(r.url) + '" target="_blank" rel="noopener">' +
+      escaparHtml(r.nombre) + '</a></div>';
+  }).catch(function (e) { ocupado(b, false); mostrarAviso('#salidaExcelDir', 'error', 'No se pudo generar', e.message); });
 }
 
 function loadMaskedRegistry() {

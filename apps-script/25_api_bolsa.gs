@@ -509,6 +509,20 @@ function accionConsolidarLista(datos, sesion) {
     if (cfgBool('lista_oficial_bloqueada', false)) {
       return { ok: false, error: 'La lista ya está consolidada (' + cfg('lista_oficial_version', '') + ').' };
     }
+    // Every refusal happens before anything changes: a refused consolidation leaves offers and slots as they were.
+    var changes = leerHoja(HOJA.CAMBIOS);
+    var check = rosterReconciliation(leerHoja(HOJA.REGISTRO), leerHoja(HOJA.OFERTAS), changes, cfgNumero('cupo_total', 100));
+    if (check.codigos_duplicados.length) {
+      return { ok: false, error: 'Hay códigos con dos titulares: ' + check.codigos_duplicados.join(', ') + '. Corrige antes de consolidar.' };
+    }
+    var pendingChanges = changes.filter(function (c) { return normalizarComparable(c.estado) === 'PENDIENTE'; })
+      .map(function (c) { return c.code; });
+    if (pendingChanges.length) {
+      // After the lock a change request can no longer be resolved, so it must be decided first.
+      return { ok: false, error: 'Resuelve primero las solicitudes de cambio de horario pendientes (' + pendingChanges.join(', ') +
+               '): después de consolidar ya no se pueden aprobar ni rechazar.' };
+    }
+
     expireOffersLocked();
     leerHoja(HOJA.OFERTAS).filter(function (o) { return normalizarComparable(o.estado) === OFFER_STATUS.PENDIENTE; })
       .forEach(function (o) {
@@ -518,10 +532,7 @@ function accionConsolidarLista(datos, sesion) {
       });
 
     var rows = leerHoja(HOJA.REGISTRO);
-    var rec = rosterReconciliation(rows, leerHoja(HOJA.OFERTAS), leerHoja(HOJA.CAMBIOS), cfgNumero('cupo_total', 100));
-    if (rec.codigos_duplicados.length) {
-      return { ok: false, error: 'Hay códigos con dos titulares: ' + rec.codigos_duplicados.join(', ') + '. Corrige antes de consolidar.' };
-    }
+    var rec = rosterReconciliation(rows, leerHoja(HOJA.OFERTAS), changes, cfgNumero('cupo_total', 100));
 
     var book = libro();
     var base = cfg('lista_oficial_nombre', 'ROSTER_FINAL_2026-10-22');

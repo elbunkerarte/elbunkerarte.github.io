@@ -129,7 +129,16 @@ function sentCards(cards) {
 // Juror screen
 // ---------------------------------------------------------------------------
 
+/** The juror screen belongs to the three jurors; anyone else gets a plain answer instead of a sheet error. */
+function notAJuror(sesion) {
+  if (sesion && sesion.rol === ROL.JURADO) return null;
+  return { ok: false, error: 'Esta pantalla es de los jurados: cada jurado entra con su propio enlace. ' +
+           'Las correcciones se hacen desde Dirección (reabrir evaluación).' };
+}
+
 function accionListaEvaluacion(datos, sesion) {
+  var refused = notAJuror(sesion);
+  if (refused) return refused;
   var rubric = activeRubric();
   var mySheet = hojaDeJurado(sesion.alias);
   var mine = {};
@@ -183,6 +192,8 @@ function accionListaEvaluacion(datos, sesion) {
  * waits for validation by an authorized role.
  */
 function accionGuardarEvaluacion(datos, sesion) {
+  var refused = notAJuror(sesion);
+  if (refused) return refused;
   var rubric = activeRubric();
   if (!rubric.valida) {
     return { ok: false, error: 'La rúbrica configurada no es válida (' + rubric.errores.join(' ') + '). Avisa a dirección.' };

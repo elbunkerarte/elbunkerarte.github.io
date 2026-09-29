@@ -171,7 +171,7 @@ function tablaAcciones() {
     'listar_descalificaciones': { capacidad: 'validar_dq', fn: accionListarDescalificaciones },
     'resolver_descalificacion': { capacidad: 'validar_dq', fn: accionResolverDescalificacion },
     'cerrar_resultados':  { capacidad: 'cerrar_resultados', fn: accionCerrarResultados },
-    'reabrir_resultados': { capacidad: '*',           fn: accionReabrirResultados }
+    'reabrir_resultados': { capacidad: 'cerrar_resultados', fn: accionReabrirResultados }
   };
 }
 
